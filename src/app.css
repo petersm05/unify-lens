@@ -3186,10 +3186,32 @@ header.bar h1,
   margin: 6px 0 2px;
 }
 
+/* The plain modal spaces its children by their own margins, which works for a
+   title, a line of help and one input. This one has fields and a row of adders
+   that carry none, so it does the spacing itself and the inherited margins are
+   cleared to stop them doubling up. */
 .modal.report {
   width: min(560px, 92vw);
   max-height: 86vh;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal.report h2,
+.modal.report .hint,
+.modal.report .modal-actions {
+  margin: 0;
+}
+
+/* The help text belongs to the title, not to the field below it. */
+.modal.report h2 + .hint {
+  margin-top: -10px;
+}
+
+.modal.report .field {
+  gap: 8px;
 }
 
 .report-body {
