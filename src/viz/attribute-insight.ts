@@ -93,10 +93,12 @@ export function mountAttributeInsight(
             <div class="kpi hero">
               <span class="k-label" data-k="headline-label">Objects</span>
               <span class="k-value" data-k="headline">—</span>
+              <span class="k-of" data-k="headline-of" hidden></span>
             </div>
             <div class="kpi">
               <span class="k-label" data-k="second-label">Values</span>
               <span class="k-value" data-k="second">—</span>
+              <span class="k-of" data-k="second-of" hidden></span>
             </div>
           </div>
 
@@ -569,24 +571,33 @@ export function mountAttributeInsight(
     // arithmetic without a referent, so those lead with the count instead.
     const additive = choice.kind === 'money';
 
+    // Every distribution counts objects that carry a value, never the whole
+    // population — so the headline says so in each case rather than reading as
+    // "Objects" in one shape and "Objects with a value" in another. The
+    // population it came from is shown beside it, from the coverage read that
+    // has already happened, so no extra query is needed to say what the count
+    // is a part of.
+    const population = cover.withValue + cover.notSet;
+    const countLabel = self ? `Objects in ${self.binLabel}` : 'Objects with a value';
+
     if (total !== undefined && additive) {
       kpi(
         self ? `Total in ${self.binLabel}` : `Total ${choice.name}`,
         { value: total, format: (n) => formatMoney(n, choice.currency) },
-        distribution.truncated ? 'Objects sampled' : 'Objects with a value',
-        { value: counted, format: formatCount },
+        distribution.truncated ? 'Objects sampled' : countLabel,
+        { value: counted, format: formatCount, outOf: population },
       );
     } else if (stats) {
       kpi(
-        self ? `Objects in ${self.binLabel}` : 'Objects with a value',
-        { value: counted, format: formatCompact },
+        countLabel,
+        { value: counted, format: formatCompact, outOf: population },
         'Median',
         { value: stats.median, format: formatCompact },
       );
     } else {
       kpi(
-        self ? `Objects in ${self.binLabel}` : 'Objects',
-        { value: counted, format: formatCompact },
+        countLabel,
+        { value: counted, format: formatCompact, outOf: population },
         'Distinct values',
         { value: distribution.bins.length, format: formatCount },
       );
@@ -1235,7 +1246,17 @@ export function mountAttributeInsight(
   }
 
   /** A figure is either final text or a number to count up to. */
-  type Figure = string | { value: number; format: (n: number) => string };
+  type Figure =
+    | string
+    | {
+        value: number;
+        format: (n: number) => string;
+        /**
+         * The whole this figure is part of. Shown beside it so a count is never
+         * read as the population when it is a subset of it.
+         */
+        outOf?: number;
+      };
 
   function kpi(label: string, value: Figure, secondLabel: string, secondValue: Figure): void {
     set('headline-label', label);
@@ -1247,6 +1268,17 @@ export function mountAttributeInsight(
   function figure(key: string, value: Figure): void {
     const node = container.querySelector<HTMLElement>(`[data-k="${key}"]`);
     if (!node) return;
+
+    const outOf = container.querySelector<HTMLElement>(`[data-k="${key}-of"]`);
+    if (outOf) {
+      // "301 of 301" says nothing twice, so the whole only appears when the
+      // figure is genuinely a part of it.
+      const whole = typeof value === 'string' ? undefined : value.outOf;
+      const show = whole !== undefined && whole !== (typeof value === 'string' ? -1 : value.value);
+      outOf.hidden = !show;
+      outOf.textContent = show ? `of ${formatCount(whole)}` : '';
+    }
+
     if (typeof value === 'string') {
       node.textContent = value;
       return;

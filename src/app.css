@@ -3142,3 +3142,21 @@ header.bar h1,
   background: var(--surface-2);
   color: var(--text-primary);
 }
+
+/* The whole a KPI figure is part of, beside the figure itself. Deliberately
+   quiet: it is context for the number, not a second number to read. */
+.k-of {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0;
+  margin-top: -2px;
+}
+
+/* The hero is solid accent, so its text has to come from the on-accent side of
+   the palette. --text-secondary is a dark brown meant for the cream surface and
+   all but disappears here. Kept a shade below the label, which sits at 82%. */
+.kpi.hero .k-of {
+  font-size: 14px;
+  color: color-mix(in srgb, var(--on-accent) 90%, transparent);
+}

@@ -32,6 +32,7 @@ export function mountTypeBars(
         <div class="kpi hero">
           <span class="k-label">Objects</span>
           <span class="k-value" data-k="objects">—</span>
+          <span class="k-of" data-k="objects-of" hidden></span>
         </div>
         <div class="kpi">
           <span class="k-label" data-k="relations-label">Relations</span>
@@ -55,6 +56,14 @@ export function mountTypeBars(
   const rows = must(container.querySelector<HTMLElement>('.rows'), 'type-bars: rows');
 
   let counts: TypeCount[] = [];
+  /**
+   * The population before any filter, so a narrowed count can say what it is a
+   * part of. Read once and kept: it only moves when the graph does, and asking
+   * again on every filter change would cost a fan-out per keystroke.
+   */
+  let unfiltered: number | null = null;
+  /** Guards against a slow population read landing after a newer one. */
+  let denominator = 0;
 
   void refresh();
 
@@ -70,12 +79,15 @@ export function mountTypeBars(
       // The shared sample is now stale — a chart drawn from it would show the
       // population as it was before the change.
       session.sample.clear();
+      // The graph moved, so the population did too.
+      unfiltered = null;
       window.clearTimeout(debounce);
       debounce = window.setTimeout(() => void refresh(), 700);
     },
   });
 
   async function refresh(): Promise<void> {
+    const active = filters.get().attributes;
     const scope = scopeFor(filters.get());
 
     const [byType, relations] = await busy.track(
@@ -88,11 +100,30 @@ export function mountTypeBars(
     counts = byType;
     const objects = counts.reduce((sum, entry) => sum + entry.count, 0);
 
+    // With nothing filtered out, what is on screen is the whole population.
+    if (active.length === 0) unfiltered = objects;
+
     countKpi('objects', objects, formatCompact);
+    outOfKpi('objects-of', objects, unfiltered);
+
+    // The population behind a filter is context, not the answer, so it is
+    // fetched after the counts are on screen and filled in when it arrives.
+    // Awaiting it here would let one extra query hold up the whole KPI row.
+    if (active.length > 0 && unfiltered === null) {
+      const mine = ++denominator;
+      void countsByType(session.kg, objectTypesFor(session.metaModel), undefined)
+        .then((whole) => {
+          if (mine !== denominator) return;
+          unfiltered = whole.reduce((sum, entry) => sum + entry.count, 0);
+          outOfKpi('objects-of', objects, unfiltered);
+        })
+        .catch(() => {
+          // Leaves the count standing on its own, which is what it did before.
+        });
+    }
     countKpi('relations', relations, formatCompact);
     countKpi('types', counts.length, formatCount);
 
-    const active = filters.get().attributes;
     // The relation count is not narrowed by an object attribute filter, so say
     // so rather than letting it read as part of the filtered slice.
     setKpi('relations-label', active.length > 0 ? 'Relations (all)' : 'Relations');
@@ -117,6 +148,15 @@ export function mountTypeBars(
   function setKpi(key: string, value: string): void {
     const node = container.querySelector<HTMLElement>(`[data-k="${key}"]`);
     if (node) node.textContent = value;
+  }
+
+  /** Says what a narrowed count is a part of; silent when it is the whole. */
+  function outOfKpi(key: string, value: number, whole: number | null): void {
+    const node = container.querySelector<HTMLElement>(`[data-k="${key}"]`);
+    if (!node) return;
+    const show = whole !== null && whole !== value;
+    node.hidden = !show;
+    node.textContent = show ? `of ${formatCount(whole)}` : '';
   }
 
   function countKpi(key: string, value: number, format: (n: number) => string): void {
