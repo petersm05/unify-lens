@@ -8,6 +8,10 @@
   "orientation": "any",
   "background_color": "#faf5ea",
   "theme_color": "#faf5ea",
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "icons": [
     {
       "src": "brand/icon-192.png",
