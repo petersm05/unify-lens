@@ -71,6 +71,24 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/** Drops cached bundles that the current document no longer references. */
+async function pruneAssets(cache, html) {
+  const wanted = new Set();
+  for (const match of html.matchAll(/(?:src|href)="\.\/(assets\/[^"]+)"/g)) {
+    wanted.add(match[1]);
+  }
+  // An empty set means the document was not what we expected; keeping
+  // everything is the safer misreading.
+  if (wanted.size === 0) return;
+
+  for (const request of await cache.keys()) {
+    const path = new URL(request.url).pathname;
+    const index = path.indexOf('assets/');
+    if (index === -1) continue;
+    if (!wanted.has(path.slice(index))) await cache.delete(request);
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -90,7 +108,12 @@ self.addEventListener('fetch', (event) => {
         try {
           const fresh = await fetch(request);
           const cache = await caches.open(CACHE);
-          await cache.put('./', fresh.clone());
+          const copy = fresh.clone();
+          await cache.put('./', copy.clone());
+          // A deploy renames every asset, so the ones this document no longer
+          // mentions are dead weight. Without this the cache only ever grows:
+          // roughly two megabytes of orphaned bundle per release.
+          event.waitUntil(pruneAssets(cache, await copy.text()));
           return fresh;
         } catch {
           const cache = await caches.open(CACHE);
