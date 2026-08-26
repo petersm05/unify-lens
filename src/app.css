@@ -3080,3 +3080,65 @@ header.bar h1,
     padding: 0 10px;
   }
 }
+
+/* ── new version offer ─────────────────────────────────────────────
+   Anchored to the bottom so it never covers the header controls, and clear of
+   the home indicator on a device. */
+.update-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 16px;
+  border-radius: 13px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+  animation: pane-enter 200ms cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+.update-text {
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.update-accept {
+  appearance: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 560;
+  color: var(--on-accent);
+  background: var(--series-1);
+  border: 0;
+  border-radius: 9px;
+  min-height: 36px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.update-accept:disabled {
+  opacity: 0.6;
+}
+
+.update-dismiss {
+  appearance: none;
+  flex: none;
+  width: 32px;
+  height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.update-dismiss:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}

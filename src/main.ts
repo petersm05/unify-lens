@@ -2,6 +2,7 @@ import { connect, MissingEnvironment, onSdkError } from './sdk/client';
 import { forgetEnvironment, savedEnvironment } from './sdk/runtime-config';
 import { mountShell } from './ui/shell';
 import { showSetup } from './ui/setup';
+import { watchForUpdates } from './ui/update-prompt';
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -72,6 +73,9 @@ function registerShellCache(): void {
     void navigator.serviceWorker
       .register(new URL('sw.js', document.baseURI).href, {
         scope: new URL('./', document.baseURI).href,
+      })
+      .then((registration) => {
+        if (registration) watchForUpdates(registration);
       })
       .catch(() => {
         // Not fatal: without it the app simply always goes to the network.

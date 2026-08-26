@@ -53,12 +53,19 @@ self.addEventListener('install', (event) => {
         ),
       );
 
-      // Take over promptly. Safe here: assets are content-hashed, the entry
-      // document is always tried from the network first, and the app is a
-      // single bundle with no dynamic imports to go missing mid-session.
-      await self.skipWaiting();
+      // Deliberately no skipWaiting here. A new worker taking over while the
+      // page is still running the previous bundle means the two disagree about
+      // what the app is. It waits instead, the page offers the update, and only
+      // an explicit message below hands it control.
+      
     })(),
   );
+});
+
+// Sent by the page when someone accepts the update. Taking over is then a
+// decision that was asked for, and the page reloads itself on controllerchange.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'skip-waiting') void self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
