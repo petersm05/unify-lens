@@ -42,6 +42,15 @@ import { renderTimeline } from './timeline';
 import { renderHeatmap } from './heatmap';
 import { formatCompact, formatCount, formatMoney } from './theme';
 
+/**
+ * Above this many objects the population is not read speculatively.
+ *
+ * Half the sample ceiling: past it a read is both slow and likely to be
+ * truncated, and the charts that would be served by counts instead lose more
+ * than the ones needing values gain.
+ */
+const PREFETCH_LIMIT = 2000;
+
 export interface AttributeSnapshot {
   readonly type?: ObjectType;
   readonly primary?: string;
@@ -349,6 +358,11 @@ export function mountAttributeInsight(
     }
 
     placeholder.textContent = 'Pick an attribute to chart it.';
+
+    // The type is settled and the population read takes seconds, so it starts
+    // now rather than when an attribute is tapped — the moment when someone is
+    // actually waiting. Nothing is guessed here: this is the type they chose.
+    void prefetchPopulation(type, mine);
 
     // Grouped by category with a sticky heading: the category was previously
     // repeated on all forty-odd rows, which is a lot of ink to say the same
@@ -1290,6 +1304,36 @@ export function mountAttributeInsight(
       'cov-foot',
       `${formatCount(cover.withValue)} of ${formatCount(populated)} ${labelFor(type).toLowerCase()} objects have a value for ${choice.name} · ${formatCount(cover.notSet)} not set`,
     );
+  }
+
+  /**
+   * Reads the population ahead of being asked for it, when that is a good trade.
+   *
+   * Not always: an enum chart is two counts, and `enumDistribution` uses a
+   * sample only when a complete one already exists rather than starting a read
+   * for one. Fetching thousands of objects so an enum chart can skip two counts
+   * would be a loss, and a larger estate makes it a worse one. So the size is
+   * checked first — a count is cheap — and the read only happens where it is
+   * bounded enough to pay for every chart that follows.
+   */
+  async function prefetchPopulation(forType: ObjectType, mine: number): Promise<void> {
+    const scope = scopeFor(filters.get());
+    if (session.sample.peek(forType, scope)) return;
+
+    try {
+      const count = await session.kg
+        .getObjects({
+          filter: { types: [forType], ...(scope ? { attributeFilter: scope } : {}) },
+        })
+        .getCount();
+      if (mine !== generation || count === 0 || count > PREFETCH_LIMIT) return;
+
+      // Deliberately outside busy.track: this is work nobody asked for, and a
+      // progress bar for it would report the app as busy when it is not.
+      await session.sample.get(forType, scope);
+    } catch {
+      // Best effort. Whatever needs the population will read it itself.
+    }
   }
 
   function reveal(): void {
