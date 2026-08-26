@@ -2,7 +2,6 @@ import type { ObjectType, UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Session } from '../sdk/client';
 import { labelFor, objectTypesFor } from '../sdk/metamodel';
 import {
-  attributesFor,
   coverage,
   crossTab,
   type Grain,
@@ -26,6 +25,7 @@ import {
   type Bin,
   type RankedObject,
 } from '../data/attributes';
+import { attributesForCached } from '../data/schema-cache';
 import { compatible, levelOf, marksFor, type Mark } from '../data/chart-spec';
 import { scopeExcluding, scopeFor, selectionFor, type FilterStore } from '../data/filter';
 import { busy } from '../ui/busy';
@@ -316,7 +316,15 @@ export function mountAttributeInsight(
     // superseded load — a type switched away from before it finished — still
     // overwrote the shared state, leaving the winning load's rail on screen
     // beside another type's attributes in every derived control.
-    const loaded = await busy.track(attributesFor(session.kg, type));
+    // Served from the device when it can be, so the rail appears immediately
+    // rather than after a round trip. A revalidation that disagrees reloads the
+    // view, which is rare enough to be worth the interruption and correct.
+    const loaded = await busy.track(
+      attributesForCached(session.kg, type, session.stamp, (changed) => {
+        if (mine !== generation || changed.length === 0) return;
+        void loadAttributes().catch(fail);
+      }),
+    );
     if (mine !== generation) return;
     choices = loaded;
 

@@ -54,4 +54,31 @@ async function boot(): Promise<void> {
   }
 }
 
+/**
+ * Registers the shell cache, which is what makes the installed app open
+ * instantly and survive having no network.
+ *
+ * Production only: in development the dev server is the source of truth, and a
+ * worker sitting in front of it would serve yesterday's module while hot
+ * reload insisted everything was fine.
+ *
+ * The path is relative so it resolves under whatever sub-path the app is
+ * deployed at, which also scopes the worker to the app rather than the whole
+ * origin — on a shared host like github.io that matters.
+ */
+function registerShellCache(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  globalThis.addEventListener('load', () => {
+    void navigator.serviceWorker
+      .register(new URL('sw.js', document.baseURI).href, {
+        scope: new URL('./', document.baseURI).href,
+      })
+      .catch(() => {
+        // Not fatal: without it the app simply always goes to the network.
+      });
+  });
+}
+
+registerShellCache();
+
 void boot();

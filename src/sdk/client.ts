@@ -21,6 +21,19 @@ export interface Session {
   readonly metaModel: MetaModel;
   /** Whatever identifies the backend in the UI — hosted environment or sandbox API host. */
   readonly label: string;
+  /** Identifies this backend for anything cached on the device. */
+  readonly stamp: BackendStamp;
+}
+
+export interface BackendStamp {
+  /** The cache-key component that identifies this backend. */
+  readonly key: string;
+  /**
+   * Whether a real platform version could be read. When false the key cannot
+   * change on an upgrade, so a cache keyed by it must not be trusted on age
+   * alone — it has to keep checking.
+   */
+  readonly versioned: boolean;
 }
 
 const LOG_SETTINGS = {
@@ -62,7 +75,35 @@ async function bootstrap(): Promise<Session> {
   await sdk.ensureAuthenticated();
 
   const kg = sdk.knowledgeGraphClient(metaModel);
-  return { sdk, kg, sample: new SampleStore(kg), metaModel, label };
+  return { sdk, kg, sample: new SampleStore(kg), metaModel, label, stamp: await stampFor(sdk, label) };
+}
+
+/**
+ * A key for everything cached about this backend.
+ *
+ * The Liquibase field is deliberately not requested: it is admin-only and
+ * selecting it fails the whole query for anyone else.
+ *
+ * Not every environment answers usefully. A sandbox returns the literal
+ * `PLACEHOLDER_VERSION` and omits `schemaMajorVersion` entirely, so a version
+ * is treated as present only when it is something a real upgrade would change.
+ * Where it is not, callers are told, and must revalidate rather than trusting
+ * a key that can never move.
+ */
+async function stampFor(sdk: Sdk, label: string): Promise<BackendStamp> {
+  try {
+    const info = await sdk.versionClient.getVersions(true, false);
+    const parts = [info.backendVersion, info.schemaMajorVersion]
+      .filter((part): part is string | number => part !== undefined && part !== null)
+      .map(String)
+      .filter((part) => part.length > 0 && !part.includes('PLACEHOLDER'));
+
+    return parts.length > 0
+      ? { key: [label, ...parts].join('|'), versioned: true }
+      : { key: label, versioned: false };
+  } catch {
+    return { key: label, versioned: false };
+  }
 }
 
 /** Thrown when nothing tells the app which Unify instance to talk to. */
