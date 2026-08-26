@@ -4,6 +4,7 @@ import { must } from './dom';
 import { promptForText } from './prompt';
 import { canShare, shareLink } from './share';
 import { savedIcon } from './icons';
+import { buildId, openReport } from './report';
 
 export interface SavedPanel {
   destroy(): void;
@@ -16,18 +17,13 @@ export interface SavedPanel {
  * stays correct as the graph changes, and the link it produces carries no data
  * the recipient would not fetch for themselves anyway.
  */
-/** The bundle's hash, or 'dev' when running from source. */
-function buildId(): string {
-  const file = import.meta.url.split('/').pop() ?? '';
-  const match = /-([A-Za-z0-9_-]{6,})\.js/.exec(file);
-  return match?.[1] ?? 'dev';
-}
-
 export function mountSavedPanel(
   host: HTMLElement,
   current: () => Analysis,
   onOpen: (analysis: Analysis) => void,
   linkFor: (analysis: Analysis) => string,
+  /** Named in a report only if someone chooses to add it. */
+  environment?: string,
 ): SavedPanel {
   host.innerHTML = `
     <div class="saved">
@@ -40,6 +36,10 @@ export function mountSavedPanel(
         <ul class="saved-list"></ul>
         <p class="saved-empty">Nothing saved yet.</p>
         <p class="saved-build"></p>
+        <div class="saved-report">
+          <button type="button" class="saved-action" data-act="bug">Report a problem</button>
+          <button type="button" class="saved-action" data-act="idea">Request a feature</button>
+        </div>
       </div>
     </div>
   `;
@@ -62,6 +62,16 @@ export function mountSavedPanel(
    */
   const build = must(host.querySelector<HTMLElement>('.saved-build'), 'saved: build');
   build.textContent = `Build ${buildId()}`;
+
+  for (const [act, kind] of [
+    ['bug', 'bug'],
+    ['idea', 'idea'],
+  ] as const) {
+    host.querySelector(`[data-act="${act}"]`)?.addEventListener('click', () => {
+      setOpen(false);
+      openReport(kind, environment);
+    });
+  }
 
   const setOpen = (open: boolean): void => {
     panel.hidden = !open;

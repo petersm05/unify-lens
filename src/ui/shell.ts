@@ -155,6 +155,7 @@ export function mountShell(root: HTMLElement, session: Session): void {
     currentAnalysis,
     (analysis) => void applyAnalysis(analysis),
     linkFor,
+    session.label,
   );
 
   globalThis.addEventListener('popstate', () => {
