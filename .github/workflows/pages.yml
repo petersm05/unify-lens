@@ -1,14 +1,17 @@
 # Publishes Unify Lens to GitHub Pages.
 #
-# The build deliberately runs with no .env and no config.json, so the artifact
-# is tenant-neutral: on first run it asks which Unify environment to connect to
-# and reads that environment's env.js. Baking a tenant in would mean one build
-# per customer.
+# Manual trigger only. The SDK comes from GitHub Packages in the bizzdesign org,
+# which the automatic GITHUB_TOKEN cannot read, so this needs a repository
+# secret PACKAGES_TOKEN — a PAT with read:packages that can see that org.
+# Without it `npm ci` fails, which is why this does not run on every push.
+#
+# The build runs with no .env and no config.json, so the artifact is
+# tenant-neutral: on first run it asks which Unify environment to use and reads
+# that environment's env.js. Baking a tenant in would mean one build per
+# customer.
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -29,8 +32,13 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@bizzdesign'
       - run: npm ci
-      - run: npm run build
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      # DEPLOY=1 drops sourcemaps, which would otherwise publish the app source.
+      - run: DEPLOY=1 npm run build
       # Pages serves no index.html for unknown paths; the app is a single page,
       # so the 404 has to be the app itself or a deep link dead-ends.
       - run: cp dist/index.html dist/404.html

@@ -29,7 +29,9 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    sourcemap: true,
+    // Sourcemaps embed the full TypeScript source of the app. Useful locally;
+    // not something to leave sitting on a public host. DEPLOY=1 drops them.
+    sourcemap: process.env['DEPLOY'] !== '1',
   },
   optimizeDeps: {
     // The browser bundle ships pre-built ESM; let esbuild pre-bundle it once
