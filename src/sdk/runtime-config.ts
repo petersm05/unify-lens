@@ -30,6 +30,11 @@ export interface RuntimeConfig {
 const SAVED_KEY = 'unify-lens:environment';
 
 export async function loadRuntimeConfig(): Promise<RuntimeConfig | null> {
+  // An escape hatch that survives a wrong answer: ?setup=1 drops whatever this
+  // device chose and asks again. A deployment pinned by config.json still wins,
+  // because there the choice was never the user's to make.
+  if (new URLSearchParams(globalThis.location.search).has('setup')) forgetEnvironment();
+
   const fromFile = await fetchConfig();
   if (fromFile && hasTarget(fromFile)) return fromFile;
 
@@ -108,6 +113,11 @@ export async function settingsFromEnvJs(environmentUrl: string): Promise<Runtime
     ...(text('cognitoUserPoolId') ? { cognitoUserPoolId: text('cognitoUserPoolId') } : {}),
     ...(text('cognitoClientId') ? { cognitoClientId: text('cognitoClientId') } : {}),
   };
+}
+
+/** The environment this device chose, if the choice was made here. */
+export function savedEnvironment(): string | null {
+  return readSaved();
 }
 
 function readSaved(): string | null {

@@ -3,6 +3,7 @@ import { listSaved, remove, save, type SavedAnalysis } from '../data/saved';
 import { must } from './dom';
 import { promptForText } from './prompt';
 import { canShare, shareLink } from './share';
+import { savedIcon } from './icons';
 
 export interface SavedPanel {
   destroy(): void;
@@ -36,6 +37,7 @@ export function mountSavedPanel(
   `;
 
   const button = must(host.querySelector<HTMLButtonElement>('.saved-btn'), 'saved: button');
+  button.prepend(savedIcon());
   const panel = must(host.querySelector<HTMLElement>('.saved-panel'), 'saved: panel');
   const list = must(host.querySelector<HTMLElement>('.saved-list'), 'saved: list');
   const empty = must(host.querySelector<HTMLElement>('.saved-empty'), 'saved: empty');

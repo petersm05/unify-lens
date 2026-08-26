@@ -1,4 +1,5 @@
 import { connect, MissingEnvironment, onSdkError } from './sdk/client';
+import { forgetEnvironment, savedEnvironment } from './sdk/runtime-config';
 import { mountShell } from './ui/shell';
 import { showSetup } from './ui/setup';
 
@@ -26,6 +27,25 @@ async function boot(): Promise<void> {
     }
 
     const message = error instanceof Error ? error.message : String(error);
+
+    // If this device chose the environment, a failure means the answer was
+    // wrong — so ask again rather than stranding someone on an error with no
+    // control. Without this a typed-in typo is permanent: the bad value is
+    // remembered, every reload fails the same way, and the only way out is
+    // clearing the site's data.
+    const chosen = savedEnvironment();
+    if (chosen !== null) {
+      forgetEnvironment();
+      showSetup(
+        root,
+        `Could not connect to ${chosen}. Check the address and try again.`,
+        chosen,
+      );
+      return;
+    }
+
+    // A deployment configured this, so there is nothing here for the reader to
+    // correct; report it plainly.
     root.replaceChildren();
     const box = document.createElement('div');
     box.className = 'error';

@@ -112,3 +112,16 @@ export function shareIcon(): HTMLElement {
     '<path d="M4 9.5v5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-5"/></svg>';
   return wrapper;
 }
+
+/** Bookmark glyph — the shelf of analyses kept on this device. */
+export function savedIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M4.5 2.75h9a.75.75 0 0 1 .75.75v11.25L9 12.25l-5.25 2.5V3.5a.75.75 0 0 1 .75-.75z"/>' +
+    '</svg>';
+  return wrapper;
+}

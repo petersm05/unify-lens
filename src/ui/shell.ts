@@ -29,7 +29,6 @@ export function mountShell(root: HTMLElement, session: Session): void {
   root.innerHTML = `
     <header class="bar">
       <h1>Unify Lens</h1>
-      <span class="env">${session.label} · ${session.metaModel}</span>
       <button type="button" class="share-btn">Share</button>
       <div class="saved-host"></div>
     </header>

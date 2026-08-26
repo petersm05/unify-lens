@@ -8,7 +8,7 @@ import { must } from './dom';
  * same artifact is still usable on a static host nobody can reconfigure, and so
  * a first run fails with a question rather than a stack trace.
  */
-export function showSetup(root: HTMLElement, message?: string): void {
+export function showSetup(root: HTMLElement, message?: string, value = ''): void {
   root.innerHTML = `
     <div class="setup">
       <img class="boot-mark" src="brand/mark.svg" width="72" height="72" alt="" />
@@ -18,7 +18,8 @@ export function showSetup(root: HTMLElement, message?: string): void {
         <label class="field">
           <span>Environment address</span>
           <input type="url" name="url" placeholder="https://your-environment.unify.cloud"
-                 autocomplete="url" required />
+                 autocomplete="url" inputmode="url" autocapitalize="none"
+                 spellcheck="false" required />
         </label>
         <button type="submit" class="primary">Connect</button>
       </form>
@@ -48,6 +49,13 @@ export function showSetup(root: HTMLElement, message?: string): void {
     rememberEnvironment(url.origin);
     globalThis.location.reload();
   });
+
+  // A wrong answer is usually a near-miss, so it comes back for editing rather
+   // than making someone type the whole address again.
+  if (value) {
+    input.value = value;
+    input.select();
+  }
 
   input.focus();
 }
