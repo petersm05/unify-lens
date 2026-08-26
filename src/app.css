@@ -3008,3 +3008,31 @@ ul.facts {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Sits beside Saved in the header and reads as its peer. */
+.share-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 520;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-height: 42px;
+  padding: 0 14px;
+}
+
+.share-btn:hover {
+  background: var(--surface-2);
+}
+
+/* The header already pushes Saved to the end; with Share ahead of it only the
+   first of the pair should claim the free space. */
+.bar .saved-host {
+  margin-left: 0;
+}

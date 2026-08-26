@@ -2,6 +2,7 @@ import type { Analysis } from '../data/analysis';
 import { listSaved, remove, save, type SavedAnalysis } from '../data/saved';
 import { must } from './dom';
 import { promptForText } from './prompt';
+import { canShare, shareLink } from './share';
 
 export interface SavedPanel {
   destroy(): void;
@@ -62,7 +63,7 @@ export function mountSavedPanel(
   add.addEventListener('click', () => {
     void promptForText({
       title: 'Save this analysis',
-      hint: 'Stored on this device. Use Copy link to share it with someone else.',
+      hint: `Stored on this device. Use ${canShare() ? 'Share' : 'Copy link'} to send it to someone else.`,
       value: '',
       confirmLabel: 'Save',
     }).then((name) => {
@@ -86,17 +87,19 @@ export function mountSavedPanel(
           setOpen(false);
         });
 
+        const resting = canShare() ? 'Share' : 'Copy link';
         const link = document.createElement('button');
         link.type = 'button';
         link.className = 'saved-action';
-        link.textContent = 'Copy link';
+        link.textContent = resting;
         link.addEventListener('click', () => {
-          void navigator.clipboard?.writeText(linkFor(entry.analysis)).then(
-            () => {
-              link.textContent = 'Copied';
-              window.setTimeout(() => (link.textContent = 'Copy link'), 1400);
+          void shareLink(linkFor(entry.analysis), entry.name, 'A saved Unify Lens analysis').then(
+            (outcome) => {
+              // A dismissed sheet needs no report: they saw it and closed it.
+              if (outcome === 'dismissed' || outcome === 'shared') return;
+              link.textContent = outcome === 'copied' ? 'Copied' : 'Failed';
+              window.setTimeout(() => (link.textContent = resting), 1400);
             },
-            () => (link.textContent = 'Copy failed'),
           );
         });
 

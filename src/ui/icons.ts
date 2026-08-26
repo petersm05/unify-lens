@@ -99,3 +99,16 @@ export function dragIcon(): HTMLElement {
     '<circle cx="6.5" cy="13.5" r="1.35"/><circle cx="11.5" cy="13.5" r="1.35"/></svg>';
   return wrapper;
 }
+
+/** Share glyph — a page with an arrow leaving it, as the platform draws it. */
+export function shareIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M9 2.5v9"/><path d="M6 5.5 9 2.5l3 3"/>' +
+    '<path d="M4 9.5v5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-5"/></svg>';
+  return wrapper;
+}

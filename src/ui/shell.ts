@@ -10,6 +10,8 @@ import { mountTypeBars, type TypeBars } from '../viz/type-bars';
 import { must } from './dom';
 import { busy } from './busy';
 import { mountFilterBar } from './filter-bar';
+import { canShare, shareLink } from './share';
+import { shareIcon } from './icons';
 
 type ViewId = 'population' | 'attributes' | 'network';
 
@@ -28,6 +30,7 @@ export function mountShell(root: HTMLElement, session: Session): void {
     <header class="bar">
       <h1>Unify Lens</h1>
       <span class="env">${session.label} · ${session.metaModel}</span>
+      <button type="button" class="share-btn">Share</button>
       <div class="saved-host"></div>
     </header>
     <p class="notice" hidden></p>
@@ -86,6 +89,22 @@ export function mountShell(root: HTMLElement, session: Session): void {
     url.search = `?a=${encode(analysis)}`;
     return url.toString();
   }
+
+  const share = must(root.querySelector<HTMLButtonElement>('.share-btn'), 'shell: share');
+  share.prepend(shareIcon());
+  // Only the sheet is called "Share"; a clipboard copy should say so rather
+  // than promise something the browser cannot do.
+  if (!canShare()) share.lastChild!.textContent = 'Copy link';
+  share.addEventListener('click', () => {
+    void shareLink(
+      linkFor(currentAnalysis()),
+      'Unify Lens',
+      `An analysis of ${session.label}`,
+    ).then((outcome) => {
+      if (outcome === 'copied') showNotice('Link copied. Anyone with it opens this same view.');
+      if (outcome === 'failed') showNotice('Could not share that link.');
+    });
+  });
 
   /**
    * Keeps the address bar describing what is on screen.
