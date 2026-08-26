@@ -1,0 +1,49 @@
+# Publishes Unify Lens to GitHub Pages.
+#
+# The build deliberately runs with no .env and no config.json, so the artifact
+# is tenant-neutral: on first run it asks which Unify environment to connect to
+# and reads that environment's env.js. Baking a tenant in would mean one build
+# per customer.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # Pages serves no index.html for unknown paths; the app is a single page,
+      # so the 404 has to be the app itself or a deep link dead-ends.
+      - run: cp dist/index.html dist/404.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

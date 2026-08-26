@@ -1,0 +1,11 @@
+{
+  "_comment": "Horizzon demo tenant. Copy to public/config.json to point the app here; delete that file to fall back to .env. Values read from https://horizzondemo.unify.cloud/env.js — its own env.js sends no CORS headers, so environmentUrl cannot be used from another origin and the settings are given directly.",
+
+  "graphqlEndpoint": "https://horizzondemo.api.svc.unify.cloud/graphql",
+  "graphqlRealtimeEndpoint": "wss://horizzondemo.api.svc.unify.cloud/graphql/realtime",
+  "cognitoRegion": "eu-central-1",
+  "cognitoDomain": "bizzdesign-auth-horizzondemo.auth.eu-central-1.amazoncognito.com",
+  "cognitoUserPoolId": "eu-central-1_6tndPyIWM",
+  "cognitoClientId": "1jhsj78kfjqvlfoska0tloqcnl",
+  "metaModel": "BDCore"
+}

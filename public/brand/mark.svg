@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Unify Lens">
+  <rect width="512" height="512" rx="112" fill="#faf5ea"/>
+  <g transform="translate(256 256)">
+    <circle r="150" fill="none" stroke="#256760" stroke-width="64"/>
+    <path d="M0 -150 A150 150 0 0 1 129.9 -75 L74.9 -43.3 A86 86 0 0 0 0 -86 Z"
+          fill="#b45c3c"/>
+    <circle r="44" fill="#256760"/>
+  </g>
+</svg>

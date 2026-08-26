@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Unify Lens</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
+    <link rel="icon" href="brand/favicon-32.png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="brand/apple-touch-icon.png" />
+    <meta name="theme-color" content="#faf5ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#241c16" media="(prefers-color-scheme: dark)" />
+    <link rel="stylesheet" href="./src/app.css" />
+  </head>
+  <body>
+    <div id="app" class="viz-root">
+      <!-- Painted before any script runs, so a cold start on a tablet shows the
+           app rather than a white page while the bundle and session load. -->
+      <div class="boot" role="status">
+        <img class="boot-mark" src="brand/mark.svg" width="88" height="88" alt="" />
+        <p class="boot-name">Unify Lens</p>
+        <p class="boot-status">Connecting…</p>
+      </div>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
