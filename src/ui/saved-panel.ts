@@ -16,6 +16,13 @@ export interface SavedPanel {
  * stays correct as the graph changes, and the link it produces carries no data
  * the recipient would not fetch for themselves anyway.
  */
+/** The bundle's hash, or 'dev' when running from source. */
+function buildId(): string {
+  const file = import.meta.url.split('/').pop() ?? '';
+  const match = /-([A-Za-z0-9_-]{6,})\.js/.exec(file);
+  return match?.[1] ?? 'dev';
+}
+
 export function mountSavedPanel(
   host: HTMLElement,
   current: () => Analysis,
@@ -32,6 +39,7 @@ export function mountSavedPanel(
         </div>
         <ul class="saved-list"></ul>
         <p class="saved-empty">Nothing saved yet.</p>
+        <p class="saved-build"></p>
       </div>
     </div>
   `;
@@ -42,6 +50,18 @@ export function mountSavedPanel(
   const list = must(host.querySelector<HTMLElement>('.saved-list'), 'saved: list');
   const empty = must(host.querySelector<HTMLElement>('.saved-empty'), 'saved: empty');
   const add = must(host.querySelector<HTMLButtonElement>('.saved-add'), 'saved: add');
+
+  /**
+   * Which build this is, taken from the bundle's own content-hashed filename.
+   *
+   * An installed app gives no way to tell what it is running — there is no
+   * address bar and no reload button — so a report of "still broken" and a
+   * report of "not updated yet" look identical. Naming the build separates
+   * them. The hash comes from the module's own URL, so it needs no build-time
+   * plumbing and cannot drift from what is actually loaded.
+   */
+  const build = must(host.querySelector<HTMLElement>('.saved-build'), 'saved: build');
+  build.textContent = `Build ${buildId()}`;
 
   const setOpen = (open: boolean): void => {
     panel.hidden = !open;

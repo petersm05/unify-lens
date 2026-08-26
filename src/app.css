@@ -3166,3 +3166,14 @@ header.bar h1,
   font-size: 14px;
   color: color-mix(in srgb, var(--on-accent) 90%, transparent);
 }
+
+/* Which build is running. An installed app has no address bar, so without this
+   "still broken" and "not updated yet" are indistinguishable from a report. */
+.saved-build {
+  margin: 8px 4px 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
