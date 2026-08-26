@@ -130,17 +130,41 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The palette is declared on `.viz-root` so overlays inside it inherit every
+   token. Custom properties only inherit downward, though, so on `body` — which
+   is `.viz-root`'s parent — `var(--surface-1)` resolves to nothing, the whole
+   declaration is dropped, and the canvas keeps the browser's default white.
+   iOS then shows that white past the app: behind the home indicator, and while
+   the viewport rubber-bands. The page needs its own copy of the ground colour,
+   declared where `html` and `body` can actually see it. */
+:root {
+  --page: #faf5ea;
+  --page-ink: #2c2118;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --page: #241c16;
+    --page-ink: #f6ede0;
+  }
+}
+
+:root[data-theme='dark'] {
+  --page: #241c16;
+  --page-ink: #f6ede0;
+}
+
 html,
 body {
   margin: 0;
   height: 100%;
   overscroll-behavior: none;
+  background: var(--page);
 }
 
 body {
   font: 400 16px/1.5 -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  background: var(--surface-1);
-  color: var(--text-primary);
+  color: var(--page-ink);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -3025,4 +3049,30 @@ ul.facts {
 
 .share-btn:hover {
   background: var(--surface-2);
+}
+
+/* Header on a narrow phone.
+   The title and the two action labels are all short, so wrapping any of them
+   costs a line and reads as a mistake rather than as reflow. They stay on one
+   line and the padding gives way instead. */
+header.bar h1,
+.share-btn,
+.saved-btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  header.bar {
+    gap: 10px;
+    padding: 14px 16px 10px;
+  }
+
+  header.bar h1 {
+    font-size: 18px;
+  }
+
+  .share-btn,
+  .saved-btn {
+    padding: 0 10px;
+  }
 }
