@@ -86,3 +86,16 @@ export function filterIcon(): HTMLElement {
     '<path d="M2.5 4h13l-5 5.6V15l-3-1.8V9.6z"/></svg>';
   return wrapper;
 }
+
+/** Grip glyph for a row that can be dragged into a new position. */
+export function dragIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="currentColor" stroke="none">' +
+    '<circle cx="6.5" cy="4.5" r="1.35"/><circle cx="11.5" cy="4.5" r="1.35"/>' +
+    '<circle cx="6.5" cy="9" r="1.35"/><circle cx="11.5" cy="9" r="1.35"/>' +
+    '<circle cx="6.5" cy="13.5" r="1.35"/><circle cx="11.5" cy="13.5" r="1.35"/></svg>';
+  return wrapper;
+}

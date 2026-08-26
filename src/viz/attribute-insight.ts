@@ -32,6 +32,7 @@ import { busy } from '../ui/busy';
 import { countUp } from '../ui/motion';
 import { must } from '../ui/dom';
 import { attributeIcon, controlsIcon, filterIcon } from '../ui/icons';
+import { createPicker, type Picker } from '../ui/picker';
 import { renderBarList, renderLegend } from './bars';
 import { mountObjectTable, type ObjectTable } from './object-table';
 import { renderDonut } from './donut';
@@ -81,7 +82,7 @@ export function mountAttributeInsight(
       <aside class="rail">
         <label class="field">
           <span>Object type</span>
-          <select class="type-select"></select>
+          <div class="type-select"></div>
         </label>
         <div class="attr-list" role="list" aria-label="Attributes"></div>
       </aside>
@@ -116,15 +117,15 @@ export function mountAttributeInsight(
                   </div>
                   <label class="field">
                     <span>Compare with</span>
-                    <select class="compare-select"></select>
+                    <div class="compare-select"></div>
                   </label>
                   <label class="field size-field" hidden>
                     <span>Bubble size</span>
-                    <select class="size-select"></select>
+                    <div class="size-select"></div>
                   </label>
                   <label class="field group-field" hidden>
                     <span>Highlight by</span>
-                    <select class="group-select"></select>
+                    <div class="group-select"></div>
                   </label>
                   <label class="field grain-field" hidden>
                     <span>Period</span>
@@ -182,11 +183,11 @@ export function mountAttributeInsight(
   const q = <T extends HTMLElement>(selector: string, what: string): T =>
     must(container.querySelector<T>(selector), `attributes: ${what}`);
 
-  const select = q<HTMLSelectElement>('.type-select', 'type select');
-  const compare = q<HTMLSelectElement>('.compare-select', 'compare select');
-  const sizeSelect = q<HTMLSelectElement>('.size-select', 'size select');
+  const select = mountPicker('.type-select', 'type select');
+  const compare = mountPicker('.compare-select', 'compare select', 'Nothing — one measure');
+  const sizeSelect = mountPicker('.size-select', 'size select', 'Uniform');
   const sizeField = q('.size-field', 'size field');
-  const groupSelect = q<HTMLSelectElement>('.group-select', 'group select');
+  const groupSelect = mountPicker('.group-select', 'group select', 'Nothing');
   const groupField = q('.group-field', 'group field');
   const grainSelect = q<HTMLSelectElement>('.grain-select', 'grain select');
   const grainField = q('.grain-field', 'grain field');
@@ -212,12 +213,10 @@ export function mountAttributeInsight(
   const meterFill = q('.meter-fill', 'meter');
   const objectsHost = q('.objects-host', 'objects host');
 
-  select.replaceChildren(
-    ...types.map((type) => option(type, labelFor(type))),
-  );
+  select.setOptions(types.map((entry) => ({ value: entry, label: labelFor(entry) })));
 
   let type: ObjectType = filters.get().type ?? types[0]!;
-  select.value = type;
+  select.setValue(type);
 
   let choices: AttributeChoice[] = [];
   let primary: AttributeChoice | null = null;
@@ -242,23 +241,23 @@ export function mountAttributeInsight(
    */
   let cache: { key: string; distribution: Distribution; cover: Coverage } | null = null;
 
-  select.addEventListener('change', () => {
-    type = select.value as ObjectType;
+  select.onChange((value) => {
+    type = value as ObjectType;
     // The filter bar's type chip has to follow the rail, or the two disagree
     // about what population is on screen.
     filters.setType(type);
     void loadAttributes().catch(fail);
   });
 
-  compare.addEventListener('change', () => {
-    secondary = choices.find((choice) => keyOf(choice) === compare.value) ?? null;
+  compare.onChange((value) => {
+    secondary = choices.find((choice) => keyOf(choice) === value) ?? null;
     mark = null;
     sizeKey = null;
     if (primary) void render().catch(fail);
   });
 
-  sizeSelect.addEventListener('change', () => {
-    sizeKey = sizeSelect.value;
+  sizeSelect.onChange((value) => {
+    sizeKey = value;
     if (primary) void render().catch(fail);
   });
 
@@ -267,8 +266,8 @@ export function mountAttributeInsight(
     if (primary) void render().catch(fail);
   });
 
-  groupSelect.addEventListener('change', () => {
-    groupKey = groupSelect.value;
+  groupSelect.onChange((value) => {
+    groupKey = value;
     activeGroup = undefined;
     if (primary) void render().catch(fail);
   });
@@ -296,7 +295,7 @@ export function mountAttributeInsight(
   const unsubscribe = filters.subscribe((filter) => {
     if (filter.type && filter.type !== type) {
       type = filter.type;
-      select.value = type;
+      select.setValue(type);
       void loadAttributes().catch(fail);
       return;
     }
@@ -401,12 +400,17 @@ export function mountAttributeInsight(
     const mine = ++generation;
 
     const pairs = compatible(primary, choices);
-    compare.replaceChildren(
-      option('', 'Nothing — one measure'),
-      ...pairs.map((choice) => option(keyOf(choice), `${choice.name} · ${choice.categoryName}`)),
-    );
-    compare.value = secondary ? keyOf(secondary) : '';
-    compare.disabled = pairs.length === 0;
+    compare.setOptions([
+      { value: '', label: 'Nothing — one measure' },
+      ...pairs.map((choice) => ({
+        value: keyOf(choice),
+        label: choice.name,
+        note: choice.categoryName,
+        icon: () => attributeIcon(choice.kind, choice.currency),
+      })),
+    ]);
+    compare.setValue(secondary ? keyOf(secondary) : '');
+    compare.setDisabled(pairs.length === 0);
 
     const options = marksFor(primary, secondary ?? undefined);
     if (!mark || !options.some((entry) => entry.mark === mark)) {
@@ -1023,16 +1027,19 @@ export function mountAttributeInsight(
     const candidates = choices.filter((candidate) =>
       ['enum', 'boolean', 'string', 'text'].includes(candidate.kind),
     );
-    groupSelect.replaceChildren(
-      option('', 'Nothing'),
-      ...candidates.map((candidate) =>
-        option(keyOf(candidate), `${candidate.name} · ${candidate.categoryName}`),
-      ),
+    groupSelect.setOptions([
+      { value: '', label: 'Nothing' },
+      ...candidates.map((candidate) => ({
+        value: keyOf(candidate),
+        label: candidate.name,
+        note: candidate.categoryName,
+        icon: () => attributeIcon(candidate.kind, candidate.currency),
+      })),
+    ]);
+    groupSelect.setValue(
+      candidates.some((candidate) => keyOf(candidate) === groupKey) ? groupKey : '',
     );
-    groupSelect.value = candidates.some((candidate) => keyOf(candidate) === groupKey)
-      ? groupKey
-      : '';
-    groupSelect.disabled = candidates.length === 0;
+    groupSelect.setDisabled(candidates.length === 0);
   }
 
   async function drawSumBy(a: AttributeChoice, b: AttributeChoice, mine: number): Promise<void> {
@@ -1268,16 +1275,19 @@ export function mountAttributeInsight(
     const candidates = sizeCandidates(x, y);
     const resolved = resolveSize(x, y);
 
-    sizeSelect.replaceChildren(
-      option('', 'Uniform'),
+    sizeSelect.setOptions([
+      { value: '', label: 'Uniform' },
       // Attribute names repeat across categories, so the category disambiguates
       // — exactly as it does in the compare list.
-      ...candidates.map((candidate) =>
-        option(keyOf(candidate), `${candidate.name} · ${candidate.categoryName}`),
-      ),
-    );
-    sizeSelect.value = resolved ? keyOf(resolved) : '';
-    sizeSelect.disabled = candidates.length === 0;
+      ...candidates.map((candidate) => ({
+        value: keyOf(candidate),
+        label: candidate.name,
+        note: candidate.categoryName,
+        icon: () => attributeIcon(candidate.kind, candidate.currency),
+      })),
+    ]);
+    sizeSelect.setValue(resolved ? keyOf(resolved) : '');
+    sizeSelect.setDisabled(candidates.length === 0);
   }
 
   /** Selects both halves at once — one condition per axis, combined by AND. */
@@ -1355,11 +1365,16 @@ export function mountAttributeInsight(
     if (node) node.textContent = value;
   }
 
-  function option(value: string, label: string): HTMLOptionElement {
-    const element = document.createElement('option');
-    element.value = value;
-    element.textContent = label;
-    return element;
+  /**
+   * Swaps a placeholder for a searchable picker, keeping the placeholder's
+   * classes so the surrounding layout rules still apply.
+   */
+  function mountPicker(selector: string, name: string, placeholder?: string): Picker {
+    const host = q(selector, name);
+    const picker = createPicker(placeholder);
+    picker.element.classList.add(...host.classList);
+    host.replaceWith(picker.element);
+    return picker;
   }
 
   function keyOf(choice: AttributeChoice): string {
@@ -1373,7 +1388,7 @@ export function mountAttributeInsight(
   ): Promise<void> {
     if (objectType !== type) {
       type = objectType as ObjectType;
-      select.value = type;
+      select.setValue(type);
       await loadAttributes();
     }
 
@@ -1407,7 +1422,7 @@ export function mountAttributeInsight(
   async function restoreSnapshot(snapshot: AttributeSnapshot): Promise<void> {
     if (snapshot.type) {
       type = snapshot.type;
-      select.value = type;
+      select.setValue(type);
     }
 
     // Always wait for the schema, even when the type already matches: mounting

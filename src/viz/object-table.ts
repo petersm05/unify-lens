@@ -13,7 +13,7 @@ import { scopeFor, type FilterStore } from '../data/filter';
 import { onContextRequest, showContextMenu } from '../ui/context-menu';
 import { busy } from '../ui/busy';
 import { must } from '../ui/dom';
-import { attributeIcon, controlsIcon } from '../ui/icons';
+import { attributeIcon, controlsIcon, dragIcon } from '../ui/icons';
 import { formatCompact, formatCount, formatMoney } from './theme';
 
 export interface ObjectTable {
@@ -82,17 +82,15 @@ export function mountObjectTable(
   const next = must(host.querySelector<HTMLButtonElement>('[data-act="next"]'), 'objects: next');
 
   // No Type column: the table is always scoped to a single object type, so it
-  // would repeat one value down every row. Created is opt-in and always last —
-  // a record date is provenance, not something you read a table for.
-  let attributeColumns: Column[] = [];
-  let showCreated = false;
+  // would repeat one value down every row. Name stays first: it is the row's
+  // identity and the click target, so a table that opened on some other column
+  // would read as a list of values with no subject.
+  let extraColumns: Column[] = [];
   let focusKey: string | null = null;
+  /** Kept across rebuilds so a rebuild does not wipe what someone just typed. */
+  let colTerm = '';
 
-  const columnsNow = (): Column[] => [
-    NAME_COLUMN,
-    ...attributeColumns,
-    ...(showCreated ? [CREATED_COLUMN] : []),
-  ];
+  const columnsNow = (): Column[] => [NAME_COLUMN, ...extraColumns];
   let sortKey = NAME_COLUMN.key;
   let descending = false;
   let page = 0;
@@ -125,53 +123,252 @@ export function mountObjectTable(
     void load();
   });
 
+  /**
+   * Which columns show, and in which order.
+   *
+   * Two lists rather than a row of checkboxes: order only means something once
+   * the chosen columns are shown in their own order, and a checkbox cannot be
+   * dragged. Search filters the "Add" list only — the shown list stays whole so
+   * dragging never reorders against a partial view of it.
+   */
   function buildColumnPicker(): void {
     const { attributes } = getContext();
+    // Created is offered last: a record date is provenance, not something you
+    // read a table for, so it should not head the list of things to add.
+    const offered: Column[] = [...attributes.map(columnFor), CREATED_COLUMN];
+    const shownKeys = new Set(extraColumns.map((column) => column.key));
+    const available = offered.filter((column) => !shownKeys.has(column.key));
 
-    const created = document.createElement('label');
-    created.className = 'col-option';
-    const createdBox = document.createElement('input');
-    createdBox.type = 'checkbox';
-    createdBox.checked = showCreated;
-    createdBox.addEventListener('change', () => {
-      showCreated = createdBox.checked;
-      if (!showCreated && sortKey === CREATED_COLUMN.key) {
-        sortKey = NAME_COLUMN.key;
-        descending = false;
-      }
-      void load();
+    const term = colTerm.trim().toLowerCase();
+    const matching = term
+      ? available.filter((column) => column.label.toLowerCase().includes(term))
+      : available;
+
+    const parts: HTMLElement[] = [];
+
+    if (offered.length >= 7) {
+      const search = document.createElement('input');
+      search.type = 'search';
+      search.className = 'col-search';
+      search.placeholder = 'Search columns…';
+      search.autocomplete = 'off';
+      search.setAttribute('aria-label', 'Search columns');
+      search.value = colTerm;
+      search.addEventListener('input', () => {
+        colTerm = search.value;
+        buildColumnPicker();
+        // Rebuilding replaces the node, so focus and caret have to be restored.
+        const again = colList.querySelector<HTMLInputElement>('.col-search');
+        again?.focus();
+        again?.setSelectionRange(again.value.length, again.value.length);
+      });
+      parts.push(search);
+    }
+
+    parts.push(heading('Shown'), shownList(), divider(), heading('Add'));
+
+    if (matching.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'col-empty';
+      empty.textContent = term ? 'Nothing matches.' : 'Every column is already shown.';
+      parts.push(empty);
+    } else {
+      parts.push(
+        ...matching.map((column) => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'col-add';
+          row.append(plus(), columnLabel(column));
+          row.addEventListener('click', () => {
+            extraColumns = [...extraColumns, column];
+            colTerm = '';
+            void load();
+          });
+          return row;
+        }),
+      );
+    }
+
+    colList.replaceChildren(...parts);
+  }
+
+  /** The chosen columns, in order, each draggable to a new position. */
+  function shownList(): HTMLElement {
+    const list = document.createElement('div');
+    list.className = 'col-shown';
+
+    const fixed = document.createElement('div');
+    fixed.className = 'col-row is-fixed';
+    fixed.append(spacer(), columnLabel(NAME_COLUMN));
+    const pinned = document.createElement('span');
+    pinned.className = 'col-note';
+    pinned.textContent = 'always first';
+    fixed.append(pinned);
+    list.append(fixed);
+
+    extraColumns.forEach((column, index) => {
+      const row = document.createElement('div');
+      row.className = 'col-row';
+      row.dataset['key'] = column.key;
+
+      const handle = document.createElement('button');
+      handle.type = 'button';
+      handle.className = 'col-handle';
+      handle.setAttribute('aria-label', `Move ${column.label}`);
+      handle.append(dragIcon());
+      // Arrow keys do the same job for anyone not using a pointer.
+      handle.addEventListener('keydown', (event) => {
+        const step = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+        if (step === 0) return;
+        event.preventDefault();
+        move(index, index + step);
+      });
+      startDragging(handle, row, list);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'col-remove';
+      remove.setAttribute('aria-label', `Remove ${column.label}`);
+      remove.textContent = '✕';
+      remove.addEventListener('click', () => {
+        extraColumns = extraColumns.filter((entry) => entry.key !== column.key);
+        if (focusKey === column.key) focusKey = null;
+        settleSort();
+        void load();
+      });
+
+      row.append(handle, columnLabel(column), remove);
+      list.append(row);
     });
-    created.append(createdBox, document.createElement('span'), text('Created'));
 
-    colList.replaceChildren(
-      created,
-      divider(),
-      ...attributes.map((choice) => {
-        const column = columnFor(choice);
-        const row = document.createElement('label');
-        row.className = 'col-option';
+    return list;
+  }
 
-        const box = document.createElement('input');
-        box.type = 'checkbox';
-        box.checked = attributeColumns.some((existing) => existing.key === column.key);
-        box.addEventListener('change', () => {
-          attributeColumns = box.checked
-            ? [...attributeColumns, column]
-            : attributeColumns.filter((existing) => existing.key !== column.key);
-          if (!columnsNow().some((existing) => existing.key === sortKey)) {
-            sortKey = NAME_COLUMN.key;
-            descending = false;
+  function move(from: number, to: number): void {
+    if (to < 0 || to >= extraColumns.length || from === to) return;
+    const next = [...extraColumns];
+    const [moved] = next.splice(from, 1);
+    if (!moved) return;
+    next.splice(to, 0, moved);
+    extraColumns = next;
+    void load();
+  }
+
+  /**
+   * Drag-to-reorder on pointer events rather than HTML5 drag-and-drop, which
+   * does not fire for touch at all — and this is a tablet app first.
+   *
+   * The move and release listeners go on the document rather than the handle:
+   * once the pointer leaves the handle, only a document-level listener still
+   * hears it. Pointer capture would also work but fails quietly in enough
+   * situations that relying on it makes dragging feel broken at random.
+   */
+  function startDragging(handle: HTMLElement, row: HTMLElement, list: HTMLElement): void {
+    handle.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      row.classList.add('dragging');
+
+      const onMove = (moveEvent: PointerEvent): void => {
+        const others = [...list.querySelectorAll<HTMLElement>('.col-row:not(.is-fixed)')];
+        for (const other of others) {
+          if (other === row) continue;
+          const box = other.getBoundingClientRect();
+          const middle = box.top + box.height / 2;
+          const before = moveEvent.clientY < middle;
+          const position = other.compareDocumentPosition(row);
+          // Only swap when the pointer crosses a neighbour's midline, so a row
+          // does not oscillate while hovering a boundary.
+          if (before && position & Node.DOCUMENT_POSITION_FOLLOWING) {
+            other.before(row);
+            return;
           }
-          void load();
-        });
+          if (!before && position & Node.DOCUMENT_POSITION_PRECEDING) {
+            other.after(row);
+            return;
+          }
+        }
+      };
 
-        const text = document.createElement('span');
-        text.textContent = choice.name;
+      const onUp = (): void => {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+        row.classList.remove('dragging');
 
-        row.append(box, attributeIcon(choice.kind, choice.currency), text);
-        return row;
-      }),
-    );
+        // The DOM is the source of truth once dragging ends; read the order back.
+        const order = [...list.querySelectorAll<HTMLElement>('.col-row:not(.is-fixed)')]
+          .map((element) => element.dataset['key'])
+          .filter((key): key is string => Boolean(key));
+        const byKey = new Map(extraColumns.map((column) => [column.key, column]));
+        const reordered = order
+          .map((key) => byKey.get(key))
+          .filter((column): column is Column => Boolean(column));
+        if (reordered.length !== extraColumns.length) return;
+        const changed = reordered.some((column, index) => column.key !== extraColumns[index]?.key);
+        extraColumns = reordered;
+        // A drag that ended where it started should not cost a round trip.
+        if (changed) void load();
+      };
+
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
+    });
+  }
+
+  /** Sorting by a column that is no longer shown means nothing; fall back. */
+  function settleSort(): void {
+    if (!columnsNow().some((column) => column.key === sortKey)) {
+      sortKey = NAME_COLUMN.key;
+      descending = false;
+    }
+  }
+
+  /**
+   * Attribute names repeat across categories — an environment can define
+   * "Business Criticality" in two of them — so the category comes along or the
+   * list offers the same label twice with no way to tell them apart.
+   */
+  function columnLabel(column: Column): HTMLElement {
+    const wrap = document.createElement('span');
+    wrap.className = 'col-name-wrap';
+
+    if (column.choice) wrap.append(attributeIcon(column.choice.kind, column.choice.currency));
+
+    const text = document.createElement('span');
+    text.className = 'col-name';
+    text.textContent = column.label;
+    wrap.append(text);
+
+    if (column.choice) {
+      const category = document.createElement('span');
+      category.className = 'col-cat';
+      category.textContent = column.choice.categoryName;
+      wrap.append(category);
+    }
+    return wrap;
+  }
+
+  function heading(text: string): HTMLElement {
+    const element = document.createElement('p');
+    element.className = 'col-heading';
+    element.textContent = text;
+    return element;
+  }
+
+  function plus(): HTMLElement {
+    const element = document.createElement('span');
+    element.className = 'col-plus';
+    element.setAttribute('aria-hidden', 'true');
+    element.textContent = '+';
+    return element;
+  }
+
+  function spacer(): HTMLElement {
+    const element = document.createElement('span');
+    element.className = 'col-spacer';
+    element.setAttribute('aria-hidden', 'true');
+    return element;
   }
 
   async function load(): Promise<void> {
@@ -288,12 +485,6 @@ export function mountObjectTable(
     ]);
   }
 
-  function text(value: string): HTMLElement {
-    const span = document.createElement('span');
-    span.textContent = value;
-    return span;
-  }
-
   function divider(): HTMLElement {
     const line = document.createElement('div');
     line.className = 'col-divider';
@@ -321,15 +512,12 @@ export function mountObjectTable(
       const column = choice ? columnFor(choice) : null;
       if (column?.key === focusKey) return;
 
-      const kept = attributeColumns.filter((existing) => existing.key !== focusKey);
-      attributeColumns =
+      const kept = extraColumns.filter((existing) => existing.key !== focusKey);
+      extraColumns =
         column && !kept.some((existing) => existing.key === column.key) ? [...kept, column] : kept;
       focusKey = column?.key ?? null;
 
-      if (!columnsNow().some((existing) => existing.key === sortKey)) {
-        sortKey = NAME_COLUMN.key;
-        descending = false;
-      }
+      settleSort();
       page = 0;
       void load();
     },

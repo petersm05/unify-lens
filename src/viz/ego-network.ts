@@ -14,8 +14,6 @@ import { busy } from '../ui/busy';
 import { must } from '../ui/dom';
 import { labelFor } from '../sdk/metamodel';
 import { mountSearch, type SearchBox } from '../ui/search';
-import { promptForText } from '../ui/prompt';
-import { saveGraphAsView } from '../data/view-writer';
 import type { FilterStore } from '../data/filter';
 import { HOP_LABELS, hopColor, token } from './theme';
 
@@ -67,7 +65,6 @@ export function mountEgoNetwork(
       <canvas></canvas>
       <div class="finder"></div>
       <div class="hud">
-        <button type="button" data-act="save">Save to Unify</button>
         <button type="button" data-act="recenter">Recentre</button>
         <span class="status"></span>
       </div>
@@ -423,54 +420,6 @@ export function mountEgoNetwork(
     dragging = null;
     downAt = null;
   });
-
-  container.querySelector('[data-act="save"]')?.addEventListener('click', () => void save());
-
-  /**
-   * Writes the graph on screen back into Unify as a view.
-   *
-   * The node coordinates are the ones the force layout settled on, so the saved
-   * diagram matches what the user arranged rather than being re-laid out.
-   */
-  async function save(): Promise<void> {
-    if (nodes.length === 0) {
-      status.textContent = 'Nothing to save yet — search for a starting point first.';
-      return;
-    }
-
-    const focus = nodes.find((node) => node.hop === 0);
-    const name = await promptForText({
-      title: 'Save to Unify',
-      hint: `${nodes.length} objects and ${links.length} relations will be referenced by a new view.`,
-      value: focus ? `${focus.name} — network` : 'Network',
-      confirmLabel: 'Save view',
-    });
-    if (name === null) return;
-
-    status.textContent = 'Saving…';
-    try {
-      await saveGraphAsView(session.kg, {
-        name,
-        description: 'Created in Unify Lens',
-        nodes: nodes.map((node) => ({
-          id: node.id,
-          name: node.name,
-          type: node.type,
-          x: node.x ?? 0,
-          y: node.y ?? 0,
-        })),
-        edges: links.map((link) => ({
-          id: link.id,
-          type: link.type,
-          sourceId: linkId(link.source) as UUID,
-          targetId: linkId(link.target) as UUID,
-        })),
-      });
-      status.textContent = `Saved “${name}” to Unify.`;
-    } catch (error) {
-      report(error);
-    }
-  }
 
   container.querySelector('[data-act="recenter"]')?.addEventListener('click', () => {
     scale = 1;

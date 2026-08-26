@@ -2210,8 +2210,8 @@ ul.facts {
    and never shifting the columns beside it. */
 .f-go {
   font-size: 13px;
-  color: var(--text-muted);
-  opacity: 0.35;
+  color: var(--series-1);
+  opacity: 0.9;
   transition: opacity 130ms ease;
 }
 
@@ -2225,9 +2225,12 @@ ul.facts {
   color: var(--series-1);
 }
 
+/* Where hovering exists the glyph can rest a little quieter, because hovering
+   the row brings it to full strength. It must never reach zero: a tablet has no
+   hover at all, so a control hidden until hover is a control nobody finds. */
 @media (hover: hover) {
   .fact.chartable .f-go {
-    opacity: 0;
+    opacity: 0.55;
   }
 }
 
@@ -2693,4 +2696,315 @@ ul.facts {
   font-size: 12px;
   color: var(--text-muted);
   max-width: 40ch;
+}
+
+/* ── searchable picker ─────────────────────────────────────────────
+   Replaces a native <select> where the list can be long. The trigger keeps the
+   look of `.field select` so a menu of pickers reads as one set of controls;
+   the panel is fixed-position because these open inside other floating panels,
+   where an absolutely positioned child would be clipped. */
+.picker {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  cursor: default;
+}
+
+.picker:disabled {
+  opacity: 0.45;
+}
+
+.picker[aria-expanded='true'] {
+  border-color: var(--series-1);
+}
+
+.picker-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A placeholder is a real choice here ("Nothing"), so it stays legible rather
+   than dropping to the muted tone an empty field would use. */
+.picker-value.is-placeholder {
+  color: var(--text-secondary);
+}
+
+.picker-caret {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.picker-panel {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: max-content;
+  max-width: min(360px, 88vw);
+  max-height: min(380px, 60vh);
+  padding: 6px;
+  border-radius: 13px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+  animation: pane-enter 130ms cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+.picker-search {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.picker-search:focus-visible {
+  outline: none;
+  border-color: var(--series-1);
+}
+
+.picker-options {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.picker-option {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  color: var(--text-primary);
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 9px;
+}
+
+/* Keyboard and pointer share one highlight, so arrowing down and hovering
+   never disagree about which row is next. */
+.picker-option.active {
+  background: var(--surface-2);
+}
+
+.picker-option.on {
+  font-weight: 600;
+}
+
+.picker-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-option-note {
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.picker-empty {
+  margin: 0;
+  padding: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ── column picker: shown list is ordered and draggable ───────────── */
+.col-list {
+  /* A drag that selects the label text instead of moving the row reads as the
+     control being broken, so selection is off inside the panel. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.col-search {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  min-height: 38px;
+  padding: 0 11px;
+  margin-bottom: 4px;
+}
+
+.col-search:focus-visible {
+  outline: none;
+  border-color: var(--series-1);
+}
+
+.col-heading {
+  margin: 6px 0 2px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.col-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 8px 0 4px;
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--surface-1);
+}
+
+.col-row.dragging {
+  background: var(--surface-3);
+  box-shadow: var(--shadow-1);
+  /* Lifted while it moves, so the row being dragged is never ambiguous. */
+  position: relative;
+  z-index: 1;
+}
+
+.col-row.is-fixed {
+  color: var(--text-secondary);
+}
+
+.col-handle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 7px;
+  /* Without this the browser scrolls the panel instead of starting a drag. */
+  touch-action: none;
+  cursor: grab;
+}
+
+.col-handle:active {
+  cursor: grabbing;
+}
+
+.col-handle:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.col-spacer {
+  flex: none;
+  width: 28px;
+}
+
+.col-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.col-note {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.col-remove {
+  appearance: none;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.col-remove:hover {
+  background: var(--surface-2);
+  color: var(--status-critical);
+}
+
+.col-add {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.col-add:hover {
+  background: var(--surface-2);
+}
+
+.col-plus {
+  flex: none;
+  width: 16px;
+  font-size: 15px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.col-empty {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* The category that disambiguates a repeated attribute name. */
+.col-cat {
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+
+.col-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
