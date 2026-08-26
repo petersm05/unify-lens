@@ -13,6 +13,7 @@ import {
   type Distribution,
   enumDistribution,
   isPlottable,
+  measureOverTime,
   numericDistribution,
   quantiles,
   rank,
@@ -452,7 +453,7 @@ export function mountAttributeInsight(
     sizeField.hidden = !plots;
     groupField.hidden = !plots;
     // Only a timeline has periods to choose between.
-    grainField.hidden = mark !== 'timeline';
+    grainField.hidden = mark !== 'timeline' && mark !== 'trend';
     grainSelect.value = grain;
     if (plots && primary && secondary) {
       buildSizeOptions(primary, secondary);
@@ -479,7 +480,9 @@ export function mountAttributeInsight(
       const crossed = pair !== null && mark === 'heatmap';
 
       await busy.track(
-        (mark === 'scatter' || mark === 'quadrant') && pair
+        mark === 'trend' && pair
+          ? drawTrend(field, pair, mine)
+          : (mark === 'scatter' || mark === 'quadrant') && pair
           ? drawScatter(field, pair, mine)
           : crossed && pair
             ? drawCrossTab(field, pair, mine)
@@ -493,6 +496,81 @@ export function mountAttributeInsight(
         onStateChange();
       }
     }
+  }
+
+  // ── a date with a measure: what happened to this number over time ──
+
+  /**
+   * The measure per period, as columns.
+   *
+   * Which of the pair is the date decides the axis rather than the order they
+   * were picked in, so choosing a measure and comparing it with a date gives
+   * the same chart as the other way round.
+   */
+  async function drawTrend(
+    a: AttributeChoice,
+    b: AttributeChoice,
+    mine: number,
+  ): Promise<void> {
+    const when = a.kind === 'date' ? a : b;
+    const measure = a.kind === 'date' ? b : a;
+
+    const trend = await measureOverTime(
+      session.sample,
+      type,
+      when,
+      measure,
+      scopeExcluding(filters.get(), when, measure),
+      grain === '' ? undefined : grain,
+    );
+    if (mine !== generation) return;
+
+    reveal();
+    plot.hidden = true;
+    donutHost.hidden = true;
+    heatHost.hidden = true;
+    meterBlock.hidden = true;
+    withDonut.classList.remove('has-donut');
+    teardownPlot?.();
+    teardownPlot = null;
+    legendHost.hidden = true;
+
+    const money = measure.kind === 'money';
+    const format = (value: number): string =>
+      money ? formatMoney(value, measure.currency) : formatCompact(value);
+
+    set('title', `${measure.name} over ${when.name}`);
+    set(
+      'subtitle',
+      `${measure.categoryName} · ${money ? 'totalled' : 'averaged'} per ${trend.grain || 'period'}, across ${formatCount(trend.counted)} ${labelFor(type)} objects carrying both a date and a value.`,
+    );
+
+    const self = selectionFor(filters.get(), when);
+    const activeIndex = self ? trend.points.findIndex((p) => p.label === self.binLabel) : -1;
+
+    kpi(
+      money ? `Total ${measure.name}` : `Average ${measure.name}`,
+      {
+        value: money
+          ? trend.points.reduce((sum, point) => sum + point.measure, 0)
+          : trend.points.reduce((sum, point) => sum + point.measure, 0) /
+            Math.max(trend.points.length, 1),
+        format,
+      },
+      'Periods',
+      { value: trend.points.length, format: formatCount },
+    );
+
+    rows.replaceChildren();
+    timelineHost.hidden = false;
+    renderTimeline(timelineHost, trend.points, {
+      ...(activeIndex >= 0 ? { activeIndex } : {}),
+      value: (_bin, index) => trend.points[index]?.measure ?? 0,
+      format,
+      onPick: (index) => pick(when, trend.points[index], self?.binLabel),
+    });
+
+    syncObjectTable(measure);
   }
 
   // ── one field: bars / histogram / donut ────────────────────────────

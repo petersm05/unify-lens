@@ -808,6 +808,107 @@ export async function dateDistribution(
   return { bins, total: dates.length, truncated: sample.truncated };
 }
 
+export interface TrendPoint extends Bin {
+  /** The aggregated measure for the period, which is what the column height shows. */
+  readonly measure: number;
+}
+
+export interface Trend {
+  readonly points: readonly TrendPoint[];
+  readonly grain: Grain;
+  /** True when the measure is summed rather than averaged. */
+  readonly additive: boolean;
+  readonly truncated: boolean;
+  /** Objects carrying both a date and a measure — the population behind the line. */
+  readonly counted: number;
+}
+
+/**
+ * A measure per period: what happened to this number over this date.
+ *
+ * Money is summed, because a total of costs is a cost. Anything else is
+ * averaged: adding up scores across a quarter produces a bigger number for a
+ * busier quarter rather than a higher-scoring one, which is a headcount wearing
+ * a score's label.
+ *
+ * Both values come from the shared population read, so pairing an attribute
+ * with a date costs nothing beyond the read that has already happened.
+ */
+export async function measureOverTime(
+  store: SampleStore,
+  type: ObjectType,
+  when: AttributeChoice,
+  measure: AttributeChoice,
+  scope?: AttributeFilter<MetaModel>,
+  grain?: Grain,
+): Promise<Trend> {
+  const dateKey = `${when.categoryId}::${when.name}`;
+  const measureKey = `${measure.categoryId}::${measure.name}`;
+  const sample = await store.get(type, scope);
+
+  const paired: Array<{ date: Date; value: number }> = [];
+  for (const object of sample.objects) {
+    const date = object.values.get(dateKey);
+    const value = object.values.get(measureKey);
+    // Only objects carrying both belong here; one without the other would move
+    // a period's figure without being part of what it describes.
+    if (date instanceof Date && typeof value === 'number') paired.push({ date, value });
+  }
+
+  const chosen: Grain = grain ?? suggestGrain(paired.map((entry) => entry.date));
+  if (paired.length === 0) {
+    return { points: [], grain: chosen, additive: false, truncated: sample.truncated, counted: 0 };
+  }
+
+  const additive = measure.kind === 'money';
+  const buckets = new Map<string, { start: Date; end: Date; sum: number; count: number }>();
+  for (const { date, value } of paired) {
+    const bucket = bucketFor(date, chosen);
+    const existing = buckets.get(bucket.key);
+    if (existing) {
+      existing.sum += value;
+      existing.count += 1;
+    } else {
+      buckets.set(bucket.key, { start: bucket.start, end: bucket.end, sum: value, count: 1 });
+    }
+  }
+
+  const name = conditionName(when);
+  const points: TrendPoint[] = [...buckets.entries()]
+    .sort((a, b) => a[1].start.getTime() - b[1].start.getTime())
+    .map(([label, bucket]) => ({
+      label,
+      count: bucket.count,
+      measure: additive ? bucket.sum : bucket.sum / bucket.count,
+      condition: {
+        and: [
+          {
+            condition: {
+              name,
+              operator: 'greaterThanOrEquals' as const,
+              expression: { value: { type: 'date' as const, value: bucket.start } },
+            },
+          },
+          {
+            condition: {
+              name,
+              operator: 'lessThan' as const,
+              expression: { value: { type: 'date' as const, value: bucket.end } },
+            },
+          },
+        ],
+      },
+    }));
+
+  return {
+    points,
+    grain: chosen,
+    additive,
+    truncated: sample.truncated,
+    counted: paired.length,
+  };
+}
+
 export function rank(observations: readonly RankedObject[]): RankedObject[] {
   return [...observations].sort((a, b) => b.value - a.value).slice(0, 10);
 }

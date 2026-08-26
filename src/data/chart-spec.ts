@@ -9,7 +9,7 @@ export type Mark =
   | 'sum-by'
   | 'quadrant'
   | 'timeline'
-  | 'frequency';
+  | 'frequency' | 'trend';
 
 export interface MarkOption {
   readonly mark: Mark;
@@ -54,6 +54,21 @@ export function levelOf(kind: AttributeKind): Level {
 export function marksFor(primary: AttributeChoice, secondary?: AttributeChoice): MarkOption[] {
   const a = levelOf(primary.kind);
   const b = secondary ? levelOf(secondary.kind) : undefined;
+
+  // A date with a measure reads as a trend regardless of which was picked
+  // first, so both orders land on the same chart rather than one of them
+  // silently offering nothing.
+  if (secondary && ((a === 'temporal' && b === 'quantitative') || (a === 'quantitative' && b === 'temporal'))) {
+    const when = a === 'temporal' ? primary : secondary;
+    const measure = a === 'temporal' ? secondary : primary;
+    return [
+      {
+        mark: 'trend',
+        label: 'Trend',
+        hint: `${measure.name} over ${when.name}${measure.kind === 'money' ? ', totalled' : ', averaged'} per period. Tap a period to filter to it.`,
+      },
+    ];
+  }
 
   if (secondary && a === 'quantitative' && b === 'quantitative') {
     const scatter: MarkOption = {
@@ -193,18 +208,22 @@ export function compatible(
   all: readonly AttributeChoice[],
 ): AttributeChoice[] {
   const a = levelOf(primary.kind);
-  if (a !== 'quantitative' && a !== 'categorical') return [];
+  if (a !== 'quantitative' && a !== 'categorical' && a !== 'temporal') return [];
 
   return all.filter((choice) => {
     if (choice.categoryId === primary.categoryId && choice.definitionId === primary.definitionId) {
       return false;
     }
     const b = levelOf(choice.kind);
+    // A date pairs with a measure and nothing else for now: a measure over a
+    // date is a trend, while a date against a category or another date needs a
+    // form this app does not draw yet.
+    if (a === 'temporal') return b === 'quantitative';
     // A categorical pairs with a measure (totals per group) or with another
     // categorical (a cross-tab). Previously only the first was offered, which
     // left "Compare with" dead for a type whose attributes are all enums.
     return a === 'quantitative'
-      ? b === 'quantitative' || b === 'categorical'
+      ? b === 'quantitative' || b === 'categorical' || b === 'temporal'
       : b === 'quantitative' || b === 'categorical';
   });
 }

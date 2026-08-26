@@ -5,6 +5,12 @@ import { formatCount } from '../format';
 export interface TimelineOptions {
   readonly onPick?: (index: number) => void;
   readonly activeIndex?: number;
+  /**
+   * What the column height means. Defaults to the number of objects in the
+   * period; a trend passes the measure it aggregated instead.
+   */
+  readonly value?: (bin: Bin, index: number) => number;
+  readonly format?: (value: number) => string;
 }
 
 /**
@@ -24,7 +30,12 @@ export function renderTimeline(
     return;
   }
 
-  const max = Math.max(...bins.map((bin) => bin.count), 1);
+  const valueOf = options.value ?? ((bin: Bin) => bin.count);
+  const format = options.format ?? formatCount;
+  const values = bins.map((bin, index) => valueOf(bin, index));
+  // Columns are drawn from zero, so a negative measure has no honest height
+  // here; clamping keeps the axis meaning what it appears to mean.
+  const max = Math.max(...values.map((value) => Math.max(value, 0)), 1);
   // Past roughly a dozen columns the labels cannot all be read, so they thin
   // out rather than overlapping or rotating.
   const every = Math.ceil(bins.length / 12);
@@ -34,7 +45,7 @@ export function renderTimeline(
       const column = document.createElement('button');
       column.type = 'button';
       column.className = 'col';
-      column.title = `${bin.label} · ${formatCount(bin.count)}`;
+      column.title = `${bin.label} · ${format(values[index] ?? 0)}`;
       if (options.activeIndex === index) column.classList.add('on');
       if (options.onPick) {
         const pick = options.onPick;
@@ -45,7 +56,7 @@ export function renderTimeline(
 
       const value = document.createElement('span');
       value.className = 'col-value';
-      value.textContent = formatCount(bin.count);
+      value.textContent = format(values[index] ?? 0);
 
       const track = document.createElement('span');
       track.className = 'col-track';
@@ -55,7 +66,7 @@ export function renderTimeline(
         fill.classList.add('muted');
       }
 
-      const height = `${(bin.count / max) * 100}%`;
+      const height = `${(Math.max(values[index] ?? 0, 0) / max) * 100}%`;
       if (reducedMotion()) {
         fill.style.height = height;
       } else {
