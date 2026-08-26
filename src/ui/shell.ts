@@ -196,12 +196,21 @@ export function mountShell(root: HTMLElement, session: Session): void {
       button.type = 'button';
       button.role = 'tab';
       button.textContent = tab.label;
-      button.addEventListener('click', () => show(tab.id));
+      button.addEventListener('click', () => show(tab.id, true));
       return button;
     }),
   );
 
-  function show(next: ViewId): void {
+  /**
+   * @param fresh - whether to drop the current filters. Set when someone picks
+   *   a tab, because reaching for a tab is starting a new question rather than
+   *   carrying the last one over — and the type filter does not even apply to
+   *   the population view, so it sat there looking like it did. Left off for
+   *   navigation the app performs itself: picking a type, charting an attribute
+   *   from a record and restoring a shared analysis all set a filter and *then*
+   *   move, so clearing would discard what they had just chosen.
+   */
+  function show(next: ViewId, fresh = false): void {
     if (current === next) return;
     current = next;
 
@@ -209,13 +218,18 @@ export function mountShell(root: HTMLElement, session: Session): void {
       button.setAttribute('aria-selected', String(TABS[index]?.id === next));
     });
 
-    // A view change is a step worth going Back to.
-    syncUrl(true);
-
     view?.destroy();
     view = null;
     insightView = null;
     pane.replaceChildren();
+
+    // After the outgoing view is gone, so its subscription does not answer a
+    // change it is about to be destroyed over, and before the URL is written so
+    // that what gets pushed is the state actually arrived at.
+    if (fresh) filters.clear();
+
+    // A view change is a step worth going Back to.
+    syncUrl(true);
 
     switch (next) {
       case 'population': {
