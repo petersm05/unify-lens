@@ -120,7 +120,19 @@ self.addEventListener('fetch', (event) => {
           // A deploy renames every asset, so the ones this document no longer
           // mentions are dead weight. Without this the cache only ever grows:
           // roughly two megabytes of orphaned bundle per release.
-          event.waitUntil(pruneAssets(cache, await copy.text()));
+          //
+          // waitUntil is only legal while the event is still active, and this
+          // point is several awaits into handling it. Where a browser refuses,
+          // the tidy-up is still worth starting — it simply loses the promise
+          // that the worker stays alive for it, and catches up next launch.
+          // What must not happen is the refusal escaping into respondWith,
+          // where it would fail the navigation itself.
+          const pruning = pruneAssets(cache, await copy.text());
+          try {
+            event.waitUntil(pruning);
+          } catch {
+            void pruning;
+          }
           return fresh;
         } catch {
           const cache = await caches.open(CACHE);
