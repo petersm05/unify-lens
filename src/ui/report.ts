@@ -29,6 +29,36 @@ export function buildId(): string {
   return match?.[1] ?? 'dev';
 }
 
+/**
+ * What is on screen, in words.
+ *
+ * A link to the view needs an account on the tenant to open, so in an issue it
+ * is close to useless — while its filters carry attribute values that would be
+ * published along with it. The chart's own title says the same thing in a form
+ * anyone can read, and filters are counted rather than named for the same
+ * reason.
+ */
+function lookingAt(): string {
+  const view =
+    document.querySelector('nav.tabs button[aria-selected="true"]')?.textContent?.trim() ?? '';
+  const type = document
+    .querySelector('.picker.type-select .picker-value')
+    ?.textContent?.trim();
+  const chart = document.querySelector('[data-k="title"]')?.textContent?.trim();
+  const filters = document.querySelectorAll('.filters .chip, .filters button').length;
+  // The bar carries one "Clear all" alongside the chips.
+  const applied = Math.max(0, filters - 1);
+
+  return [
+    view,
+    type && type !== 'Nothing' ? type : undefined,
+    chart && chart !== '—' ? chart : undefined,
+    applied > 0 ? `${applied} filter${applied === 1 ? '' : 's'} applied` : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 function diagnostics(): string {
   const mode = globalThis.matchMedia?.('(display-mode: standalone)').matches
     ? 'installed'
@@ -52,12 +82,15 @@ const TEMPLATE: Record<ReportKind, { heading: string; title: string; body: strin
   bug: {
     heading: 'Report a problem',
     title: '',
-    body: 'What happened?\n\n\nWhat did you expect instead?\n\n',
+    body:
+      'What happened?\n\n\nWhat did you expect instead?\n\n\n' +
+      'Screenshot (paste here — iOS cannot capture one for you):\n\n',
   },
   idea: {
     heading: 'Request a feature',
     title: '',
-    body: 'What would you like to be able to do?\n\n\nWhat would that let you find out?\n\n',
+    body:
+      'What would you like to be able to do?\n\n\nWhat would that let you find out?\n\n',
   },
 };
 
@@ -80,10 +113,9 @@ export function openReport(kind: ReportKind, environment?: string): void {
         <textarea class="report-body" rows="10"></textarea>
       </label>
       <div class="report-adders">
-        <button type="button" class="ghost" data-act="add-env">Add environment</button>
-        <button type="button" class="ghost" data-act="add-link">Add current view link</button>
+        <button type="button" class="adder" data-act="add-env">Add environment</button>
+        <button type="button" class="adder" data-act="add-view">Add what I'm looking at</button>
       </div>
-      <p class="hint report-warn" hidden></p>
       <div class="modal-actions">
         <button type="button" class="ghost" data-act="cancel">Cancel</button>
         <button type="button" class="primary" data-act="open">Open on GitHub</button>
@@ -94,14 +126,13 @@ export function openReport(kind: ReportKind, environment?: string): void {
   const heading = must(backdrop.querySelector('h2'), 'report: title');
   const title = must(backdrop.querySelector<HTMLInputElement>('.report-title'), 'report: summary');
   const body = must(backdrop.querySelector<HTMLTextAreaElement>('.report-body'), 'report: body');
-  const warn = must(backdrop.querySelector<HTMLElement>('.report-warn'), 'report: warning');
   const addEnv = must(
     backdrop.querySelector<HTMLButtonElement>('[data-act="add-env"]'),
     'report: env',
   );
-  const addLink = must(
-    backdrop.querySelector<HTMLButtonElement>('[data-act="add-link"]'),
-    'report: link',
+  const addView = must(
+    backdrop.querySelector<HTMLButtonElement>('[data-act="add-view"]'),
+    'report: view',
   );
 
   heading.textContent = template.heading;
@@ -120,13 +151,11 @@ export function openReport(kind: ReportKind, environment?: string): void {
     addEnv.disabled = true;
   });
 
-  addLink.addEventListener('click', () => {
-    append(`View: ${globalThis.location.href}`);
-    addLink.disabled = true;
-    // Said only once it is true, rather than as a standing warning nobody reads.
-    warn.hidden = false;
-    warn.textContent =
-      'That link carries the filters you have applied, including attribute values. Remove any you would rather not publish.';
+  const seeing = lookingAt();
+  addView.disabled = seeing.length === 0;
+  addView.addEventListener('click', () => {
+    append(`Looking at: ${seeing}`);
+    addView.disabled = true;
   });
 
   const close = (): void => {

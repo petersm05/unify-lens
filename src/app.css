@@ -3228,6 +3228,29 @@ header.bar h1,
   gap: 8px;
 }
 
+/* .ghost is only styled inside .modal-actions, so these were falling through to
+   the browser's own button. They belong to the form, not to its actions. */
+.report-adders .adder {
+  appearance: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.report-adders .adder:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
+.report-adders .adder:disabled {
+  opacity: 0.45;
+}
+
 /* Shown only once a link has actually been attached, so it reports a fact
    rather than standing there as a warning nobody reads. */
 .report-warn {
