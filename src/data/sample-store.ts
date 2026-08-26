@@ -3,6 +3,23 @@ import type { Kg } from '../sdk/client';
 
 /** How many objects a client-side derivation will read before it stops. */
 export const SAMPLE_LIMIT = 4000;
+
+/**
+ * How long a population read is allowed to take before it settles for what it
+ * has.
+ *
+ * A ceiling on objects alone does not bound the wait: the cost is objects
+ * multiplied by the attributes each carries, and there is no per-attribute
+ * projection — one object arrives with all forty-four of an Application's
+ * values whether a chart wants one of them or all of them. So a type with
+ * forty attributes waits many times longer than a type with six for the same
+ * number of objects, and a limit expressed in objects lets that run away.
+ *
+ * The first page reveals the real rate, so the rest of the read is sized from
+ * it. Reading less is visible — every view already says when it is working from
+ * a sample — where a minute of waiting is not something a reader can act on.
+ */
+const READ_BUDGET_MS = 20_000;
 /**
  * Objects per request.
  *
@@ -110,9 +127,15 @@ export class SampleStore {
 
     // The first page also settles the count, so asking how many there are costs
     // nothing extra afterwards.
+    const started = performance.now();
     const first = await pages.getPage(0);
+    const perPage = performance.now() - started;
     const total = await pages.getNumberOfPages();
-    const wanted = Math.min(total, Math.ceil(SAMPLE_LIMIT / PAGE));
+
+    // What the budget affords at the rate the first page just demonstrated,
+    // always at least the page already in hand.
+    const affordable = Math.max(1, Math.floor(READ_BUDGET_MS / Math.max(perPage, 1)));
+    const wanted = Math.min(total, Math.ceil(SAMPLE_LIMIT / PAGE), affordable);
 
     // Requested together rather than one after the next: pages are randomly
     // addressable, so the round trips overlap instead of queueing. Awaited in
