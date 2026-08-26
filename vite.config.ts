@@ -1,6 +1,51 @@
-import { defineConfig } from 'vite';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { defineConfig, type Plugin } from 'vite';
+
+/**
+ * Stamps the service worker with the bundle it belongs to.
+ *
+ * A browser decides a worker is new by comparing the script's bytes. sw.js is a
+ * static file, so a release that changed only the app left it identical — no
+ * new worker, no update event, and the "new version" prompt never appeared for
+ * exactly the releases people needed to be told about. It only ever fired when
+ * the worker itself happened to be edited.
+ *
+ * Naming the emitted assets ties the two together: the stamp changes when, and
+ * only when, there is actually something new to pick up.
+ */
+function stampServiceWorker(): Plugin {
+  return {
+    name: 'stamp-service-worker',
+    apply: 'build',
+    writeBundle(options) {
+      const dir = options.dir;
+      if (!dir) return;
+      const worker = join(dir, 'sw.js');
+
+      let assets: string[];
+      try {
+        const html = readFileSync(join(dir, 'index.html'), 'utf8');
+        assets = [...html.matchAll(/(?:src|href)="\.\/(assets\/[^"]+)"/g)]
+          .map((match) => match[1] ?? '')
+          .sort();
+      } catch {
+        return;
+      }
+      if (assets.length === 0) return;
+
+      try {
+        const body = readFileSync(worker, 'utf8');
+        writeFileSync(worker, `// build: ${assets.join(' ')}\n${body}`);
+      } catch {
+        // No worker in this build; nothing to stamp.
+      }
+    },
+  };
+}
 
 export default defineConfig({
+  plugins: [stampServiceWorker()],
   // Emit relative asset URLs so one build runs from any path: the root of a
   // host, a project subpath like /unify-lens/ on GitHub Pages, or file:// inside
   // a native shell. Nothing in the bundle may assume it is served from /.

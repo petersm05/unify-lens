@@ -137,20 +137,26 @@
    iOS then shows that white past the app: behind the home indicator, and while
    the viewport rubber-bands. The page needs its own copy of the ground colour,
    declared where `html` and `body` can actually see it. */
+/* The ground matches the plane, not the app's own surface.
+   #app is anchored to the top and sized to the viewport, so any moment the
+   visible area is taller than it — a toolbar retracting, an overscroll, the
+   keyboard leaving — opens a gap at the *bottom*, directly under the scrolling
+   plane. Painting that gap in the lighter surface colour is what made it read
+   as a band; in the plane's own colour there is nothing to see. */
 :root {
-  --page: #faf5ea;
+  --page: #f2e9d8;
   --page-ink: #2c2118;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --page: #241c16;
+    --page: #191310;
     --page-ink: #f6ede0;
   }
 }
 
 :root[data-theme='dark'] {
-  --page: #241c16;
+  --page: #191310;
   --page-ink: #f6ede0;
 }
 
