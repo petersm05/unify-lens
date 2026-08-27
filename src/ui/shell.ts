@@ -3,6 +3,7 @@ import type { Session } from '../sdk/client';
 import { mountDetailSheet } from './detail-sheet';
 import { decode, encode, slimFilters, type Analysis } from '../data/analysis';
 import { mountSavedPanel } from './saved-panel';
+import { createSavedStore } from '../data/saved';
 import { FilterStore } from '../data/filter';
 import { mountAttributeInsight, type AttributeInsight } from '../viz/attribute-insight';
 import { mountEgoNetwork, type EgoNetwork } from '../viz/ego-network';
@@ -157,6 +158,7 @@ export function mountShell(root: HTMLElement, session: Session): void {
     currentAnalysis,
     (analysis) => void applyAnalysis(analysis),
     linkFor,
+    createSavedStore(session),
     session.label,
     () => void endSession({ forgetEnvironment: false }),
     () => void endSession({ forgetEnvironment: true }),

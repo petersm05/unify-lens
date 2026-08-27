@@ -1,5 +1,5 @@
 import type { Analysis } from '../data/analysis';
-import { listSaved, remove, save, type SavedAnalysis } from '../data/saved';
+import type { SavedAnalysis, SavedStore } from '../data/saved';
 import { must } from './dom';
 import { confirmAction, promptForText } from './prompt';
 import { canShare, shareLink } from './share';
@@ -22,6 +22,8 @@ export function mountSavedPanel(
   current: () => Analysis,
   onOpen: (analysis: Analysis) => void,
   linkFor: (analysis: Analysis) => string,
+  /** Where saved analyses live — Unify where possible, this device otherwise. */
+  store: SavedStore,
   /** Named in a report only if someone chooses to add it, and shown in the menu. */
   environment?: string,
   /** Ends the session. Absent in contexts with no session to end. */
@@ -128,8 +130,22 @@ export function mountSavedPanel(
   const setOpen = (open: boolean): void => {
     panel.hidden = !open;
     button.setAttribute('aria-expanded', String(open));
-    if (open) render(listSaved());
+    // Reading them is a request now, so the list says it is working rather than
+    // showing "nothing saved yet" while the answer is still on its way.
+    if (open) void reload();
   };
+
+  async function reload(): Promise<void> {
+    empty.hidden = false;
+    empty.textContent = 'Loading…';
+    list.replaceChildren();
+    try {
+      render(await store.list());
+    } catch {
+      empty.hidden = false;
+      empty.textContent = 'Could not read your saved analyses.';
+    }
+  }
 
   button.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -147,17 +163,29 @@ export function mountSavedPanel(
   add.addEventListener('click', () => {
     void promptForText({
       title: 'Save this analysis',
-      hint: `Stored on this device. Use ${canShare() ? 'Share' : 'Copy link'} to send it to someone else.`,
+      hint: `${
+        store.isLocalOnly() ? 'Stored on this device.' : 'Stored in Unify, so it follows you.'
+      } Use ${canShare() ? 'Share' : 'Copy link'} to send it to someone else.`,
       value: '',
       confirmLabel: 'Save',
-    }).then((name) => {
+    }).then(async (name) => {
       if (name === null) return;
-      render(save(name, current(), Date.now()));
+      empty.hidden = false;
+      empty.textContent = 'Saving…';
+      try {
+        render(await store.save(name, current()));
+      } catch {
+        empty.hidden = false;
+        empty.textContent = 'Could not save.';
+      }
     });
   });
 
   function render(entries: readonly SavedAnalysis[]): void {
     empty.hidden = entries.length > 0;
+    empty.textContent = store.isLocalOnly()
+      ? 'Nothing saved yet. These would be kept on this device only.'
+      : 'Nothing saved yet.';
     list.replaceChildren(
       ...entries.map((entry) => {
         const item = document.createElement('li');
@@ -167,8 +195,24 @@ export function mountSavedPanel(
         open.className = 'saved-open';
         open.textContent = entry.name;
         open.addEventListener('click', () => {
-          onOpen(entry.analysis);
-          setOpen(false);
+          // The analysis is fetched now rather than with the list, so opening
+          // one costs a request the list no longer pays for every entry.
+          open.disabled = true;
+          const label = open.textContent;
+          open.textContent = 'Opening…';
+          void store
+            .open(entry.id)
+            .then((analysis) => {
+              if (!analysis) throw new Error('unreadable');
+              setOpen(false);
+              onOpen(analysis);
+            })
+            .catch(() => {
+              open.disabled = false;
+              open.textContent = label;
+              empty.hidden = false;
+              empty.textContent = 'Could not open that analysis.';
+            });
         });
 
         const resting = canShare() ? 'Share' : 'Copy link';
@@ -177,21 +221,44 @@ export function mountSavedPanel(
         link.className = 'saved-action';
         link.textContent = resting;
         link.addEventListener('click', () => {
-          void shareLink(linkFor(entry.analysis), entry.name, 'A saved Unify Lens analysis').then(
+          // Sharing needs the analysis itself, which the list no longer carries.
+          link.disabled = true;
+          void store
+            .open(entry.id)
+            .then((analysis) => {
+              if (!analysis) throw new Error('unreadable');
+              return shareLink(linkFor(analysis), entry.name, 'A saved Unify Lens analysis');
+            })
+            .then(
             (outcome) => {
+              link.disabled = false;
               // A dismissed sheet needs no report: they saw it and closed it.
               if (outcome === 'dismissed' || outcome === 'shared') return;
               link.textContent = outcome === 'copied' ? 'Copied' : 'Failed';
               window.setTimeout(() => (link.textContent = resting), 1400);
             },
-          );
+          )
+            .catch(() => {
+              link.disabled = false;
+              link.textContent = 'Failed';
+              window.setTimeout(() => (link.textContent = resting), 1400);
+            });
         });
 
         const drop = document.createElement('button');
         drop.type = 'button';
         drop.className = 'saved-action';
         drop.textContent = 'Delete';
-        drop.addEventListener('click', () => render(remove(entry.id)));
+        drop.addEventListener('click', () => {
+          drop.disabled = true;
+          void store
+            .remove(entry.id)
+            .then(render)
+            .catch(() => {
+              drop.disabled = false;
+              drop.textContent = 'Failed';
+            });
+        });
 
         item.append(open, link, drop);
         return item;
