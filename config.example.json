@@ -1,0 +1,16 @@
+{
+  "_comment": "Copy to config.json beside the built app. One artifact, one file per deployment — no rebuild to point at a different tenant.",
+
+  "environmentUrl": "https://your-environment.unify.cloud",
+  "metaModel": "BDCore",
+
+  "_sandbox": "A stack that publishes no env.js supplies the settings directly instead of environmentUrl:",
+  "_graphqlEndpoint": "https://<stack>-api.<stack>.sandbox.bizzdesign.dev/graphql",
+  "_graphqlRealtimeEndpoint": "wss://<stack>-api.<stack>.sandbox.bizzdesign.dev/graphql/realtime",
+  "_cognitoRegion": "eu-west-1",
+  "_cognitoDomain": "<stack>-auth.<stack>.sandbox.bizzdesign.dev",
+  "_cognitoUserPoolId": "<user-pool-id>",
+  "_cognitoClientId": "<app-client-id>",
+
+  "_callbackUrl": "Optional. Defaults to this app's own origin, which must be on the Cognito app client's callback allowlist."
+}
