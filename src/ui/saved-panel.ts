@@ -2,11 +2,13 @@ import type { Analysis } from '../data/analysis';
 import type { SavedAnalysis, SavedStore } from '../data/saved';
 import type { Session } from '../sdk/client';
 import { must } from './dom';
-import { confirmAction, promptForText } from './prompt';
+import { confirmAction } from './prompt';
 import { canShare, shareLink } from './share';
 import { moreIcon } from './icons';
 import { showContextMenu, type MenuItem } from './context-menu';
 import { openShareWith } from './share-with';
+import { openSaveAnalysis } from './save-analysis';
+import { applyChoice } from './share-options';
 import { buildId, openReport } from './report';
 
 export interface SavedPanel {
@@ -175,30 +177,43 @@ export function mountSavedPanel(
   document.addEventListener('keydown', escape);
 
   add.addEventListener('click', () => {
-    void promptForText({
-      title: 'Save this analysis',
-      hint: `${
-        store.isLocalOnly() ? 'Stored on this device.' : 'Stored in Unify, so it follows you.'
-      } Use ${canShare() ? 'Share' : 'Copy link'} to send it to someone else.`,
-      value: '',
-      confirmLabel: 'Save',
-    }).then(async (name) => {
-      if (name === null) return;
-      empty.hidden = false;
-      empty.textContent = 'Saving…';
+    void openSaveAnalysis(
+      session,
+      store.isLocalOnly()
+        ? 'Stored on this device.'
+        : 'Stored in Unify, so it follows you to any browser you sign in from.',
+    ).then(async (request) => {
+      if (request === null) return;
+      say('Saving…');
       try {
-        render(await store.save(name, current()));
-        // Saving falls back to this device when Unify cannot be written to. The
-        // prompt has just promised the opposite, so silence here is how an
-        // analysis goes missing from someone's other browser with no sign that
-        // anything went wrong.
-        status.hidden = !store.isLocalOnly();
-        status.textContent = store.isLocalOnly()
-          ? 'Saved on this device only — Unify could not be written to, so this will not appear elsewhere.'
-          : '';
+        const entries = await store.save(request.name, current());
+        render(entries);
+
+        // Sharing waits until the analysis exists, because there is nothing to
+        // grant a permission on before that.
+        const saved = entries.find((entry) => entry.name === request.name);
+        const wanted = request.share.tenantWide || request.share.people.length > 0;
+        if (saved && wanted) {
+          say('Sharing…');
+          const failed = await applyChoice(store, saved.id, request.share);
+          render(await store.list());
+          say(
+            failed.length === 0
+              ? 'Saved and shared.'
+              : `Saved, but could not share with ${failed.join(', ')}.`,
+          );
+          return;
+        }
+
+        // Saving falls back to this device when Unify cannot be written to, and
+        // the prompt has just promised the opposite.
+        say(
+          store.isLocalOnly()
+            ? 'Saved on this device only — Unify could not be written to, so this will not appear elsewhere.'
+            : '',
+        );
       } catch {
-        empty.hidden = false;
-        empty.textContent = 'Could not save.';
+        say('Could not save.');
       }
     });
   });

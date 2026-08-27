@@ -3380,7 +3380,7 @@ header.bar h1,
   max-width: min(280px, 80vw);
 }
 
-/* ── sharing with a person ─────────────────────────────────────────── */
+/* ── sharing ───────────────────────────────────────────────────────── */
 .modal.share-with {
   width: min(480px, 92vw);
   display: flex;
@@ -3506,4 +3506,115 @@ header.bar h1,
 .share-revoke:hover:not(:disabled) {
   background: var(--surface-2);
   color: var(--status-critical);
+}
+
+/* The controls themselves, wherever they are mounted. */
+.share-options {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Reads as one statement with a checkbox in front of it, rather than a control
+   and some prose that happen to sit near each other. */
+.share-everyone {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.share-everyone > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* Specific enough to escape the modal's generic text-input styling, which
+   would otherwise stretch the checkbox across the row. */
+.share-options input.share-tenant {
+  appearance: auto;
+  flex: none;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  margin: 1px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  accent-color: var(--series-1);
+}
+
+.share-everyone-label {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.share-everyone-note {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.share-current:not(:empty) {
+  padding-top: 2px;
+}
+
+/* ── naming an analysis ────────────────────────────────────────────── */
+.modal.save-analysis {
+  width: min(480px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 86vh;
+  overflow-y: auto;
+}
+
+.modal.save-analysis h2,
+.modal.save-analysis .hint,
+.modal.save-analysis .modal-actions {
+  margin: 0;
+}
+
+/* Folded shut on a save that is going nowhere but here, which is most of them. */
+.save-share > summary {
+  font-size: 14px;
+  color: var(--text-secondary);
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+  list-style: none;
+  user-select: none;
+}
+
+.save-share > summary::-webkit-details-marker {
+  display: none;
+}
+
+.save-share > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+
+.save-share[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.save-share[open] > summary {
+  color: var(--text-primary);
+}
+
+.save-share > .share-host {
+  padding-top: 6px;
 }

@@ -1,22 +1,15 @@
 import type { SavedAnalysis, SavedStore } from '../data/saved';
 import type { Session } from '../sdk/client';
-import { MIN_SEARCH, searchUsers, type FoundUser } from '../sdk/users';
 import { must } from './dom';
 import { overlayHost } from './overlay';
-
-/** Long enough that typing a name is one request, not one per letter. */
-const DEBOUNCE_MS = 250;
+import { mountShareOptions } from './share-options';
 
 /**
- * Choosing who may read an analysis.
+ * Sharing an analysis that already exists.
  *
- * Deliberately a search rather than a list. Nothing appears until at least two
- * characters are typed, and only matches for what was typed come back — so this
- * is a way to find a colleague, never a way to read off the staff directory.
- *
- * Access is granted immediately on picking someone rather than collected behind
- * a Save button: each grant is its own call, and a dialog that looks like a form
- * but has already taken effect would be worse than one that plainly acts.
+ * A thin frame around the shared controls: because there is something to grant
+ * a permission on, every change is applied as it is made rather than collected
+ * behind a Save button that would already have taken effect.
  */
 export function openShareWith(
   session: Session,
@@ -28,150 +21,34 @@ export function openShareWith(
   backdrop.className = 'modal-backdrop';
   backdrop.innerHTML = `
     <div class="modal share-with" role="dialog" aria-modal="true">
-      <h2>Share with someone</h2>
+      <h2>Share</h2>
       <p class="hint"></p>
-      <label class="field">
-        <span>Find a person</span>
-        <input type="search" class="share-search" placeholder="Name or email"
-               autocomplete="off" autocapitalize="none" spellcheck="false" />
-      </label>
-      <div class="share-results" role="listbox" aria-label="People"></div>
-      <p class="share-note"></p>
-      <div class="share-current"></div>
+      <div class="share-host"></div>
       <div class="modal-actions">
         <button type="button" class="primary" data-act="done">Done</button>
       </div>
     </div>
   `;
 
-  const hint = must(backdrop.querySelector<HTMLElement>('.hint'), 'share: hint');
-  const input = must(backdrop.querySelector<HTMLInputElement>('.share-search'), 'share: input');
-  const results = must(backdrop.querySelector<HTMLElement>('.share-results'), 'share: results');
-  const note = must(backdrop.querySelector<HTMLElement>('.share-note'), 'share: note');
-  const current = must(backdrop.querySelector<HTMLElement>('.share-current'), 'share: current');
+  must(backdrop.querySelector<HTMLElement>('.hint'), 'share: hint').textContent =
+    `Who can open “${entry.name}”. Anyone you share with can open and copy it, but not change it.`;
 
-  hint.textContent = `Whoever you choose can open “${entry.name}” from their own saved list. They cannot change it.`;
-
-  let shared: readonly { email: string; name: string }[] = entry.sharedWith;
-  let debounce: number | undefined;
-  let generation = 0;
-
-  function paintCurrent(): void {
-    current.replaceChildren();
-    if (shared.length === 0) return;
-
-    const heading = document.createElement('p');
-    heading.className = 'share-heading';
-    heading.textContent = 'Shared with';
-    current.append(heading);
-
-    for (const person of shared) {
-      const row = document.createElement('div');
-      row.className = 'share-person';
-
-      const label = document.createElement('span');
-      label.textContent = person.name;
-
-      const revoke = document.createElement('button');
-      revoke.type = 'button';
-      revoke.className = 'share-revoke';
-      revoke.textContent = 'Remove';
-      revoke.addEventListener('click', () => {
-        revoke.disabled = true;
-        revoke.textContent = 'Removing…';
-        // Revoking needs an id, and a grant read back from the server carries
-        // only an address — the backend will not return a user id here. The
-        // address is unique, so it finds the person again.
-        void searchUsers(session, person.email)
-          .then((found) => {
-            const match = found.find((candidate) => candidate.email === person.email);
-            if (!match) throw new Error('not found');
-            return store.setUserShared(entry.id, match.id, person.email, false);
-          })
-          .then((entries) => {
-            shared = shared.filter((other) => other.email !== person.email);
-            paintCurrent();
-            onChanged(entries);
-            // Said plainly: revoking stops future access, it does not reach
-            // into a copy someone already saved for themselves.
-            note.textContent = `${person.name} can no longer open it. Anything they already copied stays theirs.`;
-          })
-          .catch(() => {
-            revoke.disabled = false;
-            revoke.textContent = 'Remove';
-            note.textContent = 'Could not remove that person.';
-          });
-      });
-
-      row.append(label, revoke);
-      current.append(row);
-    }
-  }
-
-  function paintResults(found: FoundUser[]): void {
-    const already = new Set(shared.map((person) => person.email));
-    results.replaceChildren(
-      ...found
-        .filter((user) => !already.has(user.email))
-        .slice(0, 8)
-        .map((user) => {
-          const row = document.createElement('button');
-          row.type = 'button';
-          row.className = 'share-result';
-          row.setAttribute('role', 'option');
-
-          const name = document.createElement('span');
-          name.className = 'share-name';
-          name.textContent = user.name;
-          const mail = document.createElement('span');
-          mail.className = 'share-email';
-          mail.textContent = user.email;
-          row.append(name, mail);
-
-          row.addEventListener('click', () => {
-            row.disabled = true;
-            note.textContent = `Sharing with ${user.name}…`;
-            void store
-              .setUserShared(entry.id, user.id, user.email, true)
-              .then((entries) => {
-                shared = [...shared, { email: user.email, name: user.name }];
-                paintCurrent();
-                paintResults(found);
-                onChanged(entries);
-                note.textContent = `${user.name} can open it now.`;
-              })
-              .catch(() => {
-                row.disabled = false;
-                note.textContent = `Could not share with ${user.name}.`;
-              });
-          });
-
-          return row;
-        }),
-    );
-  }
-
-  input.addEventListener('input', () => {
-    window.clearTimeout(debounce);
-    const term = input.value.trim();
-
-    if (term.length < MIN_SEARCH) {
-      results.replaceChildren();
-      note.textContent = term.length === 0 ? '' : 'Keep typing…';
-      return;
-    }
-
-    note.textContent = 'Searching…';
-    const mine = ++generation;
-    debounce = window.setTimeout(() => {
-      void searchUsers(session, term).then((found) => {
-        // A slower earlier search must not overwrite a later one.
-        if (mine !== generation) return;
-        note.textContent = found.length === 0 ? 'Nobody matches that.' : '';
-        paintResults(found);
-      });
-    }, DEBOUNCE_MS);
-  });
+  mountShareOptions(
+    must(backdrop.querySelector<HTMLElement>('.share-host'), 'share: host'),
+    session,
+    {
+      initial: { tenantWide: entry.sharedWithTenant, people: [] },
+      load: () => store.sharedWith(entry.id),
+      apply: {
+        setTenantWide: async (shared) => {
+          onChanged(await store.setSharedWithTenant(entry.id, shared));
+        },
+        setPerson: async (person, shared) => {
+          onChanged(await store.setUserShared(entry.id, person.id, person.email, shared));
+        },
+      },
+    },
+  );
 
   const close = (): void => {
     document.removeEventListener('keydown', onKey);
@@ -188,14 +65,6 @@ export function openShareWith(
   });
   document.addEventListener('keydown', onKey);
 
-  paintCurrent();
   overlayHost().append(backdrop);
-  input.focus();
-
-  // Read who it is already shared with. Not carried by the list, because doing
-  // so would cost a request per row for something only this dialog shows.
-  void store.sharedWith(entry.id).then((people) => {
-    shared = people;
-    paintCurrent();
-  });
+  must(backdrop.querySelector<HTMLInputElement>('.share-search'), 'share: input').focus();
 }
