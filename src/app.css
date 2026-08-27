@@ -3321,3 +3321,15 @@ header.bar h1,
 .saved-build {
   margin: 0 4px 8px;
 }
+
+/* Said when analyses are on this device rather than in Unify. Not an error —
+   the app still works — but it must not be silent, or an analysis simply does
+   not appear on someone's other machine and nothing ever said why. */
+.saved-status {
+  margin: 6px 4px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--text-secondary);
+}

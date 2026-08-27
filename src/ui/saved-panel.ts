@@ -41,6 +41,7 @@ export function mountSavedPanel(
         </div>
         <ul class="saved-list"></ul>
         <p class="saved-empty">Nothing saved yet.</p>
+        <p class="saved-status" hidden></p>
 
         <div class="menu-section">
           <span class="menu-label">Environment</span>
@@ -68,6 +69,7 @@ export function mountSavedPanel(
   const panel = must(host.querySelector<HTMLElement>('.saved-panel'), 'saved: panel');
   const list = must(host.querySelector<HTMLElement>('.saved-list'), 'saved: list');
   const empty = must(host.querySelector<HTMLElement>('.saved-empty'), 'saved: empty');
+  const status = must(host.querySelector<HTMLElement>('.saved-status'), 'saved: status');
   const add = must(host.querySelector<HTMLButtonElement>('.saved-add'), 'saved: add');
 
   /**
@@ -136,11 +138,18 @@ export function mountSavedPanel(
   };
 
   async function reload(): Promise<void> {
+    status.hidden = true;
     empty.hidden = false;
     empty.textContent = 'Loading…';
     list.replaceChildren();
     try {
       render(await store.list());
+      // Same for reading: a list that came from this device is not the list
+      // someone thinks they are looking at.
+      status.hidden = !store.isLocalOnly();
+      status.textContent = store.isLocalOnly()
+        ? 'These are on this device only — Unify could not be reached.'
+        : '';
     } catch {
       empty.hidden = false;
       empty.textContent = 'Could not read your saved analyses.';
@@ -174,6 +183,14 @@ export function mountSavedPanel(
       empty.textContent = 'Saving…';
       try {
         render(await store.save(name, current()));
+        // Saving falls back to this device when Unify cannot be written to. The
+        // prompt has just promised the opposite, so silence here is how an
+        // analysis goes missing from someone's other browser with no sign that
+        // anything went wrong.
+        status.hidden = !store.isLocalOnly();
+        status.textContent = store.isLocalOnly()
+          ? 'Saved on this device only — Unify could not be written to, so this will not appear elsewhere.'
+          : '';
       } catch {
         empty.hidden = false;
         empty.textContent = 'Could not save.';
