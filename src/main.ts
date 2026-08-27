@@ -2,16 +2,40 @@ import { connect, MissingEnvironment, onSdkError } from './sdk/client';
 import { forgetEnvironment, savedEnvironment } from './sdk/runtime-config';
 import { mountShell } from './ui/shell';
 import { showSetup } from './ui/setup';
+import { guardSession, rememberView, takeResumeUrl } from './sdk/session-guard';
 import { watchForUpdates } from './ui/update-prompt';
 
 const root = document.querySelector<HTMLElement>('#app');
 
+/** A line the app can say for itself before the shell exists to say it. */
+function showNotice(root: HTMLElement, message: string): void {
+  const existing = root.querySelector<HTMLElement>('.session-notice');
+  const notice = existing ?? document.createElement('p');
+  notice.className = 'session-notice';
+  notice.setAttribute('role', 'status');
+  notice.textContent = message;
+  if (!existing) root.append(notice);
+}
+
 async function boot(): Promise<void> {
   if (!root) return;
+
+  // Before connecting, because connecting is what redirects: an unauthenticated
+  // visitor opening a shared link is sent to sign in, and the link's whole
+  // payload is the query that round trip discards.
+  rememberView();
 
   try {
     const session = await connect();
     onSdkError(session, (message) => console.warn('[sdk]', message));
+
+    // Coming back from signing in, the callback lands on the app's base URL and
+    // the analysis that was on screen is in the query it dropped. Put it back
+    // before anything mounts, so the view returns rather than resetting.
+    const resume = takeResumeUrl();
+    if (resume && resume !== globalThis.location.href) {
+      globalThis.history.replaceState(null, '', resume);
+    }
 
     // Dev-only handle so the SDK can be driven from the console when working
     // out an undocumented payload shape. Never present in a production build.
@@ -20,6 +44,11 @@ async function boot(): Promise<void> {
     }
 
     mountShell(root, session);
+
+    // A session is only established at start-up, and an installed app is never
+    // closed. Without this it keeps showing a view that quietly stopped being
+    // true, and only a reload puts it right.
+    guardSession(session, (message) => showNotice(root, message));
   } catch (error) {
     // Nothing configured is a question to ask, not an error to report.
     if (error instanceof MissingEnvironment) {

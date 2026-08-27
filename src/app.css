@@ -3278,3 +3278,23 @@ header.bar h1,
 .report-warn {
   color: var(--status-warning);
 }
+
+/* Said when a session has gone and is being recovered. Fixed rather than in
+   the flow: it can appear at any moment, and must not push a chart someone is
+   reading down the page. */
+.session-notice {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(12px + env(safe-area-inset-top));
+  z-index: 80;
+  margin: 0;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+  font-size: 14px;
+  color: var(--text-primary);
+}

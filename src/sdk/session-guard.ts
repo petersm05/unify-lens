@@ -1,0 +1,115 @@
+import type { Session } from './client';
+
+/**
+ * Notices when a session has stopped being valid, and gets it back.
+ *
+ * Authentication is only established at start-up. That is enough for a page
+ * someone opens, uses and closes — but an installed app is not closed. It sits
+ * on a home screen for days, and when it is opened again the access token is
+ * long gone. Every query then fails, the failures go to the console, and the
+ * app shows a view that quietly stopped being true. Reloading fixes it, which
+ * nobody should have to know.
+ *
+ * Two things are watched, because they catch different halves of the problem:
+ * coming back to the foreground catches it before anything is asked for, and an
+ * authentication error catches a token that expired while the app was open and
+ * in use.
+ */
+
+/** Where the current view is kept while signing in, since the callback drops the query. */
+const RESUME_KEY = 'unify-lens:resume';
+
+/** Long enough that a failing sign-in cannot become a redirect loop. */
+const RETRY_AFTER_MS = 60_000;
+
+/**
+ * Whether an SDK error means the session is no longer good.
+ *
+ * `errorType` is the SDK's own classification and is what should decide this.
+ * The message is a fallback: it is the one field every error carries, and a
+ * token failure that arrives without a type should still be recognised rather
+ * than logged and forgotten.
+ */
+export function isAuthFailure(error: { errorType?: unknown; message?: unknown }): boolean {
+  if (error.errorType === 'AUTHENTICATION') return true;
+  const message = typeof error.message === 'string' ? error.message.toLowerCase() : '';
+  return (
+    message.includes('unauthorized') ||
+    message.includes('unauthenticated') ||
+    message.includes('not authorized') ||
+    message.includes('token has expired') ||
+    message.includes('expired token')
+  );
+}
+
+export function guardSession(session: Session, notify: (message: string) => void): void {
+  let recovering = false;
+  let lastAttempt = 0;
+
+  async function recover(reason: string): Promise<void> {
+    if (recovering || Date.now() - lastAttempt < RETRY_AFTER_MS) return;
+    recovering = true;
+    lastAttempt = Date.now();
+
+    try {
+      if (await session.sdk.authClient.isAuthenticated()) return;
+
+      notify(reason);
+      rememberView();
+
+      // Refreshes silently where it can, and sends someone to sign in where it
+      // cannot — which is what should have happened the moment the token died.
+      await session.sdk.authClient.ensureAuthenticated();
+    } catch {
+      notify('Your session has expired. Reload to sign in again.');
+    } finally {
+      recovering = false;
+    }
+  }
+
+  session.sdk.errorClient.errors$.subscribe((error) => {
+    if (isAuthFailure(error)) void recover('Your session expired. Signing you in again…');
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      void recover('Your session expired while the app was away. Signing you in again…');
+    }
+  });
+}
+
+/**
+ * Keeps the current view for the far side of a sign-in.
+ *
+ * The Cognito callback is the app's base URL, so the round trip drops the query
+ * the analysis lives in. This matters in two places: a session dying under
+ * someone mid-use, and a shared link opened by someone not signed in — where
+ * the whole point of the link is the query that would be thrown away.
+ *
+ * Only a view worth returning to is kept, so an ordinary sign-in does not
+ * resurrect an analysis nobody asked for.
+ */
+export function rememberView(): void {
+  try {
+    const url = new URL(globalThis.location.href);
+    if (!url.searchParams.has('a')) return;
+    globalThis.sessionStorage?.setItem(RESUME_KEY, url.href);
+  } catch {
+    // Private browsing: signing in still works, the view is just not restored.
+  }
+}
+
+/**
+ * The view to return to after signing in, if there is one.
+ *
+ * Read once: a resume that failed should not be retried on every later start.
+ */
+export function takeResumeUrl(): string | null {
+  try {
+    const url = globalThis.sessionStorage?.getItem(RESUME_KEY) ?? null;
+    globalThis.sessionStorage?.removeItem(RESUME_KEY);
+    return url;
+  } catch {
+    return null;
+  }
+}
