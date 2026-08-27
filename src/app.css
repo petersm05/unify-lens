@@ -3656,3 +3656,24 @@ header.bar h1,
   background: var(--series-1);
   vertical-align: middle;
 }
+
+/* Offered next to the count it is about, rather than filed under settings
+   where nobody would find out it exists. */
+.saved-offer {
+  appearance: none;
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  color: var(--series-1);
+  background: transparent;
+  border: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+}
+
+.saved-offer:hover {
+  background: var(--surface-2);
+}

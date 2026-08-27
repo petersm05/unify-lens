@@ -57,6 +57,7 @@ export function mountSavedPanel(
         <ul class="saved-list"></ul>
         <p class="saved-empty">Nothing saved yet.</p>
         <p class="saved-status" hidden></p>
+        <button type="button" class="saved-offer" hidden>Show this count on the app icon</button>
 
         <div class="menu-section">
           <span class="menu-label">Environment</span>
@@ -84,6 +85,9 @@ export function mountSavedPanel(
   button.prepend(moreIcon());
 
   const incoming = createIncoming(session);
+  const offer = must(host.querySelector<HTMLButtonElement>('.saved-offer'), 'saved: offer');
+  /** What the icon-badge offer would be about, so it is not offered for nothing. */
+  let lastCount = 0;
   const badge = document.createElement('span');
   badge.className = 'saved-badge';
   badge.hidden = true;
@@ -98,6 +102,7 @@ export function mountSavedPanel(
    */
   function showBadge(entries: readonly SavedAnalysis[]): void {
     const count = incoming.unseen(entries).length;
+    lastCount = count;
     badge.hidden = count === 0;
     badge.textContent = count > 9 ? '9+' : String(count);
     button.setAttribute(
@@ -105,6 +110,19 @@ export function mountSavedPanel(
       count === 0 ? 'More' : `More — ${count} shared with you`,
     );
     void showIconBadge(count);
+  }
+
+  /**
+   * Offered when there is a count to offer it for.
+   *
+   * Opening the menu is what marks them seen, so by the time the list has been
+   * drawn the count is on its way to nought — which is exactly when someone has
+   * just learned there is a count worth putting somewhere they would see it
+   * without opening a menu. Hence the number the panel was opened *on*.
+   */
+  function showOffer(count: number): void {
+    lastCount = count;
+    offer.hidden = !canBadgeIcon() || iconBadgeOn() || count === 0;
   }
   const panel = must(host.querySelector<HTMLElement>('.saved-panel'), 'saved: panel');
   const list = must(host.querySelector<HTMLElement>('.saved-list'), 'saved: list');
@@ -138,8 +156,11 @@ export function mountSavedPanel(
   const drawBadgeToggle = (): void => {
     badgeToggle.hidden = !canBadgeIcon();
     badgeToggle.textContent = iconBadgeOn()
-      ? 'Stop badging the app icon'
-      : 'Badge the app icon when shared with';
+      ? 'Stop showing counts on the app icon'
+      : 'Show counts on the app icon';
+    // The offer is for discovering this; once it is on there is nothing to
+    // discover, and the settings line is where it gets turned back off.
+    offer.hidden = !canBadgeIcon() || iconBadgeOn() || lastCount === 0;
   };
   drawBadgeToggle();
   badgeToggle.addEventListener('click', () => {
@@ -155,6 +176,22 @@ export function mountSavedPanel(
         return;
       }
       void store.list().then((entries) => showBadge(entries));
+    });
+  });
+
+  offer.addEventListener('click', () => {
+    void enableIconBadge().then((on) => {
+      drawBadgeToggle();
+      if (on) {
+        say('The app icon will show the count from now on.');
+        void store.list().then((entries) => showBadge(entries));
+      } else {
+        say(
+          typeof Notification !== 'undefined' && Notification.permission === 'denied'
+            ? 'The app icon cannot be badged while notifications are blocked for this app.'
+            : 'This browser will not badge the app icon. The count still shows here.'
+        );
+      }
     });
   });
 
@@ -219,7 +256,9 @@ export function mountSavedPanel(
     try {
       const entries = await store.list();
       await incoming.ready();
+      const arrived = incoming.unseen(entries).length;
       render(entries);
+      showOffer(arrived);
       // Cleared only after they have been drawn — having opened the menu is
       // what counts as having seen them, not having asked for it.
       void incoming.markSeen(entries).then(() => showBadge(entries));

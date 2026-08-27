@@ -13,39 +13,71 @@ export function canBadgeIcon(): boolean {
 /**
  * Whether the icon is being badged.
  *
- * Two conditions, not one: someone has asked for it, and — on iOS, where
- * badging an installed web app is a notification — the permission that requires
- * is still granted. A permission revoked in Settings turns the feature off
- * without the app being told, so it is checked rather than remembered.
+ * The stored answer and nothing else. An earlier version also demanded
+ * `Notification.permission === 'granted'`, which is only how Safari gates
+ * badging: Chrome and Edge badge with no permission at all, leaving it at
+ * "default" forever, so requiring it meant opting in could never take effect
+ * there. Whether badging actually works is settled by doing it — see
+ * `enableIconBadge` — not by reading a permission most engines never set.
  */
 export function iconBadgeOn(): boolean {
-  if (!canBadgeIcon()) return false;
   try {
-    if (globalThis.localStorage?.getItem(KEY) !== 'on') return false;
+    return canBadgeIcon() && globalThis.localStorage?.getItem(KEY) === 'on';
   } catch {
     return false;
   }
-  return typeof Notification === 'undefined' || Notification.permission === 'granted';
 }
 
 /**
- * Turns icon badging on, asking for permission if that is what it takes.
+ * Turns icon badging on, asking for permission only if that is what it takes.
+ *
+ * Tries it before asking for anything. Where badging is free — Chrome, Edge —
+ * that is the whole story and nobody is prompted. Safari rejects until
+ * notifications are allowed, and only then is there a reason to interrupt.
  *
  * Must be called from something the user did: a permission prompt out of
  * nowhere is both refused by browsers and deserved.
  */
 export async function enableIconBadge(): Promise<boolean> {
   if (!canBadgeIcon()) return false;
+
+  if (await badgeWorks()) return remember();
+
   try {
-    // Safari treats badging an installed web app as a notification and will
-    // not do it unsolicited. Chrome and Edge badge without asking, and have no
-    // Notification permission to grant here.
-    if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
-      if ((await Notification.requestPermission()) !== 'granted') return false;
-    }
+    if (typeof Notification === 'undefined') return false;
+    if (Notification.permission === 'denied') return false;
+    if ((await Notification.requestPermission()) !== 'granted') return false;
+  } catch {
+    return false;
+  }
+
+  return (await badgeWorks()) ? remember() : false;
+}
+
+/**
+ * Whether this really badges, established by badging.
+ *
+ * A number nobody asked for would be wrong to leave behind, so it is cleared
+ * again immediately — the count is written properly by `showIconBadge` once
+ * the setting has stuck.
+ */
+async function badgeWorks(): Promise<boolean> {
+  try {
+    await (navigator as Badger).setAppBadge?.(1);
+    await clearIconBadge();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function remember(): boolean {
+  try {
     globalThis.localStorage?.setItem(KEY, 'on');
     return true;
   } catch {
+    // Badging works but the choice cannot be kept, so it would be forgotten on
+    // reload. Better to say it failed than to promise something that lapses.
     return false;
   }
 }
