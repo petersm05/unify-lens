@@ -23,17 +23,61 @@ const RESUME_KEY = 'unify-lens:resume';
 const RETRY_AFTER_MS = 60_000;
 
 /**
+ * How often the session is checked while someone is actually looking at it.
+ *
+ * Errors are a hint, not a contract: the failure that started this reached the
+ * SDK's logger, and whether it also reaches `errors$` — and in what shape — is
+ * not something this app should have to be right about. Asking directly does
+ * not care. Only while visible, because a backgrounded app has nobody to
+ * recover for and is checked on its way back anyway.
+ */
+const CHECK_EVERY_MS = 60_000;
+
+/**
+ * Every string and every classification anywhere shallow in an error.
+ *
+ * The shape emitted on `errors$` is not the shape it appears to be. A token
+ * failure arrives as `{ context, msg, error: { errorType } }` — the type nested
+ * a level down, the text under `msg` rather than `message`. Reading the two
+ * obvious fields found neither. Rather than encode one more guess about the
+ * layout, everything within reach is gathered and the decision is made on the
+ * contents.
+ */
+function fieldsOf(value: unknown, depth = 0): { types: string[]; texts: string[] } {
+  const types: string[] = [];
+  const texts: string[] = [];
+  if (depth > 2 || value === null || typeof value !== 'object') return { types, texts };
+
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry === 'string') {
+      if (key === 'errorType' || key === 'type' || key === 'name' || key === 'code') {
+        types.push(entry);
+      } else if (key === 'message' || key === 'msg' || key === 'context' || key === 'detail') {
+        texts.push(entry);
+      }
+    } else if (typeof entry === 'object') {
+      const nested = fieldsOf(entry, depth + 1);
+      types.push(...nested.types);
+      texts.push(...nested.texts);
+    }
+  }
+  return { types, texts };
+}
+
+/**
  * Whether an SDK error means the session is no longer good.
  *
- * `errorType` is the SDK's own classification and is what should decide this.
- * The message is a fallback: it is the one field every error carries, and a
- * token failure that arrives without a type should still be recognised rather
- * than logged and forgotten.
+ * The SDK's own classification decides it wherever one is present, at whatever
+ * depth. The wording is a fallback for a failure that arrives without one:
+ * with the tokens gone the message is "Access Token could not be retrieved",
+ * which is neither an expiry nor a refusal, so matching only those missed the
+ * most ordinary case there is — no token rather than a stale one.
  */
-export function isAuthFailure(error: { errorType?: unknown; message?: unknown }): boolean {
-  if (error.errorType === 'AUTHENTICATION') return true;
+export function isAuthFailure(error: unknown): boolean {
+  const { types, texts } = fieldsOf(error);
+  if (types.includes('AUTHENTICATION')) return true;
 
-  const message = typeof error.message === 'string' ? error.message.toLowerCase() : '';
+  const message = texts.join(' ').toLowerCase();
   if (
     message.includes('unauthorized') ||
     message.includes('unauthenticated') ||
@@ -42,19 +86,16 @@ export function isAuthFailure(error: { errorType?: unknown; message?: unknown })
     return true;
   }
 
-  // A missing token does not announce itself as an authentication problem. With
-  // the stored tokens gone the SDK reports "GraphQL Client Error: Access Token
-  // could not be retrieved", typed GQL_CLIENT — so matching only on the word
-  // authorized, or on an expiry, missed the most ordinary case there is.
-  //
-  // Anything that names a token and says it went wrong counts. The one error
-  // every boot produces is the schema-version mismatch, which mentions no
-  // token, so it stays outside this.
+  // Anything naming a token and saying it went wrong. The error every boot
+  // emits is the schema-version mismatch, which names no token, so it stays
+  // outside this — treating it as a session failure would send someone to sign
+  // in on every launch.
   return (
     message.includes('token') &&
     (message.includes('could not be retrieved') ||
       message.includes('could not retrieve') ||
       message.includes('not be retrieved') ||
+      message.includes('retrieving') ||
       message.includes('expired') ||
       message.includes('missing') ||
       message.includes('invalid') ||
@@ -62,22 +103,6 @@ export function isAuthFailure(error: { errorType?: unknown; message?: unknown })
   );
 }
 
-/**
- * Throws away the stored tokens, so the recovery above can be tested.
- *
- * Waiting for a token to die takes an hour, and reaching a console to delete it
- * by hand is worse: an installed app exposes its service worker as a separate
- * inspector target, and `localStorage` does not exist there — so the obvious
- * attempt fails with a confusing error. On a tablet there is no console within
- * reach at all.
- *
- * Deliberately does not reload. A reload only proves the start-up path, which
- * already worked; what needed proving is a session dying under an app that is
- * already running. Clear, switch away, come back.
- *
- * Removing every Cognito key drops the refresh token too, which forces a real
- * sign-in. Keeping it would only exercise the silent refresh.
- */
 export function expireSession(): number {
   let removed = 0;
   for (const store of [globalThis.localStorage, globalThis.sessionStorage]) {
@@ -121,15 +146,37 @@ export function guardSession(session: Session, notify: (message: string) => void
     }
   }
 
+  // Free when it works, and it works for errors that carry a classification.
   session.sdk.errorClient.errors$.subscribe((error) => {
     if (isAuthFailure(error)) void recover('Your session expired. Signing you in again…');
   });
 
+  // The one that does not depend on being told. A token can go without any
+  // error being raised at all until something is asked for, and the thing asked
+  // for might be a chart that fails quietly.
+  // Node's types are in scope, so this is the browser's handle, not a Timeout.
+  let timer: ReturnType<typeof globalThis.setInterval> | undefined;
+  const stop = (): void => {
+    if (timer !== undefined) globalThis.clearInterval(timer);
+    timer = undefined;
+  };
+  const start = (): void => {
+    stop();
+    timer = globalThis.setInterval(() => {
+      void recover('Your session expired. Signing you in again…');
+    }, CHECK_EVERY_MS);
+  };
+
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       void recover('Your session expired while the app was away. Signing you in again…');
+      start();
+    } else {
+      stop();
     }
   });
+
+  if (document.visibilityState === 'visible') start();
 }
 
 /**
