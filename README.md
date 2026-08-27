@@ -80,6 +80,67 @@ entry, and it is the long pole in any new deployment:
 | Installed PWA | the same origin — installing changes nothing |
 | Capacitor build | its custom scheme or universal link |
 
+### Choosing the URL
+
+Published from this repository with no further configuration, the app lands on
+`https://petersm05.github.io/unify-lens/` — an origin named after whoever
+happens to own the repository today, under a path that says which repository it
+came out of. Neither is a name to hand to a customer, and neither survives the
+project moving.
+
+The allowlist above is the reason to settle this early rather than iterate on
+it. Every distinct origin is a request to a Bizzdesign administrator and a
+wait, so the address people are eventually given is worth picking *before* the
+first one is asked for. The device pays too: saved analyses, the chosen
+environment and the badge preference all live in `localStorage` and IndexedDB,
+which are scoped to the origin — so a later move to a nicer URL does not carry
+anyone's saved work with it. The decision is cheapest before the first person
+is given an address, and gets more expensive with every one after that.
+
+Four ways to get the username out of the URL:
+
+| Option | URL | What it costs |
+| --- | --- | --- |
+| A subdomain of a domain Bizzdesign already owns | `https://lens.bizzdesign.com/` | one DNS record from whoever runs the zone — and that is the same conversation as the Cognito allowlist, so it is one request rather than two |
+| A domain of your own | `https://lens.example.com/` | a registrar and roughly €10–15 a year |
+| A free GitHub organisation | `https://<org>.github.io/unify-lens/`, or the root if the repo is renamed `<org>.github.io` | nothing but a transfer — no DNS, no registrar |
+| Another static host | `https://unify-lens.pages.dev/` and equivalents on Netlify or Vercel | nothing but a new account and CI wiring |
+
+The last two are free and take minutes, and both have the same flaw: the
+hostname still names a hosting choice rather than the app, so moving hosts
+later changes the origin and spends the allowlist request again. The first two
+give an origin that is independent of who hosts the app and who owns the
+repository — which is the only kind that never has to be allowlisted twice.
+Prefer a Bizzdesign subdomain if this is going to be a Bizzdesign-facing thing;
+otherwise buy one.
+
+### Pointing a custom domain at Pages
+
+Nothing in the build has to change. `base: './'` already emits relative URLs and
+the manifest and service worker are registered relative to `document.baseURI`,
+so the same artifact serves from `/unify-lens/` or from the root of a domain
+without being rebuilt.
+
+1. **DNS.** For a subdomain, one `CNAME` record pointing at
+   `<owner>.github.io.` — today `petersm05.github.io.`, and the record has to
+   follow if the repository ever changes hands. For an apex domain,
+   `ALIAS`/`ANAME` to the same target if the provider
+   supports it, or GitHub's four `A` records (`185.199.108.153`,
+   `185.199.109.153`, `185.199.110.153`, `185.199.111.153`) plus the matching
+   `AAAA` records — worth checking against GitHub's own documentation rather
+   than trusting this table, since the addresses have changed before.
+2. **Repository settings → Pages → Custom domain.** Enter the hostname and wait
+   for the check to pass, then tick **Enforce HTTPS** once the certificate has
+   been issued (minutes, occasionally an hour).
+3. **Set the `CUSTOM_DOMAIN` repository variable** to the same bare hostname.
+   The deploy workflow then writes a `CNAME` into the artifact, so the build
+   carries its own address even if it is served from somewhere else later.
+4. **Verify the domain** under the account's Pages settings. An unverified
+   custom domain can be claimed by someone else's repository if this one is
+   ever deleted or made private.
+5. **Ask for the new origin on the Cognito allowlist**, and only then hand the
+   URL to anyone — until it is there, login returns a redirect mismatch.
+
 ### Testing on a device
 
 **The LAN address does not work, and cannot be made to.** `npm run dev` serves
