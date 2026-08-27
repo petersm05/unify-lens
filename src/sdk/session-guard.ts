@@ -32,13 +32,33 @@ const RETRY_AFTER_MS = 60_000;
  */
 export function isAuthFailure(error: { errorType?: unknown; message?: unknown }): boolean {
   if (error.errorType === 'AUTHENTICATION') return true;
+
   const message = typeof error.message === 'string' ? error.message.toLowerCase() : '';
-  return (
+  if (
     message.includes('unauthorized') ||
     message.includes('unauthenticated') ||
-    message.includes('not authorized') ||
-    message.includes('token has expired') ||
-    message.includes('expired token')
+    message.includes('not authorized')
+  ) {
+    return true;
+  }
+
+  // A missing token does not announce itself as an authentication problem. With
+  // the stored tokens gone the SDK reports "GraphQL Client Error: Access Token
+  // could not be retrieved", typed GQL_CLIENT — so matching only on the word
+  // authorized, or on an expiry, missed the most ordinary case there is.
+  //
+  // Anything that names a token and says it went wrong counts. The one error
+  // every boot produces is the schema-version mismatch, which mentions no
+  // token, so it stays outside this.
+  return (
+    message.includes('token') &&
+    (message.includes('could not be retrieved') ||
+      message.includes('could not retrieve') ||
+      message.includes('not be retrieved') ||
+      message.includes('expired') ||
+      message.includes('missing') ||
+      message.includes('invalid') ||
+      message.includes('revoked'))
   );
 }
 
