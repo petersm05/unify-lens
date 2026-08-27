@@ -1,9 +1,9 @@
 import type { Analysis } from '../data/analysis';
 import { listSaved, remove, save, type SavedAnalysis } from '../data/saved';
 import { must } from './dom';
-import { promptForText } from './prompt';
+import { confirmAction, promptForText } from './prompt';
 import { canShare, shareLink } from './share';
-import { savedIcon } from './icons';
+import { moreIcon } from './icons';
 import { buildId, openReport } from './report';
 
 export interface SavedPanel {
@@ -22,30 +22,47 @@ export function mountSavedPanel(
   current: () => Analysis,
   onOpen: (analysis: Analysis) => void,
   linkFor: (analysis: Analysis) => string,
-  /** Named in a report only if someone chooses to add it. */
+  /** Named in a report only if someone chooses to add it, and shown in the menu. */
   environment?: string,
+  /** Ends the session. Absent in contexts with no session to end. */
+  onSignOut?: () => void | Promise<void>,
+  /** Forgets which Unify this is and asks again. */
+  onChangeEnvironment?: () => void | Promise<void>,
 ): SavedPanel {
   host.innerHTML = `
     <div class="saved">
-      <button type="button" class="saved-btn" aria-expanded="false" aria-haspopup="dialog">Saved</button>
-      <div class="saved-panel" hidden role="dialog" aria-label="Saved analyses">
+      <button type="button" class="saved-btn" aria-expanded="false" aria-haspopup="dialog">More</button>
+      <div class="saved-panel" hidden role="dialog" aria-label="More">
         <div class="saved-head">
-          <span class="menu-label">On this device</span>
+          <span class="menu-label">Analyses</span>
           <button type="button" class="saved-add">Save current…</button>
         </div>
         <ul class="saved-list"></ul>
         <p class="saved-empty">Nothing saved yet.</p>
-        <p class="saved-build"></p>
-        <div class="saved-report">
-          <button type="button" class="saved-action" data-act="bug">Report a problem</button>
-          <button type="button" class="saved-action" data-act="idea">Request a feature</button>
+
+        <div class="menu-section">
+          <span class="menu-label">Environment</span>
+          <p class="saved-env"></p>
+          <div class="saved-report">
+            <button type="button" class="saved-action" data-act="switch">Change environment…</button>
+            <button type="button" class="saved-action" data-act="signout">Sign out</button>
+          </div>
+        </div>
+
+        <div class="menu-section">
+          <span class="menu-label">About</span>
+          <p class="saved-build"></p>
+          <div class="saved-report">
+            <button type="button" class="saved-action" data-act="bug">Report a problem</button>
+            <button type="button" class="saved-action" data-act="idea">Request a feature</button>
+          </div>
         </div>
       </div>
     </div>
   `;
 
   const button = must(host.querySelector<HTMLButtonElement>('.saved-btn'), 'saved: button');
-  button.prepend(savedIcon());
+  button.prepend(moreIcon());
   const panel = must(host.querySelector<HTMLElement>('.saved-panel'), 'saved: panel');
   const list = must(host.querySelector<HTMLElement>('.saved-list'), 'saved: list');
   const empty = must(host.querySelector<HTMLElement>('.saved-empty'), 'saved: empty');
@@ -62,6 +79,41 @@ export function mountSavedPanel(
    */
   const build = must(host.querySelector<HTMLElement>('.saved-build'), 'saved: build');
   build.textContent = `Build ${buildId()}`;
+
+  const env = must(host.querySelector<HTMLElement>('.saved-env'), 'saved: environment');
+  env.textContent = environment ?? 'Not connected';
+
+  const signOut = must(
+    host.querySelector<HTMLButtonElement>('[data-act="signout"]'),
+    'saved: sign out',
+  );
+  signOut.disabled = onSignOut === undefined;
+  signOut.addEventListener('click', () => {
+    setOpen(false);
+    void confirmAction({
+      title: 'Sign out?',
+      hint: 'Analyses saved on this device are kept. You will need to sign in again to read anything.',
+      confirmLabel: 'Sign out',
+    }).then((yes) => {
+      if (yes) void onSignOut?.();
+    });
+  });
+
+  const switchEnv = must(
+    host.querySelector<HTMLButtonElement>('[data-act="switch"]'),
+    'saved: switch',
+  );
+  switchEnv.disabled = onChangeEnvironment === undefined;
+  switchEnv.addEventListener('click', () => {
+    setOpen(false);
+    void confirmAction({
+      title: 'Change environment?',
+      hint: `This signs out of ${environment ?? 'the current environment'} and asks which Unify to connect to. Saved analyses are kept — each records the environment it was built against.`,
+      confirmLabel: 'Change environment',
+    }).then((yes) => {
+      if (yes) void onChangeEnvironment?.();
+    });
+  });
 
   for (const [act, kind] of [
     ['bug', 'bug'],

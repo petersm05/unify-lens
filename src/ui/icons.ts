@@ -125,3 +125,14 @@ export function savedIcon(): HTMLElement {
     '</svg>';
   return wrapper;
 }
+
+/** Overflow glyph — the menu of everything that is not a view. */
+export function moreIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="currentColor" stroke="none">' +
+    '<circle cx="4" cy="9" r="1.5"/><circle cx="9" cy="9" r="1.5"/><circle cx="14" cy="9" r="1.5"/></svg>';
+  return wrapper;
+}

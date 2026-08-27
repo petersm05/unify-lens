@@ -10,6 +10,8 @@ import { mountTypeBars, type TypeBars } from '../viz/type-bars';
 import { must } from './dom';
 import { busy } from './busy';
 import { mountFilterBar } from './filter-bar';
+import { forgetEnvironment } from '../sdk/runtime-config';
+import { expireSession } from '../sdk/session-guard';
 import { canShare, shareLink } from './share';
 import { shareIcon } from './icons';
 
@@ -156,7 +158,34 @@ export function mountShell(root: HTMLElement, session: Session): void {
     (analysis) => void applyAnalysis(analysis),
     linkFor,
     session.label,
+    () => void endSession({ forgetEnvironment: false }),
+    () => void endSession({ forgetEnvironment: true }),
   );
+
+  /**
+   * Leaves the current session, and optionally the environment with it.
+   *
+   * Both land on a bare URL rather than reloading in place: the analysis in the
+   * query belongs to the session being left, and restoring it on the way back
+   * in would put someone straight back where they were told they no longer are.
+   *
+   * Signing out is best effort. A failure there still means someone asked to
+   * leave, and the tokens are discarded either way — refusing to go because the
+   * server did not answer would be the wrong way round.
+   */
+  async function endSession(options: { forgetEnvironment: boolean }): Promise<void> {
+    try {
+      await session.sdk.authClient.logout();
+    } catch {
+      // Already gone, or unreachable. The local state below is what matters.
+    }
+    expireSession();
+    if (options.forgetEnvironment) forgetEnvironment();
+
+    const home = new URL(globalThis.location.href);
+    home.search = '';
+    globalThis.location.replace(home.toString());
+  }
 
   globalThis.addEventListener('popstate', () => {
     const analysis = decode(new URL(globalThis.location.href).searchParams.get('a') ?? '');

@@ -3170,9 +3170,6 @@ header.bar h1,
 /* Which build is running. An installed app has no address bar, so without this
    "still broken" and "not updated yet" are indistinguishable from a report. */
 .saved-build {
-  margin: 8px 4px 2px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
   font-size: 11px;
   color: var(--text-muted);
   letter-spacing: 0.02em;
@@ -3297,4 +3294,30 @@ header.bar h1,
   box-shadow: var(--shadow-2);
   font-size: 14px;
   color: var(--text-primary);
+}
+
+/* ── the menu's sections ───────────────────────────────────────────
+   The panel holds three unrelated things now — analyses, the environment, and
+   what this build is. Without a rule between them they read as one list. */
+.menu-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.menu-section .menu-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* The tenant, named so that signing out or switching says what it is leaving. */
+.saved-env {
+  margin: 0 4px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.saved-build {
+  margin: 0 4px 8px;
 }

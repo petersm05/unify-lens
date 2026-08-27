@@ -7,6 +7,66 @@ import { overlayHost } from './overlay';
  * The native `prompt()` is blocked in installed PWAs and unstyleable
  * everywhere, so anything that writes back to Unify needs its own dialog.
  */
+/**
+ * A yes-or-no the reader has to mean.
+ *
+ * Used where an action throws something away — a session, a chosen
+ * environment. Both are recoverable, so this is a speed bump rather than a
+ * guard, but a mis-tap in a menu should not sign someone out.
+ */
+export function confirmAction(params: {
+  readonly title: string;
+  readonly hint?: string;
+  readonly confirmLabel: string;
+}): Promise<boolean> {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h2></h2>
+        <p class="hint"></p>
+        <div class="modal-actions">
+          <button type="button" class="ghost" data-act="cancel">Cancel</button>
+          <button type="button" class="primary" data-act="confirm"></button>
+        </div>
+      </div>
+    `;
+
+    const heading = must(backdrop.querySelector('h2'), 'confirm: title');
+    const hint = must(backdrop.querySelector<HTMLElement>('.hint'), 'confirm: hint');
+    const confirm = must(
+      backdrop.querySelector<HTMLButtonElement>('[data-act="confirm"]'),
+      'confirm: confirm',
+    );
+
+    heading.textContent = params.title;
+    hint.textContent = params.hint ?? '';
+    hint.hidden = !params.hint;
+    confirm.textContent = params.confirmLabel;
+
+    const close = (result: boolean): void => {
+      document.removeEventListener('keydown', onKey);
+      backdrop.remove();
+      resolve(result);
+    };
+
+    function onKey(event: KeyboardEvent): void {
+      if (event.key === 'Escape') close(false);
+    }
+
+    backdrop.querySelector('[data-act="cancel"]')?.addEventListener('click', () => close(false));
+    confirm.addEventListener('click', () => close(true));
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) close(false);
+    });
+    document.addEventListener('keydown', onKey);
+
+    overlayHost().append(backdrop);
+    confirm.focus();
+  });
+}
+
 export function promptForText(params: {
   readonly title: string;
   readonly hint?: string;
