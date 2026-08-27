@@ -42,6 +42,13 @@ export interface SavedAnalysis {
   readonly mine: boolean;
   /** Who saved it, shown only when that was not you. */
   readonly owner?: string;
+  /** People it has been shared with individually, by name or address. */
+  readonly sharedWith: readonly SharedWith[];
+}
+
+export interface SharedWith {
+  readonly id: string;
+  readonly name: string;
 }
 
 export interface SavedStore {
@@ -66,6 +73,13 @@ export interface SavedStore {
    * own copy, but cannot rename or overwrite someone else's.
    */
   setSharedWithTenant(id: string, shared: boolean): Promise<SavedAnalysis[]>;
+  /**
+   * Grants or withdraws one person's access.
+   *
+   * Read-only, like sharing with everyone: someone can open what was shared
+   * with them and save their own copy, but not rename or overwrite it.
+   */
+  setUserShared(id: string, userId: string, shared: boolean): Promise<SavedAnalysis[]>;
 }
 
 /**
@@ -209,6 +223,37 @@ export function createSavedStore(session: Session): SavedStore {
       return cached;
     },
 
+    async setUserShared(id: string, userId: string, shared: boolean): Promise<SavedAnalysis[]> {
+      cached = null;
+      await session.sdk.deliverableClient.updateDeliverable({
+        id: id as UUID,
+        permissions: [
+          {
+            action: shared ? 'ALLOW' : 'REVOKE',
+            permissions: ['DELIVERABLE_READ'],
+            users: [userId as UUID],
+          },
+        ],
+      });
+      cached = (await remote()) ?? readLocal();
+
+      // The mutation is accepted whether or not the grant takes: an id that
+      // passes UUID validation but belongs to nobody who can hold a permission
+      // produces no error and no grant. Telling someone an analysis is shared
+      // when it is not is worse than telling them it failed, so the result is
+      // read back and disagreement is raised.
+      const entry = cached.find((candidate) => candidate.id === id);
+      const granted = entry?.sharedWith.some((person) => person.id === userId) ?? false;
+      if (granted !== shared) {
+        throw new Error(
+          shared
+            ? 'The grant was accepted but is not in effect.'
+            : 'The removal was accepted but is not in effect.',
+        );
+      }
+      return cached;
+    },
+
     async remove(id: string): Promise<SavedAnalysis[]> {
       cached = null;
       try {
@@ -269,6 +314,13 @@ function toEntry(deliverable: Deliverable, meId: string | null): SavedAnalysis {
     savedAt: Date.parse(typeof updatedAt === 'string' ? updatedAt : '') || 0,
     remote: true,
     sharedWithTenant: (deliverable.tenantPermissions ?? []).length > 0,
+    // Who it was granted to individually. Note the map's keys are READ/WRITE,
+    // not the DELIVERABLE_READ/DELIVERABLE_WRITE used when granting — reading
+    // and writing this permission speak different vocabularies.
+    sharedWith: (deliverable.users?.READ ?? []).map((user) => ({
+      id: String(user.userId),
+      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email,
+    })),
     mine,
     // Only worth saying when it was not you; otherwise it is noise on every row.
     ...(mine ? {} : { owner: owner || createdBy?.email || 'someone else' }),
@@ -316,6 +368,7 @@ function readLocal(): SavedAnalysis[] {
           remote: false,
           sharedWithTenant: false,
           mine: true,
+          sharedWith: [],
         };
       })
       .filter((entry): entry is SavedAnalysis => entry !== null)

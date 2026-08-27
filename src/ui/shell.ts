@@ -159,6 +159,7 @@ export function mountShell(root: HTMLElement, session: Session): void {
     (analysis) => void applyAnalysis(analysis),
     linkFor,
     createSavedStore(session),
+    session,
     session.label,
     () => void endSession({ forgetEnvironment: false }),
     () => void endSession({ forgetEnvironment: true }),

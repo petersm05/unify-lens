@@ -1,10 +1,12 @@
 import type { Analysis } from '../data/analysis';
 import type { SavedAnalysis, SavedStore } from '../data/saved';
+import type { Session } from '../sdk/client';
 import { must } from './dom';
 import { confirmAction, promptForText } from './prompt';
 import { canShare, shareLink } from './share';
 import { moreIcon } from './icons';
 import { showContextMenu, type MenuItem } from './context-menu';
+import { openShareWith } from './share-with';
 import { buildId, openReport } from './report';
 
 export interface SavedPanel {
@@ -25,6 +27,8 @@ export function mountSavedPanel(
   linkFor: (analysis: Analysis) => string,
   /** Where saved analyses live — Unify where possible, this device otherwise. */
   store: SavedStore,
+  /** Needed to look someone up when sharing with a person. */
+  session: Session,
   /** Named in a report only if someone chooses to add it, and shown in the menu. */
   environment?: string,
   /** Ends the session. Absent in contexts with no session to end. */
@@ -279,6 +283,12 @@ export function mountSavedPanel(
   function actionsFor(entry: SavedAnalysis): MenuItem[] {
     return [
       linkAction(entry),
+      {
+        label: entry.sharedWith.length > 0
+          ? `Share with someone… (${entry.sharedWith.length})`
+          : 'Share with someone…',
+        onPick: () => openShareWith(session, store, entry, render),
+      },
       {
         label: entry.sharedWithTenant ? 'Stop sharing with everyone' : 'Share with everyone',
         onPick: () => {
