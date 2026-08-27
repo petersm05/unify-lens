@@ -36,6 +36,12 @@ export interface SavedAnalysis {
   readonly savedAt: number;
   /** False when this came from the device rather than from Unify. */
   readonly remote: boolean;
+  /** Readable by everyone in the tenant, rather than only by its owner. */
+  readonly sharedWithTenant: boolean;
+  /** False when someone else saved it and shared it — it is not yours to change. */
+  readonly mine: boolean;
+  /** Who saved it, shown only when that was not you. */
+  readonly owner?: string;
 }
 
 export interface SavedStore {
@@ -53,6 +59,13 @@ export interface SavedStore {
   remove(id: string): Promise<SavedAnalysis[]>;
   /** True while analyses live on this device only, so the menu can say so. */
   isLocalOnly(): boolean;
+  /**
+   * Makes one readable by everyone in the tenant, or stops that.
+   *
+   * Read-only on purpose: a recipient can open a shared analysis and save their
+   * own copy, but cannot rename or overwrite someone else's.
+   */
+  setSharedWithTenant(id: string, shared: boolean): Promise<SavedAnalysis[]>;
 }
 
 /**
@@ -79,6 +92,19 @@ export function createSavedStore(session: Session): SavedStore {
    * not pay for it again.
    */
   let cached: SavedAnalysis[] | null = null;
+  let meId: string | null | undefined;
+
+  /** The signed-in user's id, so an entry can say whether it is theirs. */
+  async function currentUserId(session: Session): Promise<string | null> {
+    if (meId !== undefined) return meId;
+    try {
+      const user = await session.sdk.authClient.getAuthenticatedUser();
+      meId = (user as { userId?: string }).userId ?? null;
+    } catch {
+      meId = null;
+    }
+    return meId;
+  }
 
   async function remote(): Promise<SavedAnalysis[] | null> {
     const client = session.sdk.deliverableClient;
@@ -99,7 +125,8 @@ export function createSavedStore(session: Session): SavedStore {
         if (isOurs(deliverable)) mine.push(deliverable);
       }
 
-      const found = mine.map(toEntry);
+      const meId = await currentUserId(session);
+      const found = mine.map((deliverable) => toEntry(deliverable, meId));
       localOnly = false;
       return found.sort((a, b) => b.savedAt - a.savedAt);
     } catch {
@@ -165,6 +192,23 @@ export function createSavedStore(session: Session): SavedStore {
       return cached;
     },
 
+    async setSharedWithTenant(id: string, shared: boolean): Promise<SavedAnalysis[]> {
+      cached = null;
+      await session.sdk.deliverableClient.updateDeliverable({
+        id: id as UUID,
+        permissions: [
+          {
+            action: shared ? 'ALLOW' : 'REVOKE',
+            permissions: ['DELIVERABLE_READ'],
+            users: [],
+            tenantWide: true,
+          },
+        ],
+      });
+      cached = (await remote()) ?? readLocal();
+      return cached;
+    },
+
     async remove(id: string): Promise<SavedAnalysis[]> {
       cached = null;
       try {
@@ -212,13 +256,22 @@ function isOurs(deliverable: { definition?: unknown }): boolean {
 }
 
 /** The listable facts about a deliverable, none of which need its content. */
-function toEntry(deliverable: Deliverable): SavedAnalysis {
+function toEntry(deliverable: Deliverable, meId: string | null): SavedAnalysis {
   const updatedAt = deliverable.systemAttributes?.updatedAt;
+  const createdBy = deliverable.systemAttributes?.createdBy;
+  const ownerId = createdBy?.userId;
+  const mine = meId === null || ownerId === undefined || ownerId === meId;
+  const owner = [createdBy?.firstName, createdBy?.lastName].filter(Boolean).join(' ');
+
   return {
     id: deliverable.id,
     name: deliverable.name,
     savedAt: Date.parse(typeof updatedAt === 'string' ? updatedAt : '') || 0,
     remote: true,
+    sharedWithTenant: (deliverable.tenantPermissions ?? []).length > 0,
+    mine,
+    // Only worth saying when it was not you; otherwise it is noise on every row.
+    ...(mine ? {} : { owner: owner || createdBy?.email || 'someone else' }),
   };
 }
 
@@ -261,6 +314,8 @@ function readLocal(): SavedAnalysis[] {
           name: record['name'],
           savedAt: typeof record['savedAt'] === 'number' ? record['savedAt'] : 0,
           remote: false,
+          sharedWithTenant: false,
+          mine: true,
         };
       })
       .filter((entry): entry is SavedAnalysis => entry !== null)

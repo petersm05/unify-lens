@@ -3333,3 +3333,12 @@ header.bar h1,
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+/* Whose analysis this is, on rows that are not yours. */
+.saved-owner {
+  font-size: 11px;
+  color: var(--text-muted);
+  align-self: center;
+  padding-left: 2px;
+  white-space: nowrap;
+}

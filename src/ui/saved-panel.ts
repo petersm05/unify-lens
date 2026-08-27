@@ -262,6 +262,27 @@ export function mountSavedPanel(
             });
         });
 
+        // Sharing and deleting belong to whoever saved it. On someone else's
+        // analysis the row is read-only, and says whose it is instead.
+        const share = document.createElement('button');
+        share.type = 'button';
+        share.className = 'saved-action';
+        share.textContent = entry.sharedWithTenant ? 'Shared ✓' : 'Share with everyone';
+        share.title = entry.sharedWithTenant
+          ? 'Everyone in this environment can open this. Tap to stop sharing.'
+          : 'Let everyone in this environment open this.';
+        share.addEventListener('click', () => {
+          share.disabled = true;
+          share.textContent = entry.sharedWithTenant ? 'Stopping…' : 'Sharing…';
+          void store
+            .setSharedWithTenant(entry.id, !entry.sharedWithTenant)
+            .then(render)
+            .catch(() => {
+              share.disabled = false;
+              share.textContent = 'Failed';
+            });
+        });
+
         const drop = document.createElement('button');
         drop.type = 'button';
         drop.className = 'saved-action';
@@ -277,7 +298,13 @@ export function mountSavedPanel(
             });
         });
 
-        item.append(open, link, drop);
+        if (entry.mine) item.append(open, link, share, drop);
+        else {
+          const from = document.createElement('span');
+          from.className = 'saved-owner';
+          from.textContent = `shared by ${entry.owner ?? 'someone else'}`;
+          item.append(open, link, from);
+        }
         return item;
       }),
     );
