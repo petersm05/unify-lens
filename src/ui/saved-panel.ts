@@ -4,6 +4,7 @@ import { must } from './dom';
 import { confirmAction, promptForText } from './prompt';
 import { canShare, shareLink } from './share';
 import { moreIcon } from './icons';
+import { showContextMenu, type MenuItem } from './context-menu';
 import { buildId, openReport } from './report';
 
 export interface SavedPanel {
@@ -211,6 +212,7 @@ export function mountSavedPanel(
         open.type = 'button';
         open.className = 'saved-open';
         open.textContent = entry.name;
+        open.title = entry.name;
         open.addEventListener('click', () => {
           // The analysis is fetched now rather than with the list, so opening
           // one costs a request the list no longer pays for every entry.
@@ -227,87 +229,109 @@ export function mountSavedPanel(
             .catch(() => {
               open.disabled = false;
               open.textContent = label;
-              empty.hidden = false;
-              empty.textContent = 'Could not open that analysis.';
+              say('Could not open that analysis.');
             });
         });
 
-        const resting = canShare() ? 'Share' : 'Copy link';
-        const link = document.createElement('button');
-        link.type = 'button';
-        link.className = 'saved-action';
-        link.textContent = resting;
-        link.addEventListener('click', () => {
-          // Sharing needs the analysis itself, which the list no longer carries.
-          link.disabled = true;
-          void store
-            .open(entry.id)
-            .then((analysis) => {
-              if (!analysis) throw new Error('unreadable');
-              return shareLink(linkFor(analysis), entry.name, 'A saved Unify Lens analysis');
-            })
-            .then(
-            (outcome) => {
-              link.disabled = false;
-              // A dismissed sheet needs no report: they saw it and closed it.
-              if (outcome === 'dismissed' || outcome === 'shared') return;
-              link.textContent = outcome === 'copied' ? 'Copied' : 'Failed';
-              window.setTimeout(() => (link.textContent = resting), 1400);
-            },
-          )
-            .catch(() => {
-              link.disabled = false;
-              link.textContent = 'Failed';
-              window.setTimeout(() => (link.textContent = resting), 1400);
-            });
-        });
+        item.append(open);
 
-        // Sharing and deleting belong to whoever saved it. On someone else's
-        // analysis the row is read-only, and says whose it is instead.
-        const share = document.createElement('button');
-        share.type = 'button';
-        share.className = 'saved-action';
-        share.textContent = entry.sharedWithTenant ? 'Shared ✓' : 'Share with everyone';
-        share.title = entry.sharedWithTenant
-          ? 'Everyone in this environment can open this. Tap to stop sharing.'
-          : 'Let everyone in this environment open this.';
-        share.addEventListener('click', () => {
-          share.disabled = true;
-          share.textContent = entry.sharedWithTenant ? 'Stopping…' : 'Sharing…';
-          void store
-            .setSharedWithTenant(entry.id, !entry.sharedWithTenant)
-            .then(render)
-            .catch(() => {
-              share.disabled = false;
-              share.textContent = 'Failed';
-            });
-        });
-
-        const drop = document.createElement('button');
-        drop.type = 'button';
-        drop.className = 'saved-action';
-        drop.textContent = 'Delete';
-        drop.addEventListener('click', () => {
-          drop.disabled = true;
-          void store
-            .remove(entry.id)
-            .then(render)
-            .catch(() => {
-              drop.disabled = false;
-              drop.textContent = 'Failed';
-            });
-        });
-
-        if (entry.mine) item.append(open, link, share, drop);
-        else {
+        if (entry.mine) {
+          // One control rather than three. Three actions and a name competing
+          // for one row left the name — the only part that identifies it —
+          // squeezed to "this is …", and put two different things called
+          // "Share" side by side.
+          const more = document.createElement('button');
+          more.type = 'button';
+          more.className = 'saved-more';
+          more.setAttribute('aria-label', `Actions for ${entry.name}`);
+          more.append(moreIcon());
+          more.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const box = more.getBoundingClientRect();
+            showContextMenu(box.right, box.bottom + 4, actionsFor(entry));
+          });
+          item.append(more);
+        } else {
           const from = document.createElement('span');
           from.className = 'saved-owner';
           from.textContent = `shared by ${entry.owner ?? 'someone else'}`;
-          item.append(open, link, from);
+          item.append(from);
+
+          const more = document.createElement('button');
+          more.type = 'button';
+          more.className = 'saved-more';
+          more.setAttribute('aria-label', `Actions for ${entry.name}`);
+          more.append(moreIcon());
+          more.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const box = more.getBoundingClientRect();
+            showContextMenu(box.right, box.bottom + 4, [linkAction(entry)]);
+          });
+          item.append(more);
         }
+
         return item;
       }),
     );
+  }
+
+  /** Everything that can be done to an analysis of your own. */
+  function actionsFor(entry: SavedAnalysis): MenuItem[] {
+    return [
+      linkAction(entry),
+      {
+        label: entry.sharedWithTenant ? 'Stop sharing with everyone' : 'Share with everyone',
+        onPick: () => {
+          say(entry.sharedWithTenant ? 'Stopping…' : 'Sharing…');
+          void store
+            .setSharedWithTenant(entry.id, !entry.sharedWithTenant)
+            .then((next) => {
+              render(next);
+              say(entry.sharedWithTenant ? 'No longer shared.' : 'Everyone here can open it now.');
+            })
+            .catch(() => say('Could not change sharing.'));
+        },
+      },
+      {
+        label: 'Delete',
+        onPick: () => {
+          say('Deleting…');
+          void store
+            .remove(entry.id)
+            .then((next) => {
+              render(next);
+              say('');
+            })
+            .catch(() => say('Could not delete that analysis.'));
+        },
+      },
+    ];
+  }
+
+  /** Hands the analysis to someone as a link, by whichever route exists. */
+  function linkAction(entry: SavedAnalysis): MenuItem {
+    return {
+      label: canShare() ? 'Send a link…' : 'Copy link',
+      onPick: () => {
+        void store
+          .open(entry.id)
+          .then((analysis) => {
+            if (!analysis) throw new Error('unreadable');
+            return shareLink(linkFor(analysis), entry.name, 'A saved Unify Lens analysis');
+          })
+          .then((outcome) => {
+            if (outcome === 'copied') say('Link copied.');
+            if (outcome === 'failed') say('Could not share that link.');
+          })
+          .catch(() => say('Could not read that analysis.'));
+      },
+    };
+  }
+
+  /** One place for the panel to speak, so feedback is not scattered per button. */
+  function say(message: string): void {
+    status.hidden = message.length === 0;
+    status.textContent = message;
   }
 
   return {

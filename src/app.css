@@ -3342,3 +3342,40 @@ header.bar h1,
   padding-left: 2px;
   white-space: nowrap;
 }
+
+/* ── saved rows: the name gets the width, actions get a menu ────────
+   Three actions and a name sharing one row squeezed the name — the only part
+   that says which analysis this is — down to a few characters, and put two
+   different things called "Share" next to each other. */
+.saved-open {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-more {
+  appearance: none;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.saved-more:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+/* The panel is narrow, so a menu that opens from a row must be allowed to be
+   wider than the row it came from. */
+.context-menu {
+  max-width: min(280px, 80vw);
+}
