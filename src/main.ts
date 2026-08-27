@@ -2,7 +2,7 @@ import { connect, MissingEnvironment, onSdkError } from './sdk/client';
 import { forgetEnvironment, savedEnvironment } from './sdk/runtime-config';
 import { mountShell } from './ui/shell';
 import { showSetup } from './ui/setup';
-import { guardSession, rememberView, takeResumeUrl } from './sdk/session-guard';
+import { expireSession, guardSession, rememberView, takeResumeUrl } from './sdk/session-guard';
 import { watchForUpdates } from './ui/update-prompt';
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -49,6 +49,21 @@ async function boot(): Promise<void> {
     // closed. Without this it keeps showing a view that quietly stopped being
     // true, and only a reload puts it right.
     guardSession(session, (message) => showNotice(root, message));
+
+    // ?expire=1 throws the tokens away once the app is up, so the recovery
+    // above can be tested without waiting an hour for one to die. After the
+    // session, or it would only be testing the start-up path — which already
+    // worked. The parameter is dropped so a reload does not repeat it.
+    if (new URLSearchParams(globalThis.location.search).has('expire')) {
+      const removed = expireSession();
+      const url = new URL(globalThis.location.href);
+      url.searchParams.delete('expire');
+      globalThis.history.replaceState(null, '', url);
+      showNotice(
+        root,
+        `Signed-in state cleared (${removed} ${removed === 1 ? 'entry' : 'entries'}). Switch away and back, or change a filter.`,
+      );
+    }
   } catch (error) {
     // Nothing configured is a question to ask, not an error to report.
     if (error instanceof MissingEnvironment) {

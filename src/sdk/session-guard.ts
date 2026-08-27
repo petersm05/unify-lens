@@ -42,6 +42,40 @@ export function isAuthFailure(error: { errorType?: unknown; message?: unknown })
   );
 }
 
+/**
+ * Throws away the stored tokens, so the recovery above can be tested.
+ *
+ * Waiting for a token to die takes an hour, and reaching a console to delete it
+ * by hand is worse: an installed app exposes its service worker as a separate
+ * inspector target, and `localStorage` does not exist there — so the obvious
+ * attempt fails with a confusing error. On a tablet there is no console within
+ * reach at all.
+ *
+ * Deliberately does not reload. A reload only proves the start-up path, which
+ * already worked; what needed proving is a session dying under an app that is
+ * already running. Clear, switch away, come back.
+ *
+ * Removing every Cognito key drops the refresh token too, which forces a real
+ * sign-in. Keeping it would only exercise the silent refresh.
+ */
+export function expireSession(): number {
+  let removed = 0;
+  for (const store of [globalThis.localStorage, globalThis.sessionStorage]) {
+    try {
+      if (!store) continue;
+      for (const key of Object.keys(store)) {
+        if (key.startsWith('CognitoIdentityServiceProvider.')) {
+          store.removeItem(key);
+          removed += 1;
+        }
+      }
+    } catch {
+      // Nothing readable here; whatever was found elsewhere still counts.
+    }
+  }
+  return removed;
+}
+
 export function guardSession(session: Session, notify: (message: string) => void): void {
   let recovering = false;
   let lastAttempt = 0;
