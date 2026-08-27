@@ -1,5 +1,6 @@
 import type { Deliverable, UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Session } from '../sdk/client';
+import { readShares } from '../sdk/users';
 import { deserialise, serialise, type Analysis } from './analysis';
 
 const KEY = 'unify-lens:saved';
@@ -47,7 +48,8 @@ export interface SavedAnalysis {
 }
 
 export interface SharedWith {
-  readonly id: string;
+  /** Address rather than id: the backend cannot return a user id here yet. */
+  readonly email: string;
   readonly name: string;
 }
 
@@ -62,6 +64,8 @@ export interface SavedStore {
   list(): Promise<SavedAnalysis[]>;
   /** The analysis behind one entry, read at the moment it is wanted. */
   open(id: string): Promise<Analysis | null>;
+  /** Who one is shared with, read when the share dialog opens rather than per list. */
+  sharedWith(id: string): Promise<SharedWith[]>;
   save(name: string, analysis: Analysis): Promise<SavedAnalysis[]>;
   remove(id: string): Promise<SavedAnalysis[]>;
   /** True while analyses live on this device only, so the menu can say so. */
@@ -79,7 +83,7 @@ export interface SavedStore {
    * Read-only, like sharing with everyone: someone can open what was shared
    * with them and save their own copy, but not rename or overwrite it.
    */
-  setUserShared(id: string, userId: string, shared: boolean): Promise<SavedAnalysis[]>;
+  setUserShared(id: string, userId: string, email: string, shared: boolean): Promise<SavedAnalysis[]>;
 }
 
 /**
@@ -153,6 +157,10 @@ export function createSavedStore(session: Session): SavedStore {
   return {
     isLocalOnly: () => localOnly,
 
+    async sharedWith(id: string): Promise<SharedWith[]> {
+      return readShares(session, id);
+    },
+
     async open(id: string): Promise<Analysis | null> {
       const local = readLocal().find((entry) => entry.id === id);
       if (local) return localAnalysis(id);
@@ -223,7 +231,12 @@ export function createSavedStore(session: Session): SavedStore {
       return cached;
     },
 
-    async setUserShared(id: string, userId: string, shared: boolean): Promise<SavedAnalysis[]> {
+    async setUserShared(
+      id: string,
+      userId: string,
+      email: string,
+      shared: boolean,
+    ): Promise<SavedAnalysis[]> {
       cached = null;
       await session.sdk.deliverableClient.updateDeliverable({
         id: id as UUID,
@@ -237,13 +250,11 @@ export function createSavedStore(session: Session): SavedStore {
       });
       cached = (await remote()) ?? readLocal();
 
-      // The mutation is accepted whether or not the grant takes: an id that
-      // passes UUID validation but belongs to nobody who can hold a permission
-      // produces no error and no grant. Telling someone an analysis is shared
-      // when it is not is worse than telling them it failed, so the result is
-      // read back and disagreement is raised.
-      const entry = cached.find((candidate) => candidate.id === id);
-      const granted = entry?.sharedWith.some((person) => person.id === userId) ?? false;
+      // Read back before reporting. The mutation is accepted whether or not it
+      // takes effect, and claiming an analysis is shared when it is not is the
+      // same silent failure as saving to a device while promising Unify.
+      const people = await readShares(session, id);
+      const granted = people.some((person) => person.email === email);
       if (granted !== shared) {
         throw new Error(
           shared
@@ -314,13 +325,9 @@ function toEntry(deliverable: Deliverable, meId: string | null): SavedAnalysis {
     savedAt: Date.parse(typeof updatedAt === 'string' ? updatedAt : '') || 0,
     remote: true,
     sharedWithTenant: (deliverable.tenantPermissions ?? []).length > 0,
-    // Who it was granted to individually. Note the map's keys are READ/WRITE,
-    // not the DELIVERABLE_READ/DELIVERABLE_WRITE used when granting — reading
-    // and writing this permission speak different vocabularies.
-    sharedWith: (deliverable.users?.READ ?? []).map((user) => ({
-      id: String(user.userId),
-      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email,
-    })),
+    // Filled in separately: the SDK's own map is empty on this backend, since
+    // building it needs a user id the backend will not return.
+    sharedWith: [],
     mine,
     // Only worth saying when it was not you; otherwise it is noise on every row.
     ...(mine ? {} : { owner: owner || createdBy?.email || 'someone else' }),

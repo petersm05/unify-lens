@@ -52,7 +52,7 @@ export function openShareWith(
 
   hint.textContent = `Whoever you choose can open “${entry.name}” from their own saved list. They cannot change it.`;
 
-  let shared = entry.sharedWith;
+  let shared: readonly { email: string; name: string }[] = entry.sharedWith;
   let debounce: number | undefined;
   let generation = 0;
 
@@ -79,10 +79,17 @@ export function openShareWith(
       revoke.addEventListener('click', () => {
         revoke.disabled = true;
         revoke.textContent = 'Removing…';
-        void store
-          .setUserShared(entry.id, person.id, false)
+        // Revoking needs an id, and a grant read back from the server carries
+        // only an address — the backend will not return a user id here. The
+        // address is unique, so it finds the person again.
+        void searchUsers(session, person.email)
+          .then((found) => {
+            const match = found.find((candidate) => candidate.email === person.email);
+            if (!match) throw new Error('not found');
+            return store.setUserShared(entry.id, match.id, person.email, false);
+          })
           .then((entries) => {
-            shared = shared.filter((other) => other.id !== person.id);
+            shared = shared.filter((other) => other.email !== person.email);
             paintCurrent();
             onChanged(entries);
             // Said plainly: revoking stops future access, it does not reach
@@ -102,10 +109,10 @@ export function openShareWith(
   }
 
   function paintResults(found: FoundUser[]): void {
-    const already = new Set(shared.map((person) => person.id));
+    const already = new Set(shared.map((person) => person.email));
     results.replaceChildren(
       ...found
-        .filter((user) => !already.has(user.id))
+        .filter((user) => !already.has(user.email))
         .slice(0, 8)
         .map((user) => {
           const row = document.createElement('button');
@@ -125,9 +132,9 @@ export function openShareWith(
             row.disabled = true;
             note.textContent = `Sharing with ${user.name}…`;
             void store
-              .setUserShared(entry.id, user.id, true)
+              .setUserShared(entry.id, user.id, user.email, true)
               .then((entries) => {
-                shared = [...shared, { id: user.id, name: user.name }];
+                shared = [...shared, { email: user.email, name: user.name }];
                 paintCurrent();
                 paintResults(found);
                 onChanged(entries);
@@ -184,4 +191,11 @@ export function openShareWith(
   paintCurrent();
   overlayHost().append(backdrop);
   input.focus();
+
+  // Read who it is already shared with. Not carried by the list, because doing
+  // so would cost a request per row for something only this dialog shows.
+  void store.sharedWith(entry.id).then((people) => {
+    shared = people;
+    paintCurrent();
+  });
 }

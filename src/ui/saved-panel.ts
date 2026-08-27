@@ -284,9 +284,7 @@ export function mountSavedPanel(
     return [
       linkAction(entry),
       {
-        label: entry.sharedWith.length > 0
-          ? `Share with someone… (${entry.sharedWith.length})`
-          : 'Share with someone…',
+        label: 'Share with someone…',
         onPick: () => openShareWith(session, store, entry, render),
       },
       {

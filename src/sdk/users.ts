@@ -62,6 +62,71 @@ export async function searchUsers(session: Session, term: string): Promise<Found
   }
 }
 
+/**
+ * Who an analysis is currently shared with.
+ *
+ * The SDK's own `users` map cannot answer this on a backend reporting schema
+ * major 5: building it selects `UserInfo.userId`, which that backend does not
+ * return, so the query fails and the map arrives empty. The grants themselves
+ * are perfectly real — asking for the same records without `userId` shows them.
+ *
+ * That is why this reads them itself. It selects only fields the backend can
+ * answer, and identifies a person by address, which is unique where a name is
+ * not. Once the backend is upgraded this should become `deliverable.users` and
+ * disappear along with the rest of this file.
+ */
+export async function readShares(session: Session, deliverableId: string): Promise<SharedPerson[]> {
+  const client = (session.kg as unknown as { lowLevelClient?: LowLevel }).lowLevelClient;
+  if (!client) return [];
+
+  try {
+    const result = await client.query({
+      deliverables: {
+        __args: { filter: { ids: [deliverableId] } },
+        deliverables: {
+          id: true,
+          userPermissions: {
+            permissions: true,
+            user: { email: true, firstName: true, lastName: true },
+          },
+        },
+      },
+    });
+
+    const first = result?.deliverables?.deliverables?.[0];
+    const grants = Array.isArray(first?.userPermissions) ? first.userPermissions : [];
+
+    return grants
+      // Everyone who can only read: whoever can also write is the owner, who is
+      // not "shared with" in any sense worth showing.
+      .filter((grant) => {
+        const held = grant?.permissions ?? [];
+        return held.includes('DELIVERABLE_READ') && !held.includes('DELIVERABLE_WRITE');
+      })
+      .map((grant) => {
+        const user = grant.user ?? {};
+        const email = user.email ?? '';
+        return {
+          email,
+          name: [user.firstName, user.lastName].filter(Boolean).join(' ') || email,
+        };
+      })
+      .filter((person) => person.email.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+export interface SharedPerson {
+  readonly email: string;
+  readonly name: string;
+}
+
+interface RawGrant {
+  permissions?: string[];
+  user?: { email?: string; firstName?: string; lastName?: string };
+}
+
 interface RawUser {
   id: string;
   email?: string;
@@ -70,5 +135,8 @@ interface RawUser {
 }
 
 interface LowLevel {
-  query(selection: unknown): Promise<{ searchUsers?: RawUser[] } | null>;
+  query(selection: unknown): Promise<{
+    searchUsers?: RawUser[];
+    deliverables?: { deliverables?: Array<{ userPermissions?: RawGrant[] }> };
+  } | null>;
 }
