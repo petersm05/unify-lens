@@ -3618,3 +3618,41 @@ header.bar h1,
 .save-share > .share-host {
   padding-top: 6px;
 }
+
+/* ── what others have shared ───────────────────────────────────────── */
+
+/* Sits in the button rather than floating over its corner: the header is
+   already a row of rounded controls, and a dot pinned outside one of them
+   would read as damage rather than as a count. */
+.saved-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--series-1);
+  color: var(--surface-1);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.saved-open.is-new {
+  font-weight: 600;
+}
+
+/* Enough to find the row the count was about, without turning a shared
+   analysis into a warning. */
+.saved-open.is-new::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--series-1);
+  vertical-align: middle;
+}

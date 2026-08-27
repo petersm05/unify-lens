@@ -9,6 +9,14 @@ import { showContextMenu, type MenuItem } from './context-menu';
 import { openShareWith } from './share-with';
 import { openSaveAnalysis } from './save-analysis';
 import { applyChoice } from './share-options';
+import { createIncoming } from '../data/incoming';
+import {
+  canBadgeIcon,
+  disableIconBadge,
+  enableIconBadge,
+  iconBadgeOn,
+  showIconBadge,
+} from './app-badge';
 import { buildId, openReport } from './report';
 
 export interface SavedPanel {
@@ -63,6 +71,7 @@ export function mountSavedPanel(
           <span class="menu-label">About</span>
           <p class="saved-build"></p>
           <div class="saved-report">
+            <button type="button" class="saved-action" data-act="badge" hidden></button>
             <button type="button" class="saved-action" data-act="bug">Report a problem</button>
             <button type="button" class="saved-action" data-act="idea">Request a feature</button>
           </div>
@@ -73,6 +82,30 @@ export function mountSavedPanel(
 
   const button = must(host.querySelector<HTMLButtonElement>('.saved-btn'), 'saved: button');
   button.prepend(moreIcon());
+
+  const incoming = createIncoming(session);
+  const badge = document.createElement('span');
+  badge.className = 'saved-badge';
+  badge.hidden = true;
+  button.append(badge);
+
+  /**
+   * How many analyses someone else has shared that have not been looked at.
+   *
+   * Only ever raised by what was actually read back from Unify. A background
+   * check that failed says nothing, so the badge keeps its last honest value
+   * rather than being cleared by an expired token.
+   */
+  function showBadge(entries: readonly SavedAnalysis[]): void {
+    const count = incoming.unseen(entries).length;
+    badge.hidden = count === 0;
+    badge.textContent = count > 9 ? '9+' : String(count);
+    button.setAttribute(
+      'aria-label',
+      count === 0 ? 'More' : `More — ${count} shared with you`,
+    );
+    void showIconBadge(count);
+  }
   const panel = must(host.querySelector<HTMLElement>('.saved-panel'), 'saved: panel');
   const list = must(host.querySelector<HTMLElement>('.saved-list'), 'saved: list');
   const empty = must(host.querySelector<HTMLElement>('.saved-empty'), 'saved: empty');
@@ -90,6 +123,40 @@ export function mountSavedPanel(
    */
   const build = must(host.querySelector<HTMLElement>('.saved-build'), 'saved: build');
   build.textContent = `Build ${buildId()}`;
+
+  /**
+   * Offered rather than assumed.
+   *
+   * On iOS badging an installed app is a notification, so switching it on costs
+   * a permission prompt — which is not something to spring on someone who only
+   * opened a menu. Hidden entirely where the browser cannot badge at all.
+   */
+  const badgeToggle = must(
+    host.querySelector<HTMLButtonElement>('[data-act="badge"]'),
+    'saved: badge toggle',
+  );
+  const drawBadgeToggle = (): void => {
+    badgeToggle.hidden = !canBadgeIcon();
+    badgeToggle.textContent = iconBadgeOn()
+      ? 'Stop badging the app icon'
+      : 'Badge the app icon when shared with';
+  };
+  drawBadgeToggle();
+  badgeToggle.addEventListener('click', () => {
+    if (iconBadgeOn()) {
+      disableIconBadge();
+      drawBadgeToggle();
+      return;
+    }
+    void enableIconBadge().then((on) => {
+      drawBadgeToggle();
+      if (!on) {
+        say('The icon can only be badged once notifications are allowed for this app.');
+        return;
+      }
+      void store.list().then((entries) => showBadge(entries));
+    });
+  });
 
   const env = must(host.querySelector<HTMLElement>('.saved-env'), 'saved: environment');
   env.textContent = environment ?? 'Not connected';
@@ -150,7 +217,12 @@ export function mountSavedPanel(
     empty.textContent = 'Loading…';
     list.replaceChildren();
     try {
-      render(await store.list());
+      const entries = await store.list();
+      await incoming.ready();
+      render(entries);
+      // Cleared only after they have been drawn — having opened the menu is
+      // what counts as having seen them, not having asked for it.
+      void incoming.markSeen(entries).then(() => showBadge(entries));
       // Same for reading: a list that came from this device is not the list
       // someone thinks they are looking at.
       status.hidden = !store.isLocalOnly();
@@ -219,6 +291,7 @@ export function mountSavedPanel(
   });
 
   function render(entries: readonly SavedAnalysis[]): void {
+    const fresh = new Set(incoming.unseen(entries).map((entry) => entry.id));
     empty.hidden = entries.length > 0;
     empty.textContent = store.isLocalOnly()
       ? 'Nothing saved yet. These would be kept on this device only.'
@@ -275,6 +348,13 @@ export function mountSavedPanel(
           from.className = 'saved-owner';
           from.textContent = `shared by ${entry.owner ?? 'someone else'}`;
           item.append(from);
+
+          // The count says how many; this says which. Without it a badge of
+          // three sends someone hunting down a list for what changed.
+          if (fresh.has(entry.id)) {
+            open.classList.add('is-new');
+            from.textContent = `new — shared by ${entry.owner ?? 'someone else'}`;
+          }
 
           const more = document.createElement('button');
           more.type = 'button';
@@ -357,11 +437,67 @@ export function mountSavedPanel(
     status.textContent = message;
   }
 
+  /**
+   * Looks for analyses others have shared, in the background.
+   *
+   * Infrequent by design. Listing costs a slow query, and a share is something
+   * a colleague mentions in a meeting rather than something that arrives by the
+   * minute — so this is a check that finds it eventually, not a live feed.
+   *
+   * A failed read is silent. Tokens expire, most often while the app has been
+   * sitting on a home screen untouched, and the session guard is what recovers
+   * from that; a badge has no business raising it, and less business reporting
+   * "nothing new" on the strength of a request that never arrived.
+   */
+  async function checkShares(): Promise<void> {
+    if (document.visibilityState !== 'visible' || !panel.hidden) return;
+    const entries = await store.refresh();
+    if (!entries) return;
+    await incoming.ready();
+    showBadge(entries);
+  }
+
+  let timer: ReturnType<typeof globalThis.setInterval> | undefined;
+  const stopChecking = (): void => {
+    if (timer !== undefined) globalThis.clearInterval(timer);
+    timer = undefined;
+  };
+  const startChecking = (): void => {
+    stopChecking();
+    timer = globalThis.setInterval(() => void checkShares(), CHECK_SHARES_MS);
+  };
+
+  const onVisible = (): void => {
+    if (document.visibilityState === 'visible') {
+      // Behind the session guard's own check on the same event, so a token that
+      // died while the app was away is refreshed before this asks anything of
+      // it rather than racing it and losing.
+      globalThis.setTimeout(() => void checkShares(), RESUME_DELAY_MS);
+      startChecking();
+    } else {
+      stopChecking();
+    }
+  };
+  document.addEventListener('visibilitychange', onVisible);
+
+  // Not at once: the first thing someone wants is their graph, and this query
+  // is slow enough to be worth keeping out of the way of it.
+  globalThis.setTimeout(() => void checkShares(), FIRST_CHECK_MS);
+  if (document.visibilityState === 'visible') startChecking();
+
   return {
     destroy(): void {
       document.removeEventListener('click', away);
       document.removeEventListener('keydown', escape);
+      document.removeEventListener('visibilitychange', onVisible);
+      stopChecking();
       host.replaceChildren();
     },
   };
 }
+
+/** Long enough that a slow query stays out of the way of everything else. */
+const FIRST_CHECK_MS = 15_000;
+const CHECK_SHARES_MS = 5 * 60_000;
+/** Lets the session guard finish reviving the token before this uses it. */
+const RESUME_DELAY_MS = 2_000;

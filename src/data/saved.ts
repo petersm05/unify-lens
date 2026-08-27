@@ -1,5 +1,6 @@
 import type { Deliverable, UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Session } from '../sdk/client';
+import { isAuthFailure } from '../sdk/session-guard';
 import { readShares } from '../sdk/users';
 import { deserialise, serialise, type Analysis } from './analysis';
 
@@ -84,6 +85,14 @@ export interface SavedStore {
    * with them and save their own copy, but not rename or overwrite it.
    */
   setUserShared(id: string, userId: string, email: string, shared: boolean): Promise<SavedAnalysis[]>;
+  /**
+   * Reads the list again, past the cache, to pick up what others have shared.
+   *
+   * Null rather than an empty list when the read failed, because a background
+   * check that cannot reach Unify must not be able to say "nothing new" — an
+   * expired token would otherwise clear a badge nobody had looked at.
+   */
+  refresh(): Promise<SavedAnalysis[] | null>;
 }
 
 /**
@@ -105,9 +114,10 @@ export function createSavedStore(session: Session): SavedStore {
    *
    * Listing is slow and variable — measured between five and twelve seconds for
    * a single entry, dominated by the deliverables query rather than by anything
-   * this app does. Nobody else writes these, so a list that has already been
-   * read stays true until this app changes it, and reopening the menu should
-   * not pay for it again.
+   * this app does, so reopening the menu should not pay for it again.
+   *
+   * It is not true for good, though: someone else sharing an analysis adds to
+   * this list without this app touching it. `refresh` is how that arrives.
    */
   let cached: SavedAnalysis[] | null = null;
   let meId: string | null | undefined;
@@ -147,9 +157,12 @@ export function createSavedStore(session: Session): SavedStore {
       const found = mine.map((deliverable) => toEntry(deliverable, meId));
       localOnly = false;
       return found.sort((a, b) => b.savedAt - a.savedAt);
-    } catch {
-      // No permission, or deliverables unavailable on this tenant.
-      localOnly = true;
+    } catch (error) {
+      // A dead token is not a tenant without deliverables. Conflating them
+      // would quietly move everything onto the device and then tell people
+      // that is where their analyses live, on nothing worse than an expiry
+      // that the session guard is already recovering from.
+      if (!isAuthFailure(error)) localOnly = true;
       return null;
     }
   }
@@ -171,6 +184,13 @@ export function createSavedStore(session: Session): SavedStore {
       } catch {
         return null;
       }
+    },
+
+    async refresh(): Promise<SavedAnalysis[] | null> {
+      const stored = await remote();
+      if (stored === null) return null;
+      cached = stored;
+      return cached;
     },
 
     async list(): Promise<SavedAnalysis[]> {
