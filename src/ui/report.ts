@@ -1,7 +1,8 @@
 import { must } from './dom';
 import { overlayHost } from './overlay';
 
-const REPO = 'https://github.com/petersm05/unify-lens';
+/** Where a report goes, and where the project itself can be read. */
+export const REPO = 'https://github.com/petersm05/unify-lens';
 
 /**
  * Filing a bug or an idea, without a server and without a token.
@@ -59,7 +60,14 @@ function lookingAt(): string {
     .join(' · ');
 }
 
-function diagnostics(): string {
+/**
+ * Facts about the app and the device, and nothing about the graph.
+ *
+ * Shared with the settings sheet, which offers the same lines for pasting into
+ * a support conversation: an installed app has no view-source and no address
+ * bar, so without this the answer to "which build, on what" is a guess.
+ */
+export function diagnostics(): string {
   const mode = globalThis.matchMedia?.('(display-mode: standalone)').matches
     ? 'installed'
     : 'browser tab';

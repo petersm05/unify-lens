@@ -513,7 +513,8 @@ into the harness and filled by hand; the stylesheet cannot tell the difference,
 and layout is all any of this touches.
 
 Open it under `npm run dev` at `/dev/phone-harness.html` in a device toolbar.
-`?view=population|attributes|network|sheet` shows one screen; `?rail=on|off`
+`?view=population|attributes|network|sheet|more|settings` shows one screen;
+`?rail=on|off`
 picks which side of the split; `?cols=open` drops the column picker open. It
 prints its own viewport, page width and a list of anything reaching past the
 right edge — skipping the cross-tab and the object table, which are *meant* to
@@ -640,6 +641,43 @@ deliberately excludes its own filter while the table includes it — so choosing
 numeric sort right after filtering pays that cost once (~5 s). Paging and
 re-sorting afterwards are free. Prefetching that second population speculatively
 was rejected: it would spend a full read for a sort most sessions never ask for.
+
+### The overflow menu, and what moved out of it
+
+**One dropdown had become three unrelated things.** Under the list of saved
+analyses sat two grey headings — *Environment* and *About* — and under those, a
+wrapped row of twelve-pixel text buttons: change environment, sign out, badge
+the app icon, report a problem, request a feature. Sign out was the same size
+and weight as a footnote about which build was running, which is the wrong shape
+for the one control in there that throws something away.
+
+The split is by **how often, not by what kind**:
+
+| | where it lives | why |
+| --- | --- | --- |
+| saved analyses, sharing one | the menu | what somebody opened the menu for |
+| report a problem, request a feature | the menu, as a row | wanted at the moment something is wrong, not two taps later |
+| sign out | the menu, as its own row below a rule | frequent, and the only destructive thing there |
+| change environment, badge the icon | the settings sheet | once a quarter, and once ever |
+| which environment, which build | the menu's footer, as a caption | facts worth having in reach that nobody opens a menu to read |
+
+**The rows are rows.** Full width, a glyph each, 42px — 46 where the pointer is
+coarse — and the destructive one carries `--status-serious` and a rule above it.
+A menu whose entries are laid out as flowing text is a menu people scan past.
+
+**Settings is a sheet, not a submenu.** Every setting in there needs a sentence
+to say what it does — "Count on the app icon" means nothing without the line
+about which count, and badging costs a notification permission on iOS, which is
+not something to spring on someone who opened a dropdown. A dropdown row has
+nowhere to put that sentence; a sheet does. Its switch is the whole row rather
+than a 42px target beside a label.
+
+**Nothing is duplicated except sign out**, which is in both on purpose: it
+belongs in the menu because it is frequent, and beside the environment it names
+because that is where someone goes looking for account actions.
+
+`?view=more` and `?view=settings` in the phone harness draw both surfaces
+without a backend.
 
 ### Sharing an analysis
 

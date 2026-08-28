@@ -2619,24 +2619,6 @@ ul.facts {
   background: var(--surface-2);
 }
 
-.saved-action {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  color: var(--text-muted);
-  min-height: 34px;
-  padding: 0 8px;
-  border-radius: 8px;
-  flex: none;
-}
-
-.saved-action:hover {
-  background: var(--surface-2);
-  color: var(--text-primary);
-}
-
 .saved-empty {
   margin: 6px 0 0;
   font-size: 13px;
@@ -3264,14 +3246,182 @@ header.bar h1,
   letter-spacing: 0.02em;
 }
 
-/* ── reporting a problem or an idea ────────────────────────────────── */
-.saved-report {
+/* ── settings ──────────────────────────────────────────────────────
+   A sheet, not a dropdown. Everything here used to be two grey headings at the
+   foot of the overflow menu, where a preference nobody could see the point of
+   sat directly beneath the analyses somebody was actually looking for. Given a
+   surface of its own, each setting has room for the sentence that says what it
+   does — which is the whole reason "Show counts on the app icon" needed one. */
+.modal.settings {
+  width: min(520px, 100%);
+  max-height: 86vh;
+  overflow-y: auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 6px 0 2px;
+  flex-direction: column;
+  gap: 22px;
+  padding: 20px 24px 24px;
 }
 
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal.settings h2 {
+  margin: 0;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-group .menu-label {
+  display: block;
+}
+
+/* The environment, and the build. Both are identifiers rather than prose, so
+   they get the weight of a value and the wrapping of one. */
+.settings-value {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.settings-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.settings-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.settings-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 14px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+
+.settings-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.settings-btn:disabled {
+  opacity: 0.45;
+}
+
+/* Signing out is the only thing in here that throws something away, and it is
+   bordered rather than filled: a red block among plain buttons reads as the
+   thing to press. */
+.settings-btn.is-danger {
+  color: var(--status-serious);
+  border-color: color-mix(in srgb, var(--status-serious) 40%, var(--border));
+}
+
+.settings-btn.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--status-serious) 12%, transparent);
+}
+
+/* ── a setting that is on or off ────────────────────────────────────
+   The whole row is the control, so the explanation is part of what you press
+   rather than a caption beside a small target. */
+.settings-switch {
+  appearance: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 10px;
+  margin: 0 -10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.settings-switch:hover {
+  background: var(--surface-2);
+}
+
+.settings-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-switch-label {
+  font-size: 14px;
+}
+
+.switch {
+  flex: none;
+  position: relative;
+  width: 42px;
+  height: 26px;
+  margin-top: 1px;
+  border-radius: 13px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+/* The knob is drawn from the pair of tokens that are defined against the thing
+   behind it, rather than from a fixed white: `--on-accent` is what the palette
+   guarantees to be legible on `--series-1`, and `--text-secondary` is what it
+   guarantees on a surface. A literal white knob is invisible on the off track
+   in dark mode, which is exactly the state that has to be readable — an unlit
+   switch is the one somebody has to notice is unlit. */
+.switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform 140ms cubic-bezier(0.22, 0.8, 0.3, 1),
+    background 140ms ease;
+}
+
+.settings-switch[aria-checked='true'] .switch {
+  background: var(--series-1);
+  border-color: var(--series-1);
+}
+
+.settings-switch[aria-checked='true'] .switch-knob {
+  background: var(--on-accent);
+  transform: translateX(16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch,
+  .switch-knob {
+    transition: none;
+  }
+}
+
+/* ── reporting a problem or an idea ────────────────────────────────── */
 /* The plain modal spaces its children by their own margins, which works for a
    title, a line of help and one input. This one has fields and a row of adders
    that carry none, so it does the spacing itself and the inherited margins are
@@ -3385,30 +3535,96 @@ header.bar h1,
   color: var(--text-primary);
 }
 
-/* ── the menu's sections ───────────────────────────────────────────
-   The panel holds three unrelated things now — analyses, the environment, and
-   what this build is. Without a rule between them they read as one list. */
-.menu-section {
-  margin-top: 12px;
-  padding-top: 12px;
+/* ── the menu's own actions ────────────────────────────────────────
+   Full-width rows with a glyph each, rather than a wrapped row of twelve-pixel
+   grey links under a heading. Two groups, so the one destructive action is
+   separated from the three that are not by a rule instead of by hoping nobody
+   is in a hurry. */
+.menu-rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 
-.menu-section .menu-label {
-  display: block;
-  margin-bottom: 6px;
+.menu-row {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  text-align: left;
 }
 
-/* The tenant, named so that signing out or switching says what it is leaving. */
+.menu-row:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.menu-row:disabled {
+  opacity: 0.45;
+}
+
+.menu-row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The trailing chevron says this row opens something rather than doing it. */
+.menu-row .icon-flip {
+  color: var(--text-muted);
+}
+
+/* Leaving is not the same kind of act as filing an idea, and a mis-tap in a
+   menu should look like it costs something before it is tapped. */
+.menu-row.is-danger,
+.menu-row.is-danger .icon {
+  color: var(--status-serious);
+}
+
+.menu-row.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--status-serious) 12%, transparent);
+}
+
+/* ── the menu's footer ─────────────────────────────────────────────
+   Which Unify this is and which build is running: facts worth having in reach,
+   but nobody opens a menu to read them. So they are a caption at the foot
+   rather than a section with a heading — and the settings sheet is where the
+   build can be copied and the environment changed. */
+.saved-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  /* Full-bleed like the rules above the rows, so the three lines in this panel
+     are one set rather than two widths. */
+  margin: 10px 0 0;
+  padding: 9px 4px 0;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
 .saved-env {
-  margin: 0 4px 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  word-break: break-all;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .saved-build {
-  margin: 0 4px 8px;
+  margin: 0;
 }
 
 /* Said when analyses are on this device rather than in Unify. Not an error —
@@ -4124,7 +4340,8 @@ header.bar h1,
 
   .modal.report,
   .modal.share-with,
-  .modal.save-analysis {
+  .modal.save-analysis,
+  .modal.settings {
     width: 100%;
   }
 
@@ -4181,7 +4398,8 @@ header.bar h1,
 
   .modal.report,
   .modal.share-with,
-  .modal.save-analysis {
+  .modal.save-analysis,
+  .modal.settings {
     max-height: calc(100dvh - 24px);
   }
 
@@ -4215,9 +4433,13 @@ header.bar h1,
     height: 40px;
   }
 
-  .saved-action,
+  .menu-row,
   .saved-offer {
-    min-height: 40px;
+    min-height: 46px;
+  }
+
+  .settings-btn {
+    min-height: 44px;
   }
 
   .share-revoke {

@@ -37,7 +37,9 @@
         <h1>Unify Lens</h1>
         <button type="button" class="share-btn">Share</button>
         <div class="saved-host">
-          <button type="button" class="saved-btn" aria-expanded="false">Saved</button>
+          <button type="button" class="saved-btn" aria-expanded="false">
+            <span class="icon" aria-hidden="true">⋯</span>More<span class="saved-badge">2</span>
+          </button>
         </div>
       </header>
       <nav class="tabs" role="tablist">
@@ -414,11 +416,131 @@
         return backdrop;
       }
 
-      const VIEWS = { population, attributes, network, sheet };
+      /**
+       * The overflow menu, open.
+       *
+       * Pasted from `src/ui/saved-panel.ts` like every other template here. It
+       * is `position: absolute` inside the header's `.saved-host`, so it is
+       * rendered there rather than in the pane — which is also the only way to
+       * see whether a 360px panel hanging off the right edge of a 390px screen
+       * stays on the screen.
+       */
+      function more() {
+        const host = document.querySelector('.saved-host');
+        host.querySelector('.saved-btn').setAttribute('aria-expanded', 'true');
+        const panel = el('div', 'saved-panel');
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-label', 'More');
+        panel.innerHTML = `
+          <div class="saved-head">
+            <span class="menu-label">Analyses</span>
+            <button type="button" class="saved-add">Save current…</button>
+          </div>
+          <ul class="saved-list">
+            <li>
+              <button type="button" class="saved-open">Mission-critical apps by owner</button>
+              <button type="button" class="saved-more" aria-label="Actions">
+                <span class="icon" aria-hidden="true">⋯</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="saved-open is-new">${LONG}</button>
+              <span class="saved-owner">new — shared by Amina Osei</span>
+              <button type="button" class="saved-more" aria-label="Actions">
+                <span class="icon" aria-hidden="true">⋯</span>
+              </button>
+            </li>
+          </ul>
+          <button type="button" class="saved-offer">Show this count on the app icon</button>
+
+          <div class="menu-rows">
+            <button type="button" class="menu-row">
+              <span class="icon" aria-hidden="true">⚙</span>
+              <span class="menu-row-label">Settings</span>
+              <span class="icon icon-flip" aria-hidden="true">›</span>
+            </button>
+            <button type="button" class="menu-row">
+              <span class="icon" aria-hidden="true">✷</span>
+              <span class="menu-row-label">Report a problem</span>
+            </button>
+            <button type="button" class="menu-row">
+              <span class="icon" aria-hidden="true">✧</span>
+              <span class="menu-row-label">Request a feature</span>
+            </button>
+          </div>
+
+          <div class="menu-rows">
+            <button type="button" class="menu-row is-danger">
+              <span class="icon" aria-hidden="true">⏏</span>
+              <span class="menu-row-label">Sign out</span>
+            </button>
+          </div>
+
+          <p class="saved-foot">
+            <span class="saved-env">horizzondemo.unify.cloud</span>
+            <span class="saved-build">Build a1b2c3d</span>
+          </p>
+        `;
+        host.append(panel);
+        return el('section', 'chart on-plane');
+      }
+
+      /** The settings sheet, pasted from `src/ui/settings.ts`. */
+      function settings() {
+        const backdrop = el('div', 'modal-backdrop');
+        backdrop.innerHTML = `
+          <div class="modal settings" role="dialog" aria-label="Settings">
+            <div class="settings-head">
+              <h2>Settings</h2>
+              <button type="button" class="sheet-close" aria-label="Close">×</button>
+            </div>
+
+            <section class="settings-group">
+              <span class="menu-label">Environment</span>
+              <p class="settings-value">horizzondemo.unify.cloud</p>
+              <p class="settings-note">Analyses you save are kept in this environment, so they
+                follow you to any browser you sign in from.</p>
+              <div class="settings-buttons">
+                <button type="button" class="settings-btn">Change environment…</button>
+                <button type="button" class="settings-btn is-danger">Sign out</button>
+              </div>
+            </section>
+
+            <section class="settings-group">
+              <span class="menu-label">Notifications</span>
+              <button type="button" class="settings-switch" role="switch" aria-checked="true">
+                <span class="settings-switch-text">
+                  <span class="settings-switch-label">Count on the app icon</span>
+                  <span class="settings-note">How many analyses other people have shared that you
+                    have not opened yet, on the installed app's icon.</span>
+                </span>
+                <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+              </button>
+            </section>
+
+            <section class="settings-group">
+              <span class="menu-label">About</span>
+              <p class="settings-value settings-build">Unify Lens · build a1b2c3d</p>
+              <p class="settings-note">Worth quoting in a report: it says exactly which version of
+                the app you are looking at, which an installed app has no address bar to tell
+                you.</p>
+              <div class="settings-buttons">
+                <button type="button" class="settings-btn">Copy build details</button>
+                <button type="button" class="settings-btn">Project on GitHub</button>
+              </div>
+            </section>
+          </div>
+        `;
+        return backdrop;
+      }
+
+      const VIEWS = { population, attributes, network, sheet, more, settings };
       // The sheet covers the screen — it is `position: fixed` over the app, and
       // faking that with a local containing block gave it the wrapper's
       // geometry rather than the viewport's, which is the thing being checked.
-      // So it gets a page of its own and `?view=all` leaves it out.
+      // So it gets a page of its own and `?view=all` leaves it out — as do
+      // `?view=more` and `?view=settings`, for the same reason: one hangs off
+      // the header and the other covers everything.
       const wanted = view === 'all' ? ['population', 'attributes', 'network'] : [view];
       for (const key of wanted) pane.append(VIEWS[key]());
 
