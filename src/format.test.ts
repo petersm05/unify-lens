@@ -64,20 +64,22 @@ describe('formatMoney', () => {
   });
 
   it('compacts at the same thresholds as formatCompact', () => {
-    expect(formatMoney(16_000, 'EUR')).toMatch(/16[.,]0K/);
+    expect(formatMoney(16_000, 'EUR')).toMatch(/16K/);
     expect(formatMoney(999, 'EUR')).not.toMatch(/[KMB]/);
   });
 
-  it('currently keeps a trailing zero that plain compaction drops', () => {
-    // Documented, not endorsed. `maximumFractionDigits: 1` is a ceiling, but
-    // Intl's currency style defaults the *minimum* to 2 and clamps it down to
-    // the ceiling rather than to zero — so a round figure renders "€16.0K"
-    // where formatCompact gives "16K". Passing minimumFractionDigits: 0 would
-    // align them; that is a visual change to every headline money figure, so
-    // it is a decision rather than a fix, and this test pins today's answer
-    // until someone makes it.
-    expect(formatMoney(16_000, 'EUR')).toMatch(/16[.,]0K/);
+  it('carries no trailing zero that plain compaction would drop', () => {
+    // A ceiling of one fraction digit is not a floor of one. Intl's currency
+    // style defaults the minimum to 2 and clamps it to the ceiling rather than
+    // to zero, which rendered "€16.0K" beside formatCompact's "16K" — two
+    // headline forms of the same figure, disagreeing on screen.
+    expect(formatMoney(16_000, 'EUR')).not.toMatch(/[.,]0K/);
+    expect(formatMoney(16_000, 'EUR').replace(/[^\dKMB]/g, '')).toBe('16K');
     expect(formatCompact(16_000)).toBe('16K');
+  });
+
+  it('still keeps a fraction digit where it carries information', () => {
+    expect(formatMoney(87_400_000, 'EUR')).toMatch(/87[.,]4M/);
   });
 
   it('degrades to a trailing code rather than throwing on a bad currency', () => {
