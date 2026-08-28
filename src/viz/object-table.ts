@@ -376,10 +376,12 @@ export function mountObjectTable(
     const { type } = getContext();
     const columns = columnsNow();
 
+    const scope = scopeFor(filters.get());
+
     const result = await busy.track(
       fetchTable(session.kg, session.sample, {
         type,
-        scope: scopeFor(filters.get()),
+        ...(scope ? { scope } : {}),
         searchTerm: term,
         columns,
         sortKey,
