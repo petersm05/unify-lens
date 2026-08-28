@@ -63,7 +63,7 @@
     </div>
 
     <script type="module">
-      import { laneNow, railView } from '../src/ui/rail.ts';
+      import { laneNow, wideRailOpen } from '../src/ui/rail.ts';
 
       const pane = document.querySelector('main.pane');
       const view = new URL(location.href).searchParams.get('view') ?? 'all';
@@ -139,14 +139,12 @@
         const lane = laneNow();
         const asked = new URL(location.href).searchParams.get('rail');
         // `?charted=no` is the state you land in before picking an attribute:
-        // the chart pane, standing empty, with the prompt that opens the list.
+        // the chart pane, standing empty, with the prompt that opens the panel.
         const charted = new URL(location.href).searchParams.get('charted') !== 'no';
-        const open = asked ? asked === 'on' : lane === 'wide';
-        const decided = railView(lane, open);
-        const section = el(
-          'section',
-          `split lane-${lane} ${decided.rail ? 'rail-on' : 'rail-off'}`,
-        );
+        // The resting state the app would be in: open where there is room to
+        // keep it open, closed where it would be covering the chart.
+        const open = asked ? asked === 'on' : lane === 'wide' && wideRailOpen();
+        const section = el('section', `split lane-${lane} ${open ? 'rail-on' : 'rail-off'}`);
         section.innerHTML = `
           <aside class="rail" tabindex="-1">
             <label class="field">
@@ -174,9 +172,12 @@
 
           <div class="rail-bar">
             <button type="button" class="rail-toggle" aria-expanded="true">
+              <span class="icon" aria-hidden="true"></span>
               <span class="rail-label">Attributes</span>
             </button>
           </div>
+
+          <div class="rail-scrim" hidden></div>
 
           <div class="detail">
             <div class="insight">
@@ -230,10 +231,9 @@
         `;
         section.querySelector('.with-donut .rows').append(...barRows(true));
         section.querySelector('.objects-host').append(objectTable());
-        section.querySelector('.rail').hidden = !decided.rail;
-        section.querySelector('.detail').hidden = !decided.detail;
-        section.querySelector('.rail-label').textContent = decided.label;
-        section.querySelector('.rail-toggle').setAttribute('aria-expanded', String(decided.rail));
+        section.querySelector('.rail').hidden = !open;
+        section.querySelector('.rail-scrim').hidden = !open || lane === 'wide';
+        section.querySelector('.rail-toggle').setAttribute('aria-expanded', String(open));
         section.querySelector('.insight').hidden = !charted;
         section.querySelector('.placeholder').hidden = charted;
         return section;
