@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Unify Lens — layout harness</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="stylesheet" href="../src/app.css" />
+  </head>
+  <body>
+    <!--
+      Every screen this app has, laid out with representative strings instead of
+      a Unify session.
+
+      The app connects before it renders anything, so without a backend the only
+      screens reachable are the boot splash and the setup form — which means the
+      layout this change is about cannot be looked at. Every view is built from
+      one `innerHTML` template per module, so those templates are pasted here
+      verbatim and filled by hand. The stylesheet cannot tell these strings from
+      real data, and layout is all this change touches.
+
+      Kept in the repo rather than in a scratch directory so `../src/app.css`
+      resolves and the dev server reloads it. `?view=…` shows one screen at a
+      time; with no query every screen is stacked, which is what the overflow
+      check below reads.
+
+      What this cannot tell you: iOS reports real `env(safe-area-inset-*)` values
+      and Chromium reports zero, and the network canvas needs a live simulation
+      to say whether a gesture through the HUD strip reaches it. Both need a
+      device.
+    -->
+    <div id="app" class="viz-root">
+      <header class="bar">
+        <h1>Unify Lens</h1>
+        <button type="button" class="share-btn">Share</button>
+        <div class="saved-host">
+          <button type="button" class="saved-btn" aria-expanded="false">Saved</button>
+        </div>
+      </header>
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="false">Population</button>
+        <button type="button" role="tab" aria-selected="true">Attributes</button>
+        <button type="button" role="tab" aria-selected="false">Network</button>
+      </nav>
+      <div class="progress" role="status"><span></span></div>
+      <div class="filters">
+        <div class="filter-bar">
+          <button type="button" class="filter-chip">
+            <span>Type: Application Component</span><span class="x">✕</span>
+          </button>
+          <button type="button" class="filter-chip">
+            <span>Business criticality is Mission critical</span><span class="x">✕</span>
+          </button>
+          <button type="button" class="clear-all">Clear all</button>
+        </div>
+      </div>
+      <main class="pane"></main>
+    </div>
+
+    <script type="module">
+      const pane = document.querySelector('main.pane');
+      const view = new URL(location.href).searchParams.get('view') ?? 'all';
+
+      /** A name long enough to be the one that breaks a row. */
+      const LONG = 'Customer Relationship Management Platform';
+      const TYPES = [
+        ['Application Component', 412],
+        [LONG, 318],
+        ['Business Process', 264],
+        ['Technology Service', 121],
+        ['Data Object', 84],
+        ['Not set', 12],
+      ];
+
+      const el = (tag, className, text) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      };
+
+      /** `renderBarList`'s row, by hand: label, track, value and a share. */
+      function barRows(withShare) {
+        const max = Math.max(...TYPES.map(([, count]) => count));
+        const total = TYPES.reduce((sum, [, count]) => sum + count, 0);
+        return TYPES.map(([name, count]) => {
+          const row = el('div', 'row');
+          row.append(el('span', 'label', name));
+          const track = el('span', 'track');
+          const fill = el('span', 'fill');
+          fill.style.width = `${(count / max) * 100}%`;
+          track.append(fill);
+          row.append(track, el('span', 'value', `€${count},2M`));
+          if (withShare) row.append(el('span', 'share', `${((count / total) * 100).toFixed(1)}%`));
+          return row;
+        });
+      }
+
+      function population() {
+        const section = el('section', 'chart on-plane');
+        section.innerHTML = `
+          <div class="kpis">
+            <div class="kpi hero">
+              <span class="k-label">Objects</span>
+              <span class="k-value">1.191</span>
+            </div>
+            <div class="kpi">
+              <span class="k-label">Relations</span>
+              <span class="k-value">4.806</span>
+            </div>
+            <div class="kpi">
+              <span class="k-label">Types in use</span>
+              <span class="k-value">18</span>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Population by type</h2>
+            <p class="sub">Tap a type to explore its attributes.</p>
+            <div class="rows" role="list"></div>
+          </div>
+        `;
+        section.querySelector('.rows').append(...barRows(false));
+        return section;
+      }
+
+      function attributes() {
+        // The same query `src/ui/rail.ts` asks, so the harness lands in the
+        // arrangement the app would. Narrow shows the chart — the state a phone
+        // is in once an attribute has been picked, and the one worth checking.
+        // `?rail=on` shows the list side instead.
+        const narrow = matchMedia('(max-width: 820px)').matches;
+        const asked = new URL(location.href).searchParams.get('rail');
+        // Narrow rests on the chart, wide rests with the list showing; `?rail=`
+        // asks for the other one.
+        const railOn = asked ? asked === 'on' : !narrow;
+        const section = el(
+          'section',
+          `split ${narrow ? 'lane-narrow' : 'lane-wide'} ${railOn ? 'rail-on' : 'rail-off'}`,
+        );
+        section.innerHTML = `
+          <aside class="rail" tabindex="-1">
+            <label class="field">
+              <span>Object type</span>
+              <div class="picker">
+                <button type="button" class="picker-btn" aria-expanded="false">
+                  Application Component
+                </button>
+              </div>
+            </label>
+            <div class="attr-list" role="list" aria-label="Attributes">
+              <h3 class="rail-head">General</h3>
+              <button type="button" class="attr on" role="listitem">
+                <span class="a-name">Business criticality</span>
+              </button>
+              <button type="button" class="attr" role="listitem">
+                <span class="a-name">Total cost of ownership</span>
+              </button>
+              <h3 class="rail-head">Lifecycle</h3>
+              <button type="button" class="attr" role="listitem">
+                <span class="a-name">Decommission date</span>
+              </button>
+            </div>
+          </aside>
+
+          <div class="rail-bar">
+            <button type="button" class="rail-toggle" aria-expanded="true">
+              <span class="rail-label">Attributes</span>
+            </button>
+          </div>
+
+          <div class="detail">
+            <div class="insight">
+              <div class="kpis">
+                <div class="kpi hero">
+                  <span class="k-label">Total in Mission critical</span>
+                  <span class="k-value">€12,2M</span>
+                </div>
+                <div class="kpi">
+                  <span class="k-label">Share of total</span>
+                  <span class="k-value">38,4%</span>
+                </div>
+              </div>
+
+              <div class="card chart-card">
+                <div class="card-head">
+                  <div class="card-title">
+                    <h2>Total cost of ownership by business criticality</h2>
+                    <p class="sub">Six values, summed across 1.191 objects.</p>
+                  </div>
+                  <div class="chart-menu">
+                    <button type="button" class="menu-btn" aria-expanded="false">
+                      <span class="menu-current">Bars</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="meter-block">
+                  <div class="meter-head"><span>Coverage</span><span>84%</span></div>
+                  <div class="meter"><span class="meter-fill" style="width:84%"></span></div>
+                  <p class="meter-foot">Well covered — 1.001 of 1.191 carry a value.</p>
+                </div>
+
+                <div class="with-donut has-donut">
+                  <div class="donut"></div>
+                  <div class="rows" role="list"></div>
+                </div>
+
+                <div class="stats">
+                  <div class="stat"><span class="s-label">Lowest</span><span class="s-value">€1.240</span></div>
+                  <div class="stat"><span class="s-label">Median</span><span class="s-value">€184.500</span></div>
+                  <div class="stat"><span class="s-label">90th pct</span><span class="s-value">€1,4M</span></div>
+                  <div class="stat"><span class="s-label">Highest</span><span class="s-value">€3,8M</span></div>
+                </div>
+              </div>
+
+              <div class="objects-host card"></div>
+            </div>
+          </div>
+        `;
+        section.querySelector('.with-donut .rows').append(...barRows(true));
+        section.querySelector('.objects-host').append(objectTable());
+        // `railView`, by hand: where both fit the chart always shows and only
+        // the list comes and goes; where they take turns, exactly one does.
+        section.querySelector('.rail').hidden = !railOn;
+        if (narrow) {
+          section.querySelector('.detail').hidden = railOn;
+          section.querySelector('.rail-label').textContent = railOn ? 'Chart' : 'Attributes';
+        }
+        return section;
+      }
+
+      function objectTable() {
+        const section = el('section', 'objects');
+        section.innerHTML = `
+          <div class="objects-head">
+            <h2>Objects in this selection</h2>
+            <div class="objects-tools">
+              <input type="search" class="obj-search" placeholder="Search these objects…" />
+              <details class="col-picker">
+                <summary><span class="picker-label">Columns</span></summary>
+                <div class="col-list"></div>
+              </details>
+            </div>
+          </div>
+          <div class="table-scroll"><table class="data objects-table">
+            <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <div class="pager">
+            <button type="button">Previous</button>
+            <span class="pager-state">1–25 of 412</span>
+            <button type="button">Next</button>
+          </div>
+        `;
+
+        // Five columns: the picker's doing, not the default — the default keeps
+        // one attribute beside the name and needs no scrolling at all.
+        const columns = ['Name', 'Criticality', 'Cost of ownership', 'Owner', 'Decommission'];
+        section.querySelector('thead tr').append(
+          ...columns.map((column) => {
+            const cell = el('th');
+            cell.append(Object.assign(el('button', 'sort'), { textContent: column }));
+            return cell;
+          }),
+        );
+        section.querySelector('tbody').append(
+          ...TYPES.map(([name]) => {
+            const row = el('tr', 'pickable');
+            row.append(
+              el('td', null, name),
+              el('td', null, 'Mission critical'),
+              el('td', null, '€1.284.500'),
+              el('td', null, 'Enterprise Architecture'),
+              el('td', null, '2027-03-31'),
+            );
+            return row;
+          }),
+        );
+        return section;
+      }
+
+      function network() {
+        const graph = el('div', 'graph');
+        graph.style.position = 'relative';
+        graph.style.height = '420px';
+        graph.innerHTML = `
+          <canvas></canvas>
+          <div class="finder">
+            <div class="search">
+              <input type="search" placeholder="Search objects…" />
+            </div>
+          </div>
+          <div class="hud">
+            <button type="button">Recentre</button>
+            <span class="status">42 objects, 3 hops from ${LONG}</span>
+          </div>
+          <div class="legend" aria-label="Distance from focus">
+            <span><i style="background:var(--hop-0)"></i>Focus</span>
+            <span><i style="background:var(--hop-1)"></i>1 hop</span>
+            <span><i style="background:var(--hop-2)"></i>2 hops</span>
+            <span><i style="background:var(--hop-3)"></i>3 hops</span>
+          </div>
+        `;
+        return graph;
+      }
+
+      function sheet() {
+        const backdrop = el('div', 'sheet-backdrop');
+        backdrop.innerHTML = `
+          <aside class="sheet" role="dialog" aria-label="Object details">
+            <header class="sheet-head">
+              <div>
+                <p class="sheet-kind">Application Component</p>
+                <h2 class="sheet-name">${LONG}</h2>
+              </div>
+              <button type="button" class="sheet-close" aria-label="Close">✕</button>
+            </header>
+            <div class="sheet-body">
+              <p class="sheet-desc">
+                The system of record for every customer interaction across the
+                three regional sales organisations.
+              </p>
+              <div class="sheet-section">
+                <ul class="facts">
+                  <li><button type="button" class="fact chartable">
+                    <span class="icon" aria-hidden="true"></span>
+                    <span class="f-name">Business criticality</span>
+                    <span class="f-value">Mission critical</span>
+                    <span class="f-go" aria-hidden="true">↗</span>
+                  </button></li>
+                  <li><button type="button" class="fact chartable">
+                    <span class="icon icon-text" aria-hidden="true">€</span>
+                    <span class="f-name">Total cost of ownership</span>
+                    <span class="f-value">€1.284.500</span>
+                    <span class="f-go" aria-hidden="true">↗</span>
+                  </button></li>
+                  <li><div class="fact plain-fact">
+                    <span class="f-name">Decommission date</span>
+                    <span class="f-value">2027-03-31</span>
+                  </div></li>
+                </ul>
+              </div>
+            </div>
+            <footer class="sheet-foot">
+              <button type="button" class="ghost">Show in network</button>
+            </footer>
+          </aside>
+        `;
+        return backdrop;
+      }
+
+      const VIEWS = { population, attributes, network, sheet };
+      // The sheet covers the screen — it is `position: fixed` over the app, and
+      // faking that with a local containing block gave it the wrapper's
+      // geometry rather than the viewport's, which is the thing being checked.
+      // So it gets a page of its own and `?view=all` leaves it out.
+      const wanted = view === 'all' ? ['population', 'attributes', 'network'] : [view];
+      for (const key of wanted) pane.append(VIEWS[key]());
+
+      // Stacking every screen means the pane scrolls, which it does not do in
+      // the app. Only the single-view URLs are honest about height.
+      if (view === 'all') pane.style.overflowY = 'auto';
+
+      /**
+       * Nothing may reach past the right edge of the screen.
+       *
+       * Two things are allowed to: the cross-tab and the object table are meant
+       * to scroll sideways inside their own box, so anything inside one of
+       * those is skipped. Reported on `window.__overflow` for the headless run
+       * to read, and printed here for a person looking at the page.
+       */
+      // Measured before the report below is appended: it is a `<pre>`, and a
+      // one-line list of offenders was reliably the widest thing on the page —
+      // the check was reporting itself.
+      const overflowing = [...document.querySelectorAll('*')]
+        .filter((node) => !node.closest('.table-scroll, .heatmap'))
+        .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+        .map((node) => `${node.tagName.toLowerCase()}.${node.className || '(none)'}`);
+
+      // Written into the document rather than onto `window`, so a headless run
+      // can read it with --dump-dom and a person can read it by scrolling down.
+      const report = el('pre', 'harness-report');
+      report.id = 'harness-report';
+      report.style.cssText = 'white-space:pre-wrap;padding:12px;font-size:12px';
+      report.textContent = [
+        `viewport ${innerWidth}x${innerHeight}`,
+        `page width ${document.scrollingElement.scrollWidth}`,
+        overflowing.length === 0 ? 'OVERFLOW none' : `OVERFLOW ${overflowing.join(', ')}`,
+      ].join('\n');
+      document.body.append(report);
+    </script>
+  </body>
+</html>

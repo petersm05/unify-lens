@@ -1,7 +1,9 @@
 # Unify Lens
 
-An iPad-first visualization surface for the Bizzdesign Unify knowledge graph,
-built on the published partner SDK (`@bizzdesign/sdk-bundle`, browser entry).
+A visualization surface for the Bizzdesign Unify knowledge graph, built on the
+published partner SDK (`@bizzdesign/sdk-bundle`, browser entry). It was designed
+for an iPad and still reads best on one; it now also fits a phone — see
+[Small screens](#small-screens).
 
 ## Before it will run: the Cognito allowlist
 
@@ -419,6 +421,111 @@ was validated against that surface.
 Tables live *inside* a card rather than being one: a `<caption>` renders outside
 the table's background box, so styling the table as the card dropped the caption
 onto the plane behind it.
+
+### Small screens
+
+The app was built for an iPad, and for a long time the only rule that fired
+below that stacked the attribute rail *above* the chart at a third of the pane.
+On a phone that left the chart about 460px tall behind 92px of nested padding —
+readable, but nothing anybody would choose.
+
+**The rail and the chart are one decision, not two.** Hiding the attributes on a
+large screen and fitting them on a small one are the same question — *is the
+list showing?* — and only the arrangement differs:
+
+| | wide | narrow |
+| --- | --- | --- |
+| arrangement | rail beside the chart | rail and chart take turns in one pane |
+| resting state | open, and remembered on this device | the list, until something is charted |
+| picking an attribute | nothing moves | the list goes; the chart takes the screen |
+| the toggle reads | Attributes | ◀ Attributes / Chart ▶ |
+
+**The breakpoint lives in TypeScript** (`src/ui/rail.ts`), not in the
+stylesheet, and `.split` wears the answer as a class. The two arrangements
+differ in *behaviour* as well as in looks — what the resting state is, whether a
+selection puts the list away, whether the choice is remembered — so JavaScript
+needs the number regardless, and a second copy in CSS would only be a number
+waiting to disagree with it. `railView(lane, open, charted)` is a total function
+of three booleans, which is what makes any of it testable in a runner with no
+DOM.
+
+**The toggle sits in its own row of the split**, outside both scrolling panels.
+Inside the chart it would scroll out of reach on a long page; inside either
+panel it would vanish with that panel exactly when it was the way back to the
+other one.
+
+**The rail's state is not in the `?a=` payload.** An `Analysis` describes a
+question, and a collapsed sidebar is not part of one. The same payload is what
+gets saved and what gets sent to a colleague — and the object-type picker lives
+in the rail, so sharing a collapsed one would hand someone a view they could not
+re-aim.
+
+**No transition on the collapse.** Animating the track would need the rail to
+stay laid out — so `inert`, to keep forty-odd buttons out of the tab order — and
+would fire the scatter's `ResizeObserver` on every frame of it. The chart
+getting wider instantly is the feature. Where the panels take turns, the one
+arriving gets the same `pane-enter` rise every other panel in the pane gets.
+
+**The breakpoints are a ladder, not a pile:** 900 the donut stops fitting beside
+its row list, 820 the rail and the chart stop fitting beside each other, 700 the
+card head stops holding its options button, 560 a phone in portrait — plus
+`max-height: 520px`, a phone on its side, which is the one thing no width can
+tell you. 560 clears a Pro Max in portrait (430) and stays below the narrowest
+phone landscape (667), so the one-column decisions never fire on a screen that
+is wide and short. Nothing new should need a sixth number.
+
+**The phone rules sit at the end of `app.css`, not beside their sections.** This
+stylesheet is written in layers — `.detail`, `.chart`, `.row` and `.kpi.hero`
+are each declared twice, the second time by a later design pass — and a media
+query carries no specificity of its own. A phone override written next to the
+first declaration loses to the second and looks entirely correct while doing
+nothing. Horizontal padding is the exception: it moved to `--gutter` and
+`--card-pad` on `.viz-root`, and a token resolves where it is *used*, so it does
+not care which declaration wins. That also fixed a drift the nine hard-coded
+copies had accumulated — the title was sitting 4px right of the tabs beneath it.
+
+Three things that were plainly broken and are now fixed at any size:
+
+- Three tabs at 22px of padding each came to more than a phone is wide, and
+  nothing clipped the overrun — the whole page gained a sideways scroll.
+- The chart options panel opened off the *left* edge of the screen: the 700px
+  rule moves its button to the left of the wrapped card head, but the panel was
+  still anchored to that button's right edge.
+- The object table's horizontal scroller had never had anything to scroll.
+  `table.data` is `width: 100%`, so the table was pinned to the card and the
+  cells crushed instead. It is now `max-content` with the name column pinned —
+  not a stacked card list, which would cost the per-column sort control the
+  table exists for, and not hidden columns, because the default is already two
+  columns wide and any others are there because someone added them.
+- The record sheet's footer was fixed to the *viewport*, with the sheet's width
+  restated on it so the two would agree. On a phone that put it under Safari's
+  own bottom bar. The sheet is now a column that owns its own scroller, and the
+  footer is its last row.
+
+#### Looking at it without a backend
+
+`dev/phone-harness.html` is every screen the app has, laid out with
+representative strings. The app connects before it renders anything, so without
+a Unify session the only reachable screens are the boot splash and the setup
+form — which is to say the layout cannot be looked at at all. Every view is
+built from one `innerHTML` template per module, so those templates are pasted
+into the harness and filled by hand; the stylesheet cannot tell the difference,
+and layout is all any of this touches.
+
+Open it under `npm run dev` at `/dev/phone-harness.html` in a device toolbar.
+`?view=population|attributes|network|sheet` shows one screen; `?rail=on|off`
+picks which side of the split. It prints its own viewport, page width and a list
+of anything reaching past the right edge — skipping the cross-tab and the object
+table, which are *meant* to scroll sideways. Checked that way at 375x667,
+390x844, 430x932, both landscapes, and 820/821 for the lane boundary
+(`max-width: 820px` matches *at* 820).
+
+Two things it cannot tell you, both of which need a device: Chromium reports
+every `env(safe-area-inset-*)` as zero, which is exactly the mechanism the sheet
+footer change is about; and whether a pan that starts on the network's HUD strip
+reaches the canvas underneath it. Note also that the entrance animations must be
+allowed to finish before anything is measured, or a panel mid-slide reads as
+overflowing by however far it has left to travel.
 
 ### Number formatting
 

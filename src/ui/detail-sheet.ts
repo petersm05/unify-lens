@@ -80,7 +80,11 @@ export function mountDetailSheet(
     const mine = ++generation;
     backdrop.hidden = false;
     document.addEventListener('keydown', onKey);
+    // The body is what scrolls; the sheet around it holds the head and foot
+    // still. Both are reset because which one carries the scroll is a layout
+    // decision, and this should not have to be revisited if it changes back.
     sheet.scrollTop = 0;
+    body.scrollTop = 0;
 
     kind.textContent = '';
     name.textContent = 'Loading…';

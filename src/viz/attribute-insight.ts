@@ -32,7 +32,15 @@ import { scopeExcluding, scopeFor, selectionFor, type FilterStore } from '../dat
 import { busy } from '../ui/busy';
 import { countUp } from '../ui/motion';
 import { must } from '../ui/dom';
-import { attributeIcon, controlsIcon, filterIcon } from '../ui/icons';
+import { attributeIcon, chevronIcon, controlsIcon, filterIcon, sidebarIcon } from '../ui/icons';
+import {
+  laneNow,
+  onLaneChange,
+  railView,
+  rememberWideRail,
+  wideRailOpen,
+  type Lane,
+} from '../ui/rail';
 import { createPicker, type Picker } from '../ui/picker';
 import { renderBarList, renderLegend } from './bars';
 import { mountObjectTable, type ObjectTable } from './object-table';
@@ -89,13 +97,22 @@ export function mountAttributeInsight(
 
   container.innerHTML = `
     <section class="split">
-      <aside class="rail">
+      <aside class="rail" tabindex="-1">
         <label class="field">
           <span>Object type</span>
           <div class="type-select"></div>
         </label>
         <div class="attr-list" role="list" aria-label="Attributes"></div>
       </aside>
+
+      <!-- Outside both scrolling panels on purpose. A chart page is long, so a
+           toggle inside it scrolls out of reach; and where the two take turns,
+           the one that is hidden cannot offer the way back to the other. -->
+      <div class="rail-bar">
+        <button type="button" class="rail-toggle" aria-expanded="true">
+          <span class="rail-label"></span>
+        </button>
+      </div>
 
       <div class="detail">
         <div class="insight" hidden>
@@ -209,7 +226,13 @@ export function mountAttributeInsight(
   const menuPanel = q('.menu-panel', 'menu panel');
   const menuCurrent = q('.menu-current', 'menu label');
   menuButton.prepend(controlsIcon());
-  const rail = q('.attr-list', 'list');
+  const attrList = q('.attr-list', 'list');
+  const split = q('.split', 'split');
+  const rail = q('.rail', 'rail');
+  const railBar = q('.rail-bar', 'rail bar');
+  const railToggle = q<HTMLButtonElement>('.rail-toggle', 'rail toggle');
+  const railLabel = q('.rail-label', 'rail label');
+  const detail = q('.detail', 'detail');
   const insight = q('.insight', 'insight');
   const placeholder = q('.placeholder', 'placeholder');
   const plot = q('.plot', 'plot');
@@ -243,6 +266,87 @@ export function mountAttributeInsight(
   let grain: '' | Grain = '';
   let generation = 0;
   let teardownPlot: (() => void) | null = null;
+
+  /**
+   * Whether the attribute rail is showing, kept once per arrangement.
+   *
+   * Two flags rather than one. A wide screen's collapsed rail is a considered
+   * preference about how to read a chart, worth carrying across sessions; a
+   * phone's is a position in a drill-down, which means nothing once there is
+   * room to show both. Sharing one variable would leak yesterday's iPad choice
+   * into today's phone, and back again.
+   */
+  let lane: Lane = laneNow();
+  let wideOpen = wideRailOpen();
+  let narrowOpen = true;
+  /** Where the chart was scrolled to; `display: none` forgets it. */
+  let detailScroll = 0;
+
+  /**
+   * Puts the split into the state the arrangement and the flags describe.
+   *
+   * @param moveFocus - whether a person asked for this. Swapping the panels has
+   *   to take focus along, or it lands on `<body>` when the element holding it
+   *   is hidden — but a restore from a link was nobody's gesture, and stealing
+   *   focus for it would be worse than not managing focus at all.
+   */
+  function applyRail(moveFocus = false): void {
+    const view = railView(lane, lane === 'wide' ? wideOpen : narrowOpen, primary !== null);
+
+    split.classList.toggle('lane-wide', lane === 'wide');
+    split.classList.toggle('lane-narrow', lane === 'narrow');
+    split.classList.toggle('rail-on', view.rail);
+    split.classList.toggle('rail-off', !view.rail);
+
+    railBar.hidden = !view.toggle;
+    railToggle.setAttribute('aria-expanded', String(view.rail));
+    railLabel.textContent = view.label;
+    railToggle.replaceChildren(
+      view.glyph === 'sidebar' ? sidebarIcon() : chevronIcon(view.glyph),
+      railLabel,
+    );
+
+    rail.hidden = !view.rail;
+    // A chart is a document, and putting the list in front of it should not
+    // lose the reader's place in it.
+    if (!view.detail && !detail.hidden) detailScroll = detail.scrollTop;
+    detail.hidden = !view.detail;
+    if (view.detail) detail.scrollTop = detailScroll;
+
+    if (!moveFocus) return;
+    if (view.rail) {
+      // Onto the row they are already on, so the list opens where they left it
+      // rather than at the top of forty-odd attributes.
+      (
+        rail.querySelector<HTMLElement>('.attr.on') ??
+        rail.querySelector<HTMLElement>('.attr:not(:disabled)') ??
+        rail
+      ).focus();
+    } else if (view.toggle) {
+      railToggle.focus();
+    }
+  }
+
+  railToggle.addEventListener('click', () => {
+    if (lane === 'wide') {
+      wideOpen = !wideOpen;
+      rememberWideRail(wideOpen);
+    } else {
+      narrowOpen = !narrowOpen;
+    }
+    applyRail(true);
+  });
+
+  const stopLane = onLaneChange((next) => {
+    lane = next;
+    // Turning a tablet on its side is not a request to go anywhere. Each
+    // arrangement resumes its own state: the remembered one where both fit,
+    // and — where they do not — the chart, which is what was being read.
+    narrowOpen = false;
+    applyRail();
+  });
+
+  applyRail();
   let objectTable: ObjectTable | null = null;
   /**
    * The last distribution, keyed by everything that could change it.
@@ -319,10 +423,14 @@ export function mountAttributeInsight(
     insight.hidden = true;
     placeholder.hidden = false;
     placeholder.textContent = 'Reading the attribute schema…';
-    rail.replaceChildren();
+    attrList.replaceChildren();
     primary = null;
     secondary = null;
     mark = null;
+    // With no chart there is nothing for the list to sit in front of, so where
+    // the two take turns this brings it back. One call covers the type picker,
+    // the filter subscription and a restore, which all pass through here.
+    applyRail();
 
     // Assign only after the staleness check. Writing `choices` first meant a
     // superseded load — a type switched away from before it finished — still
@@ -374,7 +482,7 @@ export function mountAttributeInsight(
       groups.set(choice.categoryName, bucket);
     }
 
-    rail.replaceChildren(
+    attrList.replaceChildren(
       ...[...groups].flatMap(([category, members]) => {
         const heading = document.createElement('h3');
         heading.className = 'rail-head';
@@ -398,11 +506,15 @@ export function mountAttributeInsight(
 
             if (!item.disabled) {
               item.addEventListener('click', () => {
-                rail.querySelectorAll('.attr').forEach((other) => other.classList.remove('on'));
+                attrList.querySelectorAll('.attr').forEach((other) => other.classList.remove('on'));
                 item.classList.add('on');
                 primary = choice;
                 secondary = null;
                 mark = null;
+                // The list has done its job; where they take turns the chart
+                // takes the screen. Where both fit, nothing moves.
+                if (lane === 'narrow') narrowOpen = false;
+                applyRail(true);
                 void render().catch(fail);
               });
             }
@@ -1574,9 +1686,15 @@ export function mountAttributeInsight(
     mark = null;
     sizeKey = null;
 
-    rail.querySelectorAll('.attr').forEach((item) => {
+    attrList.querySelectorAll('.attr').forEach((item) => {
       item.classList.toggle('on', item.textContent?.includes(primary?.name ?? '\u0000') === true);
     });
+
+    // Charting from a record is a request for that chart, so it lands on the
+    // chart rather than on the list it was picked from. Before the render, so
+    // it appears in the right pane while it computes.
+    if (lane === 'narrow') narrowOpen = false;
+    applyRail(true);
 
     await render();
   }
@@ -1609,9 +1727,15 @@ export function mountAttributeInsight(
       return;
     }
 
-    rail.querySelectorAll('.attr').forEach((item) => {
+    attrList.querySelectorAll('.attr').forEach((item) => {
       item.classList.toggle('on', item.textContent?.includes(primary?.name ?? '\u0000') === true);
     });
+    // A shared link describes a chart, not a device: where the panels take
+    // turns it opens on the chart it names, and where both fit the reader's own
+    // remembered choice stands, because the rail is theirs and not the
+    // sender's. No focus move — nobody gestured.
+    if (lane === 'narrow') narrowOpen = false;
+    applyRail();
     await render();
   }
 
@@ -1638,6 +1762,7 @@ export function mountAttributeInsight(
     destroy(): void {
       document.removeEventListener('click', onAway);
       document.removeEventListener('keydown', onEscape);
+      stopLane();
       unsubscribe();
       objectTable?.destroy();
       teardownPlot?.();
