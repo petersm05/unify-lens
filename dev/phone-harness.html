@@ -233,15 +233,77 @@
       }
 
       function objectTable() {
+        // `?cols=open` drops the column picker open, which is the only way to
+        // look at a panel that is otherwise closed on load.
+        const colsOpen = new URL(location.href).searchParams.get('cols') === 'open';
         const section = el('section', 'objects');
         section.innerHTML = `
           <div class="objects-head">
             <h2>Objects in this selection</h2>
             <div class="objects-tools">
               <input type="search" class="obj-search" placeholder="Search these objects…" />
-              <details class="col-picker">
+              <details class="col-picker" ${colsOpen ? 'open' : ''}>
                 <summary><span class="picker-label">Columns</span></summary>
-                <div class="col-list"></div>
+                <!-- buildColumnPicker()'s output, by hand. An empty .col-list is
+                     what let #17 through: a panel with nothing in it has nothing
+                     to truncate, so the width it gives its contents never showed
+                     up as wrong. -->
+                <div class="col-list">
+                  <input type="search" class="col-search" placeholder="Search columns…" />
+                  <div class="col-heading">Shown</div>
+                  <div class="col-shown">
+                    <div class="col-row is-fixed">
+                      <span class="col-spacer"></span>
+                      <span class="col-name-wrap"><span class="col-name">Name</span></span>
+                      <span class="col-note">always first</span>
+                    </div>
+                    <div class="col-row">
+                      <button type="button" class="col-handle" aria-label="Move Business criticality">
+                        <span class="icon" aria-hidden="true"></span>
+                      </button>
+                      <span class="col-name-wrap">
+                        <span class="icon" aria-hidden="true"></span>
+                        <span class="col-name">Business criticality</span>
+                        <span class="col-cat">Application</span>
+                      </span>
+                      <button type="button" class="col-remove" aria-label="Remove">✕</button>
+                    </div>
+                  </div>
+                  <div class="col-divider"></div>
+                  <div class="col-heading">Add</div>
+                  <button type="button" class="col-add">
+                    <span class="col-plus">+</span>
+                    <span class="col-name-wrap">
+                      <span class="icon" aria-hidden="true"></span>
+                      <span class="col-name">Application owner</span>
+                      <span class="col-cat">Ownership</span>
+                    </span>
+                  </button>
+                  <button type="button" class="col-add">
+                    <span class="col-plus">+</span>
+                    <span class="col-name-wrap">
+                      <span class="icon" aria-hidden="true"></span>
+                      <span class="col-name">Environment</span>
+                      <span class="col-cat">Application</span>
+                    </span>
+                  </button>
+                  <button type="button" class="col-add">
+                    <span class="col-plus">+</span>
+                    <span class="col-name-wrap">
+                      <span class="icon icon-text" aria-hidden="true">€</span>
+                      <span class="col-name">Total cost of ownership</span>
+                      <span class="col-cat">Finance</span>
+                    </span>
+                  </button>
+                  <button type="button" class="col-add">
+                    <span class="col-plus">+</span>
+                    <span class="col-name-wrap">
+                      <span class="icon" aria-hidden="true"></span>
+                      <span class="col-name">Decommission date</span>
+                      <span class="col-cat">Lifecycle</span>
+                    </span>
+                  </button>
+                </div>
               </details>
             </div>
           </div>

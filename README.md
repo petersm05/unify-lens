@@ -514,9 +514,14 @@ and layout is all any of this touches.
 
 Open it under `npm run dev` at `/dev/phone-harness.html` in a device toolbar.
 `?view=population|attributes|network|sheet` shows one screen; `?rail=on|off`
-picks which side of the split. It prints its own viewport, page width and a list
-of anything reaching past the right edge — skipping the cross-tab and the object
-table, which are *meant* to scroll sideways. Checked that way at 375x667,
+picks which side of the split; `?cols=open` drops the column picker open. It
+prints its own viewport, page width and a list of anything reaching past the
+right edge — skipping the cross-tab and the object table, which are *meant* to
+scroll sideways.
+
+Fill every panel it draws, including the ones that open on demand. An empty
+`.col-list` is what let #17 through: a panel with nothing in it has nothing to
+truncate, so the width it was giving its contents never showed up as wrong. Checked that way at 375x667,
 390x844, 430x932, both landscapes, and 820/821 for the lane boundary
 (`max-width: 820px` matches *at* 820).
 
