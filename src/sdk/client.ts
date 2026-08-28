@@ -8,6 +8,7 @@ import {
 } from '@bizzdesign/sdk-bundle/browser';
 
 import { SampleStore } from '../data/sample-store';
+import { META_MODELS, toMetaModel } from './metamodel';
 import { loadRuntimeConfig, type RuntimeConfig, settingsFromEnvJs } from './runtime-config';
 
 export type Sdk = ReturnType<typeof sdkFactory>;
@@ -64,7 +65,7 @@ async function bootstrap(): Promise<Session> {
   const config = await loadRuntimeConfig();
   if (!config) throw new MissingEnvironment();
 
-  const metaModel = (config.metaModel ?? 'BDCore') as MetaModel;
+  const metaModel = resolveMetaModel(config.metaModel);
   const { sdkConfig, label } = await resolveConfig(config);
 
   const sdk = sdkFactory(sdkConfig);
@@ -104,6 +105,23 @@ async function stampFor(sdk: Sdk, label: string): Promise<BackendStamp> {
   } catch {
     return { key: label, versioned: false };
   }
+}
+
+/**
+ * A configured metamodel is checked rather than cast, because the wrong one is
+ * worse than none: every query still runs, against types that do not exist.
+ * `main.ts` reports a throw from here plainly, which is the right answer for a
+ * value only a deployment can correct.
+ */
+function resolveMetaModel(configured: string | undefined): MetaModel {
+  if (configured === undefined) return 'BDCore';
+
+  const known = toMetaModel(configured);
+  if (known) return known;
+
+  throw new Error(
+    `Unknown metaModel "${configured}" in configuration. Expected one of: ${META_MODELS.join(', ')}.`,
+  );
 }
 
 /** Thrown when nothing tells the app which Unify instance to talk to. */
