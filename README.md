@@ -436,9 +436,20 @@ list showing?* — and only the arrangement differs:
 | | wide | narrow |
 | --- | --- | --- |
 | arrangement | rail beside the chart | rail and chart take turns in one pane |
-| resting state | open, and remembered on this device | the list, until something is charted |
+| resting state | open, and remembered on this device | the chart, with the list one tap away |
 | picking an attribute | nothing moves | the list goes; the chart takes the screen |
 | the toggle reads | Attributes | ◀ Attributes / Chart ▶ |
+
+**The chart pane is what you land on, in both arrangements.** The list used to
+hold a narrow screen until an attribute was picked, which had a consequence
+nobody set out to design: a *wide* screen was the only one where a chart pane
+was reliably in front of you, so turning a phone on its side was how you got to
+see one at all. Now the list shows when it is asked for and not otherwise, and
+the empty pane says what to do next — `.placeholder` is a button when picking an
+attribute is the thing to do next and a plain sentence when it is not, which is
+what `say()` in `attribute-insight.ts` decides per message. Loading, an empty
+metamodel and an error are sentences; "Pick an attribute to chart it" is the way
+into the list.
 
 **The breakpoint lives in TypeScript** (`src/ui/rail.ts`), not in the
 stylesheet, and `.split` wears the answer as a class. The two arrangements
@@ -514,17 +525,24 @@ and layout is all any of this touches.
 
 Open it under `npm run dev` at `/dev/phone-harness.html` in a device toolbar.
 `?view=population|attributes|network|sheet|more|settings` shows one screen;
-`?rail=on|off`
-picks which side of the split; `?cols=open` drops the column picker open. It
+`?rail=on|off` picks which side of the split; `?charted=no` is the state before
+an attribute has been picked; `?cols=open` drops the column picker open. It
 prints its own viewport, page width and a list of anything reaching past the
 right edge — skipping the cross-tab and the object table, which are *meant* to
-scroll sideways.
+scroll sideways. Checked that way at 375x667, 390x844, 430x932, both landscapes,
+and 820/821 for the lane boundary (`max-width: 820px` matches *at* 820).
 
-Fill every panel it draws, including the ones that open on demand. An empty
+Two rules for keeping it honest, both learned the hard way:
+
+**Import the decision, never restate it.** The harness asks `src/ui/rail.ts` for
+the lane and applies `railView`'s answer the way `applyRail` does. It used to
+carry its own copy of the breakpoint and choose the classes by hand, which meant
+it agreed with itself whatever the app actually did — a check that can only
+confirm its own copy is not a check.
+
+**Fill every panel it draws, including the ones that open on demand.** An empty
 `.col-list` is what let #17 through: a panel with nothing in it has nothing to
-truncate, so the width it was giving its contents never showed up as wrong. Checked that way at 375x667,
-390x844, 430x932, both landscapes, and 820/821 for the lane boundary
-(`max-width: 820px` matches *at* 820).
+truncate, so the width it was giving its contents never showed up as wrong.
 
 Two things it cannot tell you, both of which need a device: Chromium reports
 every `env(safe-area-inset-*)` as zero, which is exactly the mechanism the sheet

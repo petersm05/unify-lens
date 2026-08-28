@@ -9,53 +9,44 @@ import { railView, rememberWideRail, wideRailOpen } from './rail';
  */
 describe('railView', () => {
   it('shows the chart on a wide screen whether or not the rail is open', () => {
-    expect(railView('wide', true, true).detail).toBe(true);
-    expect(railView('wide', false, true).detail).toBe(true);
-    // Also with nothing charted: the placeholder lives in the same pane.
-    expect(railView('wide', true, false).detail).toBe(true);
+    expect(railView('wide', true).detail).toBe(true);
+    expect(railView('wide', false).detail).toBe(true);
   });
 
   it('follows the remembered choice on a wide screen', () => {
-    expect(railView('wide', true, true).rail).toBe(true);
-    expect(railView('wide', false, true).rail).toBe(false);
+    expect(railView('wide', true).rail).toBe(true);
+    expect(railView('wide', false).rail).toBe(false);
   });
 
   it('never shows both on a narrow screen', () => {
     for (const open of [true, false]) {
-      for (const charted of [true, false]) {
-        const view = railView('narrow', open, charted);
-        expect(view.rail).not.toBe(view.detail);
-      }
+      const view = railView('narrow', open);
+      expect(view.rail).not.toBe(view.detail);
     }
   });
 
-  it('keeps the list up on a narrow screen while nothing is charted', () => {
-    // Not a preference that can be overridden: with no chart, closing the list
-    // would leave the pane empty.
-    expect(railView('narrow', false, false).rail).toBe(true);
-    expect(railView('narrow', true, false).rail).toBe(true);
-  });
-
-  it('offers the toggle everywhere except a narrow screen with no chart', () => {
-    expect(railView('wide', true, false).toggle).toBe(true);
-    expect(railView('narrow', true, true).toggle).toBe(true);
-    expect(railView('narrow', false, false).toggle).toBe(false);
+  it('rests on the chart where the two take turns', () => {
+    // The list used to hold the screen until an attribute was picked, which
+    // made a wide screen the only arrangement where a chart pane was reliably
+    // in front of you. Now it shows when it is asked for and not otherwise.
+    expect(railView('narrow', false).detail).toBe(true);
+    expect(railView('narrow', false).rail).toBe(false);
   });
 
   it('labels the button with where it goes, not with what is on screen', () => {
     // The list is up, so the button leads to the chart.
-    expect(railView('narrow', true, true).label).toBe('Chart');
-    expect(railView('narrow', false, true).label).toBe('Attributes');
+    expect(railView('narrow', true).label).toBe('Chart');
+    expect(railView('narrow', false).label).toBe('Attributes');
     // On a wide screen it shows and hides one region, so the name is constant
     // and `aria-expanded` carries the state instead.
-    expect(railView('wide', true, true).label).toBe('Attributes');
-    expect(railView('wide', false, true).label).toBe('Attributes');
+    expect(railView('wide', true).label).toBe('Attributes');
+    expect(railView('wide', false).label).toBe('Attributes');
   });
 
   it('points the chevron the way the swap will move', () => {
-    expect(railView('narrow', true, true).glyph).toBe('forward');
-    expect(railView('narrow', false, true).glyph).toBe('back');
-    expect(railView('wide', false, true).glyph).toBe('sidebar');
+    expect(railView('narrow', true).glyph).toBe('forward');
+    expect(railView('narrow', false).glyph).toBe('back');
+    expect(railView('wide', false).glyph).toBe('sidebar');
   });
 });
 

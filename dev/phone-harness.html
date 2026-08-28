@@ -63,6 +63,8 @@
     </div>
 
     <script type="module">
+      import { laneNow, railView } from '../src/ui/rail.ts';
+
       const pane = document.querySelector('main.pane');
       const view = new URL(location.href).searchParams.get('view') ?? 'all';
 
@@ -129,18 +131,21 @@
       }
 
       function attributes() {
-        // The same query `src/ui/rail.ts` asks, so the harness lands in the
-        // arrangement the app would. Narrow shows the chart — the state a phone
-        // is in once an attribute has been picked, and the one worth checking.
-        // `?rail=on` shows the list side instead.
-        const narrow = matchMedia('(max-width: 820px)').matches;
+        // The real decision, not a copy of it. The harness used to restate the
+        // breakpoint and pick the classes by hand, which meant it agreed with
+        // itself no matter what `src/ui/rail.ts` actually did. Importing the
+        // module and applying its answer the way `applyRail` does is what makes
+        // a wrong answer visible here.
+        const lane = laneNow();
         const asked = new URL(location.href).searchParams.get('rail');
-        // Narrow rests on the chart, wide rests with the list showing; `?rail=`
-        // asks for the other one.
-        const railOn = asked ? asked === 'on' : !narrow;
+        // `?charted=no` is the state you land in before picking an attribute:
+        // the chart pane, standing empty, with the prompt that opens the list.
+        const charted = new URL(location.href).searchParams.get('charted') !== 'no';
+        const open = asked ? asked === 'on' : lane === 'wide';
+        const decided = railView(lane, open);
         const section = el(
           'section',
-          `split ${narrow ? 'lane-narrow' : 'lane-wide'} ${railOn ? 'rail-on' : 'rail-off'}`,
+          `split lane-${lane} ${decided.rail ? 'rail-on' : 'rail-off'}`,
         );
         section.innerHTML = `
           <aside class="rail" tabindex="-1">
@@ -220,17 +225,17 @@
 
               <div class="objects-host card"></div>
             </div>
+            <button type="button" class="placeholder">Pick an attribute to chart it.</button>
           </div>
         `;
         section.querySelector('.with-donut .rows').append(...barRows(true));
         section.querySelector('.objects-host').append(objectTable());
-        // `railView`, by hand: where both fit the chart always shows and only
-        // the list comes and goes; where they take turns, exactly one does.
-        section.querySelector('.rail').hidden = !railOn;
-        if (narrow) {
-          section.querySelector('.detail').hidden = railOn;
-          section.querySelector('.rail-label').textContent = railOn ? 'Chart' : 'Attributes';
-        }
+        section.querySelector('.rail').hidden = !decided.rail;
+        section.querySelector('.detail').hidden = !decided.detail;
+        section.querySelector('.rail-label').textContent = decided.label;
+        section.querySelector('.rail-toggle').setAttribute('aria-expanded', String(decided.rail));
+        section.querySelector('.insight').hidden = !charted;
+        section.querySelector('.placeholder').hidden = charted;
         return section;
       }
 

@@ -306,10 +306,35 @@ main.pane {
   max-width: 72ch;
 }
 
+/* The empty pane's line, which is a control only when picking an attribute is
+   the thing to do next — see `say()`. Disabled it is a sentence and looks like
+   one; enabled it is where the list is reached from, which where the two panes
+   take turns is the only thing on the screen. */
 .placeholder {
-  color: var(--text-muted);
+  appearance: none;
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
   font-size: 14px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
   padding: 26px 0;
+}
+
+.placeholder:not(:disabled) {
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 18px 20px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+}
+
+.placeholder:not(:disabled):hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
 }
 
 /* ── figures ───────────────────────────────────────────────────────── */

@@ -204,7 +204,7 @@ export function mountAttributeInsight(
           <div class="objects-host card"></div>
         </div>
 
-        <p class="placeholder">Pick an attribute to chart it.</p>
+        <button type="button" class="placeholder" disabled>Pick an attribute to chart it.</button>
       </div>
     </section>
   `;
@@ -229,12 +229,25 @@ export function mountAttributeInsight(
   const attrList = q('.attr-list', 'list');
   const split = q('.split', 'split');
   const rail = q('.rail', 'rail');
-  const railBar = q('.rail-bar', 'rail bar');
   const railToggle = q<HTMLButtonElement>('.rail-toggle', 'rail toggle');
   const railLabel = q('.rail-label', 'rail label');
   const detail = q('.detail', 'detail');
   const insight = q('.insight', 'insight');
-  const placeholder = q('.placeholder', 'placeholder');
+  const placeholder = q<HTMLButtonElement>('.placeholder', 'placeholder');
+
+  /**
+   * The empty pane's line.
+   *
+   * @param canPick - whether picking an attribute is the thing to do next. Only
+   *   then is the line a control: it opens the list, which on a phone is the
+   *   pane it is standing in for. While something is loading, or when the type
+   *   has nothing to offer, it is a sentence and nothing more.
+   */
+  function say(message: string, canPick = false): void {
+    placeholder.hidden = false;
+    placeholder.textContent = message;
+    placeholder.disabled = !canPick;
+  }
   const plot = q('.plot', 'plot');
   const donutHost = q('.donut', 'donut');
   const timelineHost = q('.timeline', 'timeline');
@@ -278,7 +291,7 @@ export function mountAttributeInsight(
    */
   let lane: Lane = laneNow();
   let wideOpen = wideRailOpen();
-  let narrowOpen = true;
+  let narrowOpen = false;
   /** Where the chart was scrolled to; `display: none` forgets it. */
   let detailScroll = 0;
 
@@ -291,14 +304,13 @@ export function mountAttributeInsight(
    *   focus for it would be worse than not managing focus at all.
    */
   function applyRail(moveFocus = false): void {
-    const view = railView(lane, lane === 'wide' ? wideOpen : narrowOpen, primary !== null);
+    const view = railView(lane, lane === 'wide' ? wideOpen : narrowOpen);
 
     split.classList.toggle('lane-wide', lane === 'wide');
     split.classList.toggle('lane-narrow', lane === 'narrow');
     split.classList.toggle('rail-on', view.rail);
     split.classList.toggle('rail-off', !view.rail);
 
-    railBar.hidden = !view.toggle;
     railToggle.setAttribute('aria-expanded', String(view.rail));
     railLabel.textContent = view.label;
     railToggle.replaceChildren(
@@ -322,10 +334,20 @@ export function mountAttributeInsight(
         rail.querySelector<HTMLElement>('.attr:not(:disabled)') ??
         rail
       ).focus();
-    } else if (view.toggle) {
+    } else {
       railToggle.focus();
     }
   }
+
+  placeholder.addEventListener('click', () => {
+    if (lane === 'wide') {
+      wideOpen = true;
+      rememberWideRail(true);
+    } else {
+      narrowOpen = true;
+    }
+    applyRail(true);
+  });
 
   railToggle.addEventListener('click', () => {
     if (lane === 'wide') {
@@ -421,8 +443,7 @@ export function mountAttributeInsight(
   async function loadAttributes(): Promise<void> {
     const mine = ++generation;
     insight.hidden = true;
-    placeholder.hidden = false;
-    placeholder.textContent = 'Reading the attribute schema…';
+    say('Reading the attribute schema…');
     attrList.replaceChildren();
     primary = null;
     secondary = null;
@@ -461,11 +482,11 @@ export function mountAttributeInsight(
     }
 
     if (choices.length === 0) {
-      placeholder.textContent = `${labelFor(type)} has no attribute categories defined.`;
+      say(`${labelFor(type)} has no attribute categories defined.`);
       return;
     }
 
-    placeholder.textContent = 'Pick an attribute to chart it.';
+    say('Pick an attribute to chart it.', true);
 
     // The type is settled and the population read takes seconds, so it starts
     // now rather than when an attribute is tapped — the moment when someone is
@@ -591,8 +612,7 @@ export function mountAttributeInsight(
     // screen it stays, dimmed, while the next one is computed — replacing it
     // with the word "Computing…" loses the reader's place on every change.
     if (insight.hidden) {
-      placeholder.hidden = false;
-      placeholder.textContent = 'Computing…';
+      say('Computing…');
     }
     insight.classList.add('busy');
 
@@ -1630,8 +1650,7 @@ export function mountAttributeInsight(
   function fail(error: unknown): void {
     insight.classList.remove('busy');
     insight.hidden = true;
-    placeholder.hidden = false;
-    placeholder.textContent = error instanceof Error ? error.message : String(error);
+    say(error instanceof Error ? error.message : String(error));
   }
 
   function set(key: string, value: string): void {
@@ -1722,8 +1741,7 @@ export function mountAttributeInsight(
 
     if (!primary) {
       insight.hidden = true;
-      placeholder.hidden = false;
-      placeholder.textContent = 'Pick an attribute to chart it.';
+      say('Pick an attribute to chart it.', true);
       return;
     }
 
