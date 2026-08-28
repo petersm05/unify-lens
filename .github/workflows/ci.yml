@@ -48,5 +48,7 @@ jobs:
       - run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-      # `build` is `tsc --noEmit && vite build`, so this typechecks too.
+      # `build` is `tsc --noEmit && vite build`, so this typechecks too — the
+      # test files live under src/, so they are typechecked with everything else.
       - run: npm run build
+      - run: npm test
