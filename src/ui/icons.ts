@@ -136,3 +136,33 @@ export function moreIcon(): HTMLElement {
     '<circle cx="4" cy="9" r="1.5"/><circle cx="9" cy="9" r="1.5"/><circle cx="14" cy="9" r="1.5"/></svg>';
   return wrapper;
 }
+
+/** Sidebar glyph — the attribute rail, shown or put away beside the chart. */
+export function sidebarIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="2.5" y="3" width="13" height="12" rx="2.5"/><path d="M7.5 3v12"/></svg>';
+  return wrapper;
+}
+
+/**
+ * Chevron glyph, pointing back by default.
+ *
+ * `forward` flips the same path rather than drawing a second one: where the
+ * rail and the chart take turns, the two directions are one move seen from
+ * either end.
+ */
+export function chevronIcon(direction: 'back' | 'forward' = 'back'): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = direction === 'forward' ? 'icon icon-flip' : 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M11.25 3.5 5.75 9l5.5 5.5"/></svg>';
+  return wrapper;
+}
