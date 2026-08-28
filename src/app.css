@@ -1918,12 +1918,17 @@ nav.tabs button {
   }
 }
 
+/* The sheet is the full height of the screen and sits above #app, so it does
+   not inherit the app's top inset: without one of its own, the kind and name
+   ran under the status bar. The inset belongs on the head rather than the
+   backdrop, so the head's background still reaches the top of the screen and
+   only its text clears the clock. */
 .sheet-head {
   flex: none;
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 22px var(--card-pad) 16px;
+  padding: calc(22px + env(safe-area-inset-top)) var(--card-pad) 16px;
   background: var(--surface-1);
   border-bottom: 1px solid var(--border);
 }
