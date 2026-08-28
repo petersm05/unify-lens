@@ -67,34 +67,33 @@ export interface RailView {
   readonly rail: boolean;
   /** Whether the chart is on screen. On a phone the two are exclusive. */
   readonly detail: boolean;
-  /** Whether the toggle has anywhere to go. */
-  readonly toggle: boolean;
   /** What the button will do, not what is on screen. */
   readonly label: string;
   readonly glyph: 'sidebar' | 'back' | 'forward';
 }
 
 /**
- * What each part of the split shows, given the arrangement, what was last
- * asked for, and whether there is a chart to ask for.
+ * What each part of the split shows, given the arrangement and what was last
+ * asked for.
  *
- * One total function of three inputs rather than a scattering of conditionals
- * through the mount. Every combination is enumerable, which is the only reason
- * any of this is testable in a project whose runner has no DOM.
+ * One total function rather than a scattering of conditionals through the
+ * mount. Every combination is enumerable, which is the only reason any of this
+ * is testable in a project whose runner has no DOM.
  */
-export function railView(lane: Lane, open: boolean, charted: boolean): RailView {
+export function railView(lane: Lane, open: boolean): RailView {
   if (lane === 'wide') {
-    return { rail: open, detail: true, toggle: true, label: 'Attributes', glyph: 'sidebar' };
+    return { rail: open, detail: true, label: 'Attributes', glyph: 'sidebar' };
   }
 
-  // With nothing charted there is nowhere to go back to, so the list is the
-  // whole view and a toggle would be a button that does nothing.
-  const rail = open || !charted;
+  // The list shows when it is asked for and not otherwise — including before
+  // anything is charted. It used to take the whole screen until an attribute
+  // was picked, which meant the one arrangement where the chart is always on
+  // screen was the *wide* one: turning a phone on its side was how you got to
+  // see a chart pane at all. The empty pane says what to do next instead.
   return {
-    rail,
-    detail: !rail,
-    toggle: charted,
-    label: rail ? 'Chart' : 'Attributes',
-    glyph: rail ? 'forward' : 'back',
+    rail: open,
+    detail: !open,
+    label: open ? 'Chart' : 'Attributes',
+    glyph: open ? 'forward' : 'back',
   };
 }

@@ -436,9 +436,20 @@ list showing?* — and only the arrangement differs:
 | | wide | narrow |
 | --- | --- | --- |
 | arrangement | rail beside the chart | rail and chart take turns in one pane |
-| resting state | open, and remembered on this device | the list, until something is charted |
+| resting state | open, and remembered on this device | the chart, with the list one tap away |
 | picking an attribute | nothing moves | the list goes; the chart takes the screen |
 | the toggle reads | Attributes | ◀ Attributes / Chart ▶ |
+
+**The chart pane is what you land on, in both arrangements.** The list used to
+hold a narrow screen until an attribute was picked, which had a consequence
+nobody set out to design: a *wide* screen was the only one where a chart pane
+was reliably in front of you, so turning a phone on its side was how you got to
+see one at all. Now the list shows when it is asked for and not otherwise, and
+the empty pane says what to do next — `.placeholder` is a button when picking an
+attribute is the thing to do next and a plain sentence when it is not, which is
+what `say()` in `attribute-insight.ts` decides per message. Loading, an empty
+metamodel and an error are sentences; "Pick an attribute to chart it" is the way
+into the list.
 
 **The breakpoint lives in TypeScript** (`src/ui/rail.ts`), not in the
 stylesheet, and `.split` wears the answer as a class. The two arrangements

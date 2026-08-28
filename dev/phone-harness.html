@@ -138,10 +138,11 @@
         // a wrong answer visible here.
         const lane = laneNow();
         const asked = new URL(location.href).searchParams.get('rail');
-        // `?charted=no` is the state you land in before picking an attribute.
+        // `?charted=no` is the state you land in before picking an attribute:
+        // the chart pane, standing empty, with the prompt that opens the list.
         const charted = new URL(location.href).searchParams.get('charted') !== 'no';
         const open = asked ? asked === 'on' : lane === 'wide';
-        const decided = railView(lane, open, charted);
+        const decided = railView(lane, open);
         const section = el(
           'section',
           `split lane-${lane} ${decided.rail ? 'rail-on' : 'rail-off'}`,
@@ -224,15 +225,17 @@
 
               <div class="objects-host card"></div>
             </div>
+            <button type="button" class="placeholder">Pick an attribute to chart it.</button>
           </div>
         `;
         section.querySelector('.with-donut .rows').append(...barRows(true));
         section.querySelector('.objects-host').append(objectTable());
         section.querySelector('.rail').hidden = !decided.rail;
         section.querySelector('.detail').hidden = !decided.detail;
-        section.querySelector('.rail-bar').hidden = !decided.toggle;
         section.querySelector('.rail-label').textContent = decided.label;
         section.querySelector('.rail-toggle').setAttribute('aria-expanded', String(decided.rail));
+        section.querySelector('.insight').hidden = !charted;
+        section.querySelector('.placeholder').hidden = charted;
         return section;
       }
 
