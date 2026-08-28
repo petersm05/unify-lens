@@ -190,10 +190,12 @@ export function mountSavedPanel(
   settings.addEventListener('click', () => {
     setOpen(false);
     openSettings({
-      environment,
+      // `!== undefined`, not truthiness: an empty environment name should
+      // still be passed through as one, exactly as it was before.
+      ...(environment !== undefined ? { environment } : {}),
       localOnly: store.isLocalOnly(),
-      onSignOut,
-      onChangeEnvironment,
+      ...(onSignOut !== undefined ? { onSignOut } : {}),
+      ...(onChangeEnvironment !== undefined ? { onChangeEnvironment } : {}),
       // Turning badging on there should put the count on the icon at once,
       // rather than at the next background check a few minutes later.
       onBadgeEnabled: () => void store.list().then((entries) => showBadge(entries)),

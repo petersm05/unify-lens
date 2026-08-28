@@ -732,12 +732,16 @@ export async function numericDistribution(
       ).sum
     : numbers.reduce((total, value) => total + value, 0);
 
+  // An empty sample has no quantiles. `stats` is declared optional and now
+  // means it: absent rather than present-and-undefined.
+  const stats = quantiles(numbers);
+
   return {
     ...histogram(numbers, choice),
     total: numbers.length,
     truncated: sample.truncated,
     sum,
-    stats: quantiles(numbers),
+    ...(stats ? { stats } : {}),
     top: rank(observations),
     observations,
   };

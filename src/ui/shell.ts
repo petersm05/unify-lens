@@ -71,11 +71,15 @@ export function mountShell(root: HTMLElement, session: Session): void {
   function currentAnalysis(): Analysis {
     const filter = filters.get();
     const chart = insightView?.snapshot();
+    // Resolved once: testing `filter.type ?? chart?.type` narrows nothing about
+    // the second evaluation of it.
+    const type = filter.type ?? chart?.type;
+
     return {
       v: 1,
       env: session.label,
       view: current ?? 'population',
-      ...(filter.type ?? chart?.type ? { type: filter.type ?? chart?.type } : {}),
+      ...(type ? { type } : {}),
       ...(chart?.primary ? { primary: chart.primary } : {}),
       ...(chart?.secondary ? { secondary: chart.secondary } : {}),
       ...(chart?.mark ? { mark: chart.mark } : {}),

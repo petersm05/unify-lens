@@ -8,10 +8,10 @@ import { compatible, levelOf, marksFor } from './chart-spec';
  * objects would assert against the SDK's shape rather than against this
  * module's rule.
  */
-function enumValues(count: number): AttributeChoice['enumValues'] {
+function enumValues(count: number): NonNullable<AttributeChoice['enumValues']> {
   return Array.from({ length: count }, (_, index) => ({
     name: `value-${index}`,
-  })) as unknown as AttributeChoice['enumValues'];
+  })) as unknown as NonNullable<AttributeChoice['enumValues']>;
 }
 
 function attribute(
