@@ -4021,10 +4021,17 @@ header.bar h1,
     min-width: 0;
   }
 
+  /* Anchored to the button's right edge but sized from the screen, not from
+     the button. `left: 0; right: 0` stretched the panel to its `.col-picker`
+     containing block — which is only as wide as the summary — leaving 91px for
+     a list of attribute names, so every name rendered at zero width and the
+     rows read as a column of icons. A width lets it reach back across the
+     screen instead, the same way `.menu-panel` above does. */
   .col-list {
-    left: 0;
+    left: auto;
     right: 0;
     min-width: 0;
+    width: calc(100vw - 2 * var(--gutter) - 2 * var(--card-pad));
     max-height: min(340px, 56vh);
   }
 
