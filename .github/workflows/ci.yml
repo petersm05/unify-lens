@@ -21,7 +21,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # Keyed on the branch, not on github.ref, because a branch that has a pull
+  # request open fires this twice for one commit — once as `push` with
+  # refs/heads/<branch>, once as `pull_request` with refs/pull/<n>/merge. Those
+  # are different refs and so were different groups, and both builds ran to
+  # completion. head_ref is set only on pull_request events; ref_name carries
+  # the bare branch name on push, so both events land on one group.
+  group: ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -48,5 +54,7 @@ jobs:
       - run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-      # `build` is `tsc --noEmit && vite build`, so this typechecks too.
+      # `build` is `tsc --noEmit && vite build`, so this typechecks too — the
+      # test files live under src/, so they are typechecked with everything else.
       - run: npm run build
+      - run: npm test

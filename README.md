@@ -69,8 +69,11 @@ Two workflows, both needing one repository secret:
 
 | Workflow | Runs on | Does |
 | --- | --- | --- |
-| `ci.yml` | pull requests, and pushes to any branch but `main` | `npm ci` then `npm run build`, which is `tsc --noEmit && vite build` |
-| `pages.yml` | pushes to `main`, or by hand | the same build with `DEPLOY=1`, then publishes `dist/` to Pages |
+| `ci.yml` | pull requests, and pushes to any branch but `main` | `npm run build` (`tsc --noEmit && vite build`) then `npm test` |
+| `pages.yml` | pushes to `main`, or by hand | `npm test`, then the same build with `DEPLOY=1`, then publishes `dist/` to Pages |
+
+Tests run before the deploy build rather than after, so a failing test costs a
+build and not a publish.
 
 **`PACKAGES_TOKEN` is what makes either one work.** `@bizzdesign/sdk-bundle`
 lives in GitHub Packages under the bizzdesign org, and the automatic
@@ -91,6 +94,35 @@ publish one.
 A deployed artifact is tenant-neutral on purpose: the workflow builds with no
 `.env` and no `config.json`, so the app asks which environment to use on first
 run. Pin a deployment by dropping a `config.json` beside the built files.
+
+### Tests
+
+```bash
+npm test          # once
+npm run test:watch
+```
+
+Vitest, no browser environment and no DOM: what is covered is the pure decision
+logic, which is where a wrong answer is silent rather than loud.
+
+- **`data/chart-spec.ts`** — which marks a field combination earns. A donut only
+  at two to five slices, a quadrant ahead of a scatter only when neither axis is
+  money, a date and a measure landing on a trend in either order, money summed
+  where a score is averaged. An incorrect mark still renders; it just
+  misrepresents the data, so these are the rules worth pinning.
+- **`data/filter.ts`** — one selection per attribute, charts excluding their own
+  attribute so they keep every bar, and `prune()` dropping what a new type
+  cannot match.
+- **`format.ts`** — the compact thresholds (K starts at 1e4, not 1e3) and the
+  money path.
+
+Assertions there avoid pinning a locale. These functions call `Intl` with
+`undefined`, so separators come from the runner's environment; the tests assert
+what is actually ours — which suffix, how many fraction digits — rather than
+`en-US` punctuation.
+
+The `ui/` and `viz/` layers are untested. They need a DOM environment and a
+separate argument about what is worth asserting about a rendered chart.
 
 ### The Cognito callback is the operational constraint
 

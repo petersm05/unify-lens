@@ -57,6 +57,9 @@ jobs:
       - run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      # Before the deploy build, not after: a failing test should cost a build,
+      # not a publish.
+      - run: npm test
       # DEPLOY=1 drops sourcemaps, which would otherwise publish the app source.
       - run: DEPLOY=1 npm run build
       # A sourcemap here means DEPLOY=1 stopped working, and the failure is

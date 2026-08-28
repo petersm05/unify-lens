@@ -52,6 +52,11 @@ export function formatMoney(value: number, currency: string | undefined): string
       style: 'currency',
       currency,
       currencyDisplay: 'narrowSymbol',
+      // The currency style defaults the *minimum* to 2 and clamps it down to
+      // the ceiling rather than to zero, which rendered a round figure as
+      // "€16.0K" where formatCompact gave "16K". Both are headline forms and
+      // they sat next to each other.
+      minimumFractionDigits: 0,
       maximumFractionDigits: scaled.suffix ? 1 : 0,
     }).formatToParts(scaled.value);
 
