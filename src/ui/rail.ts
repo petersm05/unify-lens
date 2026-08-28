@@ -1,19 +1,29 @@
 /**
- * Where the attribute rail sits, and what it does there.
+ * Where the attribute panel sits, and what it does there.
  *
- * The breakpoint lives here and nowhere else. It used to be a `max-width` rule
- * in the stylesheet, but the two arrangements differ in *behaviour* as well as
- * in looks — what the rail's resting state is, whether choosing an attribute
- * puts it away, whether the choice is remembered — and behaviour is not
- * something a stylesheet can hold. Since JavaScript needs the number anyway, a
- * second copy in CSS would only be a number waiting to disagree with this one,
- * so `.split` carries the answer as a class instead.
+ * There is one panel and one control, and they behave the same way at every
+ * size: the panel shows or hides, and the chart is on screen either way. Only
+ * *where* the panel goes changes — beside the chart where there is room, over
+ * it where there is not.
+ *
+ * That was not true at first. A phone got a drill-down instead, with the panel
+ * and the chart taking turns, which meant a second set of rules about which one
+ * you were looking at, a label that changed, and a chevron that turned round.
+ * Two mechanisms for one idea. The overlay is the same mechanism as the column,
+ * so all of that is gone and what is left here is the resting state and where
+ * it is remembered.
+ *
+ * The breakpoint lives here and nowhere else. It is behaviour as much as
+ * layout — what the resting state is, whether a selection closes the panel,
+ * whether the choice is remembered — so JavaScript needs the number anyway, and
+ * a second copy in CSS would only be a number waiting to disagree with this
+ * one. `.split` carries the answer as a class.
  */
 
 /** Below this the rail and the chart cannot both be on screen. */
 const NARROW = '(max-width: 820px)';
 
-/** Whether there is room for the rail beside the chart. */
+/** Whether there is room for the panel beside the chart, or only over it. */
 export type Lane = 'wide' | 'narrow';
 
 export function laneNow(): Lane {
@@ -38,11 +48,14 @@ export function onLaneChange(handle: (lane: Lane) => void): () => void {
 const KEY = 'unify-lens:attr-rail';
 
 /**
- * Whether the rail shows beside the chart, as this device last left it.
+ * Whether the panel rests open, on a screen with room to keep it open.
  *
- * Only the closed state is written. Showing the attributes is what a wide
- * screen is for, so someone who has never touched the toggle should see them —
- * and a device that has never been asked stores nothing.
+ * Only the closed state is written. Showing the attributes is what that much
+ * room is for, so someone who has never touched the toggle should see them, and
+ * a device that has never been asked stores nothing.
+ *
+ * Not asked where the panel covers the chart: resting open there would put a
+ * list in front of the thing it is a list *for*, and it is one tap away.
  */
 export function wideRailOpen(): boolean {
   try {
@@ -62,38 +75,12 @@ export function rememberWideRail(open: boolean): void {
   }
 }
 
-export interface RailView {
-  /** Whether the attribute list is on screen. */
-  readonly rail: boolean;
-  /** Whether the chart is on screen. On a phone the two are exclusive. */
-  readonly detail: boolean;
-  /** What the button will do, not what is on screen. */
-  readonly label: string;
-  readonly glyph: 'sidebar' | 'back' | 'forward';
-}
-
 /**
- * What each part of the split shows, given the arrangement and what was last
- * asked for.
+ * Whether picking an attribute should put the panel away.
  *
- * One total function rather than a scattering of conditionals through the
- * mount. Every combination is enumerable, which is the only reason any of this
- * is testable in a project whose runner has no DOM.
+ * Only where it is covering the chart. Beside it, the panel is something you
+ * left open on purpose and a selection is not a reason to close it.
  */
-export function railView(lane: Lane, open: boolean): RailView {
-  if (lane === 'wide') {
-    return { rail: open, detail: true, label: 'Attributes', glyph: 'sidebar' };
-  }
-
-  // The list shows when it is asked for and not otherwise — including before
-  // anything is charted. It used to take the whole screen until an attribute
-  // was picked, which meant the one arrangement where the chart is always on
-  // screen was the *wide* one: turning a phone on its side was how you got to
-  // see a chart pane at all. The empty pane says what to do next instead.
-  return {
-    rail: open,
-    detail: !open,
-    label: open ? 'Chart' : 'Attributes',
-    glyph: open ? 'forward' : 'back',
-  };
+export function closesOnPick(lane: Lane): boolean {
+  return lane === 'narrow';
 }

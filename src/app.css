@@ -459,8 +459,10 @@ main.pane {
   grid-template-columns: 0 1fr;
 }
 
-/* Only room for one of the two, so they share a cell and take turns; the bar
-   above them is what moves between them. */
+/* Without room to sit beside the chart the panel goes over it, which is the
+   same panel doing the same thing rather than a second arrangement to reason
+   about. The chart stays where it is — it keeps its scroll position, its canvas
+   and its place in the tab order, none of which survive being unmounted. */
 .split.lane-narrow {
   grid-template-columns: 1fr;
   grid-template-areas:
@@ -469,20 +471,46 @@ main.pane {
 }
 
 .split.lane-narrow > .rail,
+.split.lane-narrow > .rail-scrim,
 .split.lane-narrow > .detail {
   grid-area: panel;
 }
 
+/* One cell, three layers: the chart, the dimming over it, the panel over that.
+   The grid already overlaps them, so nothing here needs taking out of flow. */
 .split.lane-narrow > .rail {
-  border-right: 0;
+  z-index: 20;
+  justify-self: start;
+  width: min(320px, 86vw);
   padding-right: var(--gutter);
+  box-shadow: var(--shadow-2);
+  animation: rail-in 200ms cubic-bezier(0.22, 0.8, 0.3, 1);
 }
 
-/* The panel that arrives gets the same rise every other panel in the pane
-   gets, so a swap reads as a move rather than as a redraw. */
-.split.lane-narrow > .rail:not([hidden]),
-.split.lane-narrow > .detail:not([hidden]) {
-  animation: pane-enter 200ms cubic-bezier(0.22, 0.8, 0.3, 1);
+.rail-scrim {
+  z-index: 15;
+  background: rgb(20 15 10 / 0.4);
+  animation: scrim-in 200ms ease;
+}
+
+/* It only ever covers something in the one arrangement, and `[hidden]` is what
+   turns it off in the other — but a stray one over a chart would be invisible
+   and swallow every tap, so it is refused the cell outright. */
+.split.lane-wide > .rail-scrim {
+  display: none;
+}
+
+@keyframes rail-in {
+  from {
+    transform: translateX(-12px);
+    opacity: 0;
+  }
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .rail-bar {
@@ -490,15 +518,6 @@ main.pane {
   align-items: center;
   padding: 14px var(--gutter) 0;
   background: var(--plane);
-}
-
-/* Where the panels take turns the bar sits over whichever one is showing, so
-   it takes that panel's ground — a plane-coloured strip above the cream rail
-   reads as a seam rather than as a header. */
-.split.lane-narrow.rail-on > .rail-bar {
-  padding-bottom: 12px;
-  background: var(--surface-1);
-  border-bottom: 1px solid var(--border);
 }
 
 .rail {

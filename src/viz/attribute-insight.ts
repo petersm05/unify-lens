@@ -32,11 +32,11 @@ import { scopeExcluding, scopeFor, selectionFor, type FilterStore } from '../dat
 import { busy } from '../ui/busy';
 import { countUp } from '../ui/motion';
 import { must } from '../ui/dom';
-import { attributeIcon, chevronIcon, controlsIcon, filterIcon, sidebarIcon } from '../ui/icons';
+import { attributeIcon, controlsIcon, filterIcon, sidebarIcon } from '../ui/icons';
 import {
+  closesOnPick,
   laneNow,
   onLaneChange,
-  railView,
   rememberWideRail,
   wideRailOpen,
   type Lane,
@@ -110,9 +110,13 @@ export function mountAttributeInsight(
            the one that is hidden cannot offer the way back to the other. -->
       <div class="rail-bar">
         <button type="button" class="rail-toggle" aria-expanded="true">
-          <span class="rail-label"></span>
+          <span class="rail-label">Attributes</span>
         </button>
       </div>
+
+      <!-- Only where the panel covers the chart. Tapping beside it puts it
+           away, which is what covering something is expected to allow. -->
+      <div class="rail-scrim" hidden></div>
 
       <div class="detail">
         <div class="insight" hidden>
@@ -230,8 +234,8 @@ export function mountAttributeInsight(
   const split = q('.split', 'split');
   const rail = q('.rail', 'rail');
   const railToggle = q<HTMLButtonElement>('.rail-toggle', 'rail toggle');
-  const railLabel = q('.rail-label', 'rail label');
-  const detail = q('.detail', 'detail');
+  const railScrim = q('.rail-scrim', 'rail scrim');
+  railToggle.prepend(sidebarIcon());
   const insight = q('.insight', 'insight');
   const placeholder = q<HTMLButtonElement>('.placeholder', 'placeholder');
 
@@ -292,41 +296,35 @@ export function mountAttributeInsight(
   let lane: Lane = laneNow();
   let wideOpen = wideRailOpen();
   let narrowOpen = false;
-  /** Where the chart was scrolled to; `display: none` forgets it. */
-  let detailScroll = 0;
 
   /**
-   * Puts the split into the state the arrangement and the flags describe.
+   * Shows or hides the attribute panel.
    *
-   * @param moveFocus - whether a person asked for this. Swapping the panels has
-   *   to take focus along, or it lands on `<body>` when the element holding it
-   *   is hidden — but a restore from a link was nobody's gesture, and stealing
-   *   focus for it would be worse than not managing focus at all.
+   * One question — is the panel open? — and the arrangement only decides where
+   * it goes. The chart is on screen either way, so nothing here has to say
+   * which pane you are looking at, and the toggle keeps one name.
+   *
+   * @param moveFocus - whether a person asked for this. Opening the panel over
+   *   the chart has to take focus with it, and closing has to bring it back, or
+   *   it is left on something that is no longer in front of anyone. A restore
+   *   from a link was nobody's gesture, and stealing focus for it would be
+   *   worse than not managing focus at all.
    */
   function applyRail(moveFocus = false): void {
-    const view = railView(lane, lane === 'wide' ? wideOpen : narrowOpen);
+    const open = lane === 'wide' ? wideOpen : narrowOpen;
 
     split.classList.toggle('lane-wide', lane === 'wide');
     split.classList.toggle('lane-narrow', lane === 'narrow');
-    split.classList.toggle('rail-on', view.rail);
-    split.classList.toggle('rail-off', !view.rail);
+    split.classList.toggle('rail-on', open);
+    split.classList.toggle('rail-off', !open);
 
-    railToggle.setAttribute('aria-expanded', String(view.rail));
-    railLabel.textContent = view.label;
-    railToggle.replaceChildren(
-      view.glyph === 'sidebar' ? sidebarIcon() : chevronIcon(view.glyph),
-      railLabel,
-    );
-
-    rail.hidden = !view.rail;
-    // A chart is a document, and putting the list in front of it should not
-    // lose the reader's place in it.
-    if (!view.detail && !detail.hidden) detailScroll = detail.scrollTop;
-    detail.hidden = !view.detail;
-    if (view.detail) detail.scrollTop = detailScroll;
+    railToggle.setAttribute('aria-expanded', String(open));
+    rail.hidden = !open;
+    // Only where the panel is over the chart is there anything to dim.
+    railScrim.hidden = !open || lane === 'wide';
 
     if (!moveFocus) return;
-    if (view.rail) {
+    if (open) {
       // Onto the row they are already on, so the list opens where they left it
       // rather than at the top of forty-odd attributes.
       (
@@ -339,31 +337,41 @@ export function mountAttributeInsight(
     }
   }
 
-  placeholder.addEventListener('click', () => {
+  /** Opens or closes the panel, remembering the choice where it is kept. */
+  function setRail(open: boolean): void {
     if (lane === 'wide') {
-      wideOpen = true;
-      rememberWideRail(true);
+      wideOpen = open;
+      rememberWideRail(open);
     } else {
-      narrowOpen = true;
+      narrowOpen = open;
     }
     applyRail(true);
-  });
+  }
 
-  railToggle.addEventListener('click', () => {
-    if (lane === 'wide') {
-      wideOpen = !wideOpen;
-      rememberWideRail(wideOpen);
-    } else {
-      narrowOpen = !narrowOpen;
-    }
-    applyRail(true);
-  });
+  placeholder.addEventListener('click', () => setRail(true));
+  railToggle.addEventListener('click', () =>
+    setRail(!(lane === 'wide' ? wideOpen : narrowOpen)),
+  );
+  railScrim.addEventListener('click', () => setRail(false));
+
+  /**
+   * Escape closes the panel where it is covering the chart.
+   *
+   * Not where it sits beside it: there it is not covering anything, and Escape
+   * belongs to whatever is — the chart options menu binds it too, and closing
+   * both from one press would be a surprise.
+   */
+  const onRailEscape = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || lane === 'wide' || !narrowOpen) return;
+    setRail(false);
+  };
+  document.addEventListener('keydown', onRailEscape);
 
   const stopLane = onLaneChange((next) => {
     lane = next;
-    // Turning a tablet on its side is not a request to go anywhere. Each
-    // arrangement resumes its own state: the remembered one where both fit,
-    // and — where they do not — the chart, which is what was being read.
+    // Turning a device is not a request to open anything. Each arrangement
+    // resumes its own resting state: the remembered one where there is room to
+    // keep the panel open, and closed where it would be covering the chart.
     narrowOpen = false;
     applyRail();
   });
@@ -534,7 +542,7 @@ export function mountAttributeInsight(
                 mark = null;
                 // The list has done its job; where they take turns the chart
                 // takes the screen. Where both fit, nothing moves.
-                if (lane === 'narrow') narrowOpen = false;
+                if (closesOnPick(lane)) narrowOpen = false;
                 applyRail(true);
                 void render().catch(fail);
               });
@@ -1712,7 +1720,7 @@ export function mountAttributeInsight(
     // Charting from a record is a request for that chart, so it lands on the
     // chart rather than on the list it was picked from. Before the render, so
     // it appears in the right pane while it computes.
-    if (lane === 'narrow') narrowOpen = false;
+    if (closesOnPick(lane)) narrowOpen = false;
     applyRail(true);
 
     await render();
@@ -1752,7 +1760,7 @@ export function mountAttributeInsight(
     // turns it opens on the chart it names, and where both fit the reader's own
     // remembered choice stands, because the rail is theirs and not the
     // sender's. No focus move — nobody gestured.
-    if (lane === 'narrow') narrowOpen = false;
+    if (closesOnPick(lane)) narrowOpen = false;
     applyRail();
     await render();
   }
@@ -1780,6 +1788,7 @@ export function mountAttributeInsight(
     destroy(): void {
       document.removeEventListener('click', onAway);
       document.removeEventListener('keydown', onEscape);
+      document.removeEventListener('keydown', onRailEscape);
       stopLane();
       unsubscribe();
       objectTable?.destroy();

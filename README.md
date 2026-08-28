@@ -429,57 +429,69 @@ below that stacked the attribute rail *above* the chart at a third of the pane.
 On a phone that left the chart about 460px tall behind 92px of nested padding —
 readable, but nothing anybody would choose.
 
-**The rail and the chart are one decision, not two.** Hiding the attributes on a
-large screen and fitting them on a small one are the same question — *is the
-list showing?* — and only the arrangement differs:
+**One panel, one control, one meaning.** Hiding the attributes on a large
+screen and fitting them on a small one are the same question — *is the panel
+open?* — and the size decides only *where* the panel goes:
 
 | | wide | narrow |
 | --- | --- | --- |
-| arrangement | rail beside the chart | rail and chart take turns in one pane |
-| resting state | open, and remembered on this device | the chart, with the list one tap away |
-| picking an attribute | nothing moves | the list goes; the chart takes the screen |
-| the toggle reads | Attributes | ◀ Attributes / Chart ▶ |
+| where the panel goes | a column beside the chart | over the chart, with the ground behind it dimmed |
+| resting state | open, and remembered on this device | closed; one tap away |
+| picking an attribute | nothing moves | puts the panel away |
+| the toggle reads | Attributes | Attributes |
 
-**The chart pane is what you land on, in both arrangements.** The list used to
-hold a narrow screen until an attribute was picked, which had a consequence
-nobody set out to design: a *wide* screen was the only one where a chart pane
-was reliably in front of you, so turning a phone on its side was how you got to
-see one at all. Now the list shows when it is asked for and not otherwise, and
-the empty pane says what to do next — `.placeholder` is a button when picking an
-attribute is the thing to do next and a plain sentence when it is not, which is
-what `say()` in `attribute-insight.ts` decides per message. Loading, an empty
-metamodel and an error are sentences; "Pick an attribute to chart it" is the way
-into the list.
+The chart is on screen in every one of those states. That is the point of the
+overlay, and it is worth saying why it was not the first design.
 
-**The breakpoint lives in TypeScript** (`src/ui/rail.ts`), not in the
-stylesheet, and `.split` wears the answer as a class. The two arrangements
-differ in *behaviour* as well as in looks — what the resting state is, whether a
-selection puts the list away, whether the choice is remembered — so JavaScript
-needs the number regardless, and a second copy in CSS would only be a number
-waiting to disagree with it. `railView(lane, open, charted)` is a total function
-of three booleans, which is what makes any of it testable in a runner with no
-DOM.
+The first attempt gave a phone a *drill-down*: the panel and the chart took
+turns in one pane. It looked like one mechanism because one variable drove it,
+but it was two — a column that shows and hides, and two panes that swap — and
+the seams showed. `railView` had to return which pane was up, the toggle's label
+flipped between Attributes and Chart, and a chevron turned round to say which
+way you were going. None of that describes the wide arrangement, because none of
+it needed to exist there.
+
+Worse, the drill-down rested on the *list*, so a phone opened on a wall of
+attribute names and the chart pane was not on screen at all. The wide
+arrangement was then the only one that reliably put a chart in front of you —
+which is exactly how it was reported: *"it only worked in landscape"*.
+
+The overlay is the same mechanism as the column. `railView` is gone, the label
+is constant, the chevron is gone, and `RailView` with them; what is left in
+`src/ui/rail.ts` is the breakpoint, where the resting state is remembered, and
+`closesOnPick`. The chart is never unmounted, so it keeps its scroll position,
+its canvas and its place in the tab order for free — the drill-down had to save
+and restore the scroll by hand.
+
+**The breakpoint lives in TypeScript** (`src/ui/rail.ts`), not the stylesheet,
+and `.split` wears the answer as a class. It is behaviour as much as layout —
+what the resting state is, whether a selection closes the panel, whether the
+choice is remembered — so JavaScript needs the number anyway, and a second copy
+in CSS would only be a number waiting to disagree with it.
+
+**The overlay needs nothing taken out of flow.** Where the panel covers the
+chart, `.split`'s grid already puts both in one named area; they are three
+layers in one cell — chart, scrim, panel — separated by `z-index` alone. The
+scrim is a real element rather than a pseudo-element so it can be tapped, which
+is the same shape the record sheet's backdrop already uses.
 
 **The toggle sits in its own row of the split**, outside both scrolling panels.
-Inside the chart it would scroll out of reach on a long page; inside either
-panel it would vanish with that panel exactly when it was the way back to the
-other one.
+Inside the chart it would scroll out of reach on a long page.
 
-**The rail's state is not in the `?a=` payload.** An `Analysis` describes a
-question, and a collapsed sidebar is not part of one. The same payload is what
-gets saved and what gets sent to a colleague — and the object-type picker lives
-in the rail, so sharing a collapsed one would hand someone a view they could not
+**The panel's state is not in the `?a=` payload.** An `Analysis` describes a
+question, and an open sidebar is not part of one. The same payload is what gets
+saved and what gets sent to a colleague — and the object-type picker lives in
+the panel, so sharing it closed would hand someone a view they could not
 re-aim.
 
-**No transition on the collapse.** Animating the track would need the rail to
-stay laid out — so `inert`, to keep forty-odd buttons out of the tab order — and
-would fire the scatter's `ResizeObserver` on every frame of it. The chart
-getting wider instantly is the feature. Where the panels take turns, the one
-arriving gets the same `pane-enter` rise every other panel in the pane gets.
+**The empty pane says what to do next and is the way to do it.**
+`.placeholder` is a button when picking an attribute is the next step and a
+plain sentence when it is not — `say()` in `attribute-insight.ts` decides that
+per message, so loading, a type with no categories and an error stay sentences.
 
 **The breakpoints are a ladder, not a pile:** 900 the donut stops fitting beside
-its row list, 820 the rail and the chart stop fitting beside each other, 700 the
-card head stops holding its options button, 560 a phone in portrait — plus
+its row list, 820 the panel stops fitting beside the chart, 700 the card head
+stops holding its options button, 560 a phone in portrait — plus
 `max-height: 520px`, a phone on its side, which is the one thing no width can
 tell you. 560 clears a Pro Max in portrait (430) and stays below the narrowest
 phone landscape (667), so the one-column decisions never fire on a screen that
@@ -535,10 +547,10 @@ and 820/821 for the lane boundary (`max-width: 820px` matches *at* 820).
 Two rules for keeping it honest, both learned the hard way:
 
 **Import the decision, never restate it.** The harness asks `src/ui/rail.ts` for
-the lane and applies `railView`'s answer the way `applyRail` does. It used to
-carry its own copy of the breakpoint and choose the classes by hand, which meant
-it agreed with itself whatever the app actually did — a check that can only
-confirm its own copy is not a check.
+the lane and the remembered resting state, and applies them the way `applyRail`
+does. It used to carry its own copy of the breakpoint and choose the classes by
+hand, which meant it agreed with itself whatever the app actually did — a check
+that can only confirm its own copy is not a check.
 
 **Fill every panel it draws, including the ones that open on demand.** An empty
 `.col-list` is what let #17 through: a panel with nothing in it has nothing to
