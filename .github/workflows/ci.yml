@@ -1,0 +1,52 @@
+# Typechecks and builds every commit that is not itself a deploy.
+#
+# Deploys are the one thing that used to run in CI, and they were manual, so
+# nothing ever verified a commit before it landed on main. This does, on the
+# branches where finding out is still cheap. Pushes to main run pages.yml
+# instead, which performs the same build before it publishes anything.
+#
+# Needs the PACKAGES_TOKEN secret for the same reason pages.yml does: the SDK
+# lives in GitHub Packages under the bizzdesign org, which the automatic
+# GITHUB_TOKEN cannot read.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+      - gh-pages
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@bizzdesign'
+      # Without this the missing secret surfaces as a bare npm E401, which reads
+      # like a broken package rather than an unset repository setting.
+      - name: Require the packages token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::PACKAGES_TOKEN is empty or unset. Add a repository secret holding a PAT with read:packages that can see the bizzdesign org (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      # `build` is `tsc --noEmit && vite build`, so this typechecks too.
+      - run: npm run build

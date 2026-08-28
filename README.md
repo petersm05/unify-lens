@@ -63,6 +63,35 @@ Two deployment shapes worth knowing:
 - **Standalone** — host anywhere and set `environmentUrl` per deployment. Works
   identically; the callback allowlist below is what has to keep up.
 
+### The pipeline
+
+Two workflows, both needing one repository secret:
+
+| Workflow | Runs on | Does |
+| --- | --- | --- |
+| `ci.yml` | pull requests, and pushes to any branch but `main` | `npm ci` then `npm run build`, which is `tsc --noEmit && vite build` |
+| `pages.yml` | pushes to `main`, or by hand | the same build with `DEPLOY=1`, then publishes `dist/` to Pages |
+
+**`PACKAGES_TOKEN` is what makes either one work.** `@bizzdesign/sdk-bundle`
+lives in GitHub Packages under the bizzdesign org, and the automatic
+`GITHUB_TOKEN` cannot read another org's packages — so a build with no token
+dies at `npm ci` with a 401 before it compiles a line. The secret holds a PAT
+with `read:packages` from an account that can see that org. Both workflows check
+for it first and say so, rather than letting npm report it as a broken package.
+
+**Pages must be set to build from GitHub Actions**, not from a branch
+(Settings → Pages → Source). Serving from `gh-pages` means `deploy-pages` has
+nowhere to publish and the site only changes when someone uploads a build by
+hand — which is how the site came to be serving a 4 MB sourcemap beside a 1.6 MB
+bundle. This repo is public, so that exposed nothing; it was just two and a half
+times the app in dead weight, on something people open over cellular. `DEPLOY=1`
+is what drops sourcemaps, and `pages.yml` now fails the build rather than
+publish one.
+
+A deployed artifact is tenant-neutral on purpose: the workflow builds with no
+`.env` and no `config.json`, so the app asks which environment to use on first
+run. Pin a deployment by dropping a `config.json` beside the built files.
+
 ### The Cognito callback is the operational constraint
 
 `sdk.ensureAuthenticated()` sends the browser through the Cognito
