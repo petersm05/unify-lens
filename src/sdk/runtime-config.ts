@@ -148,10 +148,43 @@ async function fetchConfig(): Promise<RuntimeConfig | null> {
   try {
     const response = await fetch(new URL('config.json', document.baseURI), { cache: 'no-store' });
     if (!response.ok) return null;
-    return (await response.json()) as RuntimeConfig;
+    return toRuntimeConfig(await response.json());
   } catch {
     return null;
   }
+}
+
+const CONFIG_KEYS = [
+  'environmentUrl',
+  'graphqlEndpoint',
+  'graphqlRealtimeEndpoint',
+  'cognitoRegion',
+  'cognitoDomain',
+  'cognitoUserPoolId',
+  'cognitoClientId',
+  'metaModel',
+  'callbackUrl',
+] as const satisfies readonly (keyof RuntimeConfig)[];
+
+/**
+ * Keeps the fields that are non-empty strings and drops everything else.
+ *
+ * A file that parses but says `"graphqlEndpoint": 123` therefore behaves like
+ * a file that does not name an endpoint at all — `hasTarget` fails, and the
+ * next source in the resolution order gets its turn. That is the same
+ * degradation an absent or unreadable `config.json` already produces, which
+ * makes a malformed one recoverable rather than a hard stop.
+ */
+function toRuntimeConfig(value: unknown): RuntimeConfig | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+
+  const record = value as Record<string, unknown>;
+  const config: Record<string, string> = {};
+  for (const key of CONFIG_KEYS) {
+    const field = record[key];
+    if (typeof field === 'string' && field.length > 0) config[key] = field;
+  }
+  return config;
 }
 
 function buildConfig(): RuntimeConfig {
