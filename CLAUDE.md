@@ -40,6 +40,23 @@ something real:
 So the gate is both, plus the maintainer's judgement. Neither replaces the
 other, and a green review is not permission to skip a red pipeline.
 
+### Knowing when to stop
+
+Two rounds is the shape to expect: review, fix, re-review. A third round
+finding the *same class* of thing means the change is the wrong shape, not that
+the findings are wrong — step back and restructure rather than patch again.
+
+This file went twenty rounds. Every finding was real, and two thirds of them
+were one mistake wearing different clothes, because the file asserts facts
+about code and each sentence was a claim that could rot. What finally worked
+was making fewer claims, not defending more of them. Prose that describes the
+codebase should say what to look for, not inventory what is currently there.
+
+Effort follows what a mistake would cost. Arithmetic, filters, anything that
+changes a figure or what a chart means: the whole loop, and check the fix
+rather than the file. A label, a comment, a stylesheet value: one pass is
+enough, and a second is usually the more expensive mistake.
+
 ### Verify the fix, not the file
 
 "The suite fails when I break the code" is not evidence that the test for that
