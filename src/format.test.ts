@@ -111,10 +111,12 @@ describe('formatMoneyExact', () => {
 });
 
 describe('sampledObjects', () => {
-  // What it cannot check is that callers pass the count rather than the
-  // ceiling — the count is its only argument, so no assertion here can tell
-  // the two apart. `src/sample-wording.test.ts` is that guard.
+  // Taking the read rather than a number is what stops a caption naming
+  // `SAMPLE_LIMIT` again, and the compiler enforces that on every build. What
+  // is left to check here is the wording the five captions share.
   it('is one wording, shared by every caption that describes a partial read', () => {
-    expect(sampledObjects(12_500)).toBe(`the first ${formatCount(12_500)} objects read`);
+    expect(sampledObjects({ sampled: 12_500 })).toBe(
+      `the first ${formatCount(12_500)} objects read`,
+    );
   });
 });

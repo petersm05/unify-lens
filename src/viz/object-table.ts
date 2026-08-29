@@ -528,7 +528,7 @@ export function mountObjectTable(
     const incomplete = result.sortedBy === 'sample' && result.truncated;
     note.hidden = !incomplete;
     note.textContent = incomplete
-      ? `Ranked from ${sampledObjects(result.total)}, so this order may not be complete.`
+      ? `Ranked from ${sampledObjects(result)}, so this order may not be complete.`
       : '';
 
     const from = result.total === 0 ? 0 : page * PAGE_SIZE + 1;
