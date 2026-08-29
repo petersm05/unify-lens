@@ -22,12 +22,22 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = dirname(fileURLToPath(import.meta.url));
 
+/**
+ * The functions that turn a number into words, read out of `format.ts` rather
+ * than listed here — a list would be the thing that falls behind, which is the
+ * defect this file exists to stop rather than to repeat.
+ */
+const formatters = [...readFileSync(join(SRC, 'format.ts'), 'utf8').matchAll(/export function (\w+)/g)]
+  .map((match) => match[1])
+  .filter((name): name is string => name !== undefined);
+
 /** `SAMPLE_LIMIT` where a formatter or a template will turn it into words. */
 const WORDED = [
-  // sampledObjects(SAMPLE_LIMIT), formatCount(SAMPLE_LIMIT), and so on.
-  /\b[A-Za-z_$][\w$]*\(\s*SAMPLE_LIMIT\s*\)/,
-  // `${SAMPLE_LIMIT}` interpolated straight into a string.
-  /\$\{\s*SAMPLE_LIMIT\s*\}/,
+  // Interpolated into a sentence, however it is dressed: `${SAMPLE_LIMIT}`,
+  // `${formatCount(SAMPLE_LIMIT)}`, `${SAMPLE_LIMIT.toLocaleString()}`.
+  /\$\{[^{}]*\bSAMPLE_LIMIT\b[^{}]*\}/g,
+  // Handed to a formatter, wrapped across lines or with arguments beside it.
+  new RegExp(String.raw`\b(?:${formatters.join('|')})\s*\(\s*[^()]*\bSAMPLE_LIMIT\b`, 'g'),
 ];
 
 function tsFilesIn(dir: string): string[] {
@@ -47,13 +57,23 @@ describe('a caption describing a partial read', () => {
     expect(sources.length).toBeGreaterThanOrEqual(20);
   });
 
+  // An empty list would leave the second pattern matching any open bracket at
+  // all, which is a check that has stopped checking while still passing.
+  it('knows which functions turn a number into words', () => {
+    expect(formatters).toContain('sampledObjects');
+    expect(formatters.length).toBeGreaterThanOrEqual(4);
+  });
+
+  // Reads each file whole rather than line by line, because a call wrapped
+  // across two lines is exactly the shape a per-line check would miss.
   it('never puts the ceiling into words', () => {
     const offenders = sources.flatMap((file) => {
-      const lines = readFileSync(file, 'utf8').split('\n');
-      return lines.flatMap((line, index) =>
-        WORDED.some((pattern) => pattern.test(line))
-          ? [`${relative(SRC, file)}:${index + 1} — ${line.trim()}`]
-          : [],
+      const source = readFileSync(file, 'utf8');
+      return WORDED.flatMap((pattern) =>
+        [...source.matchAll(pattern)].map((match) => {
+          const line = source.slice(0, match.index).split('\n').length;
+          return `${relative(SRC, file)}:${line} — ${match[0].replace(/\s+/g, ' ')}`;
+        }),
       );
     });
 

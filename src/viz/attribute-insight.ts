@@ -740,16 +740,16 @@ export function mountAttributeInsight(
     // next is an average of 2,7 across the eleven — the unweighted form said 6,
     // and gave a quiet month the same say as a busy one. Money is summed, where
     // the distinction does not arise.
-    const objects = trend.points.reduce((count, point) => count + point.count, 0);
     const lead = money ? `Total ${measure.name}` : `Average ${measure.name}`;
     kpi(
       trend.truncated ? `${lead} in sample` : lead,
       {
         value: money
           ? trend.points.reduce((sum, point) => sum + point.measure, 0)
-          : objects === 0
+          : trend.counted === 0
             ? 0
-            : trend.points.reduce((sum, point) => sum + point.measure * point.count, 0) / objects,
+            : trend.points.reduce((sum, point) => sum + point.measure * point.count, 0) /
+              trend.counted,
         format,
       },
       'Periods',
@@ -890,18 +890,24 @@ export function mountAttributeInsight(
           : mark === 'frequency'
             ? `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`
             : 'one bar per range of values';
-    const basis = distribution.truncated
+    // Belongs in both subtitles: picking a bar narrows which objects the
+    // figures describe, not which ones were read, so a selected bin's numbers
+    // come from the same partial read the whole chart does.
+    const sampledFrom = distribution.truncated
       ? `, based on ${sampledObjects(distribution.sampled)}`
-      : // A frequency chart plots the most common values and leaves the tail
-        // out, so completeness is not something it can claim: its own shape
-        // clause already says how many of how many distinct values are drawn.
-        mark === 'frequency'
+      : '';
+    // Only the unselected subtitle claims coverage, and only where the bars
+    // cover everything: a frequency chart plots the most common values and
+    // leaves the tail out, and its own shape clause already says so.
+    const basis = distribution.truncated
+      ? sampledFrom
+      : mark === 'frequency'
         ? ''
         : ', covering every object with a value';
     set(
       'subtitle',
       self
-        ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
+        ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}${sampledFrom}. Tap the highlighted bar to clear it.`
         : `${choice.categoryName} · ${shape}${basis}.`,
     );
 
