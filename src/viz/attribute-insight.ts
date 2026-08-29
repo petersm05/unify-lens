@@ -895,7 +895,12 @@ export function mountAttributeInsight(
     set(
       'subtitle',
       self
-        ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
+        ? // `basis` goes on the distribution, not on "the figures above" — the
+          // same subject it takes in the other sentence. Attaching it to the
+          // figures would caption `sumOf`, an exact server-side total, as a
+          // sample estimate; attaching it to nothing left a truncated chart
+          // with a bar selected saying so nowhere on screen.
+          `${choice.categoryName} · the full distribution is kept for context${basis}; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
         : `${choice.categoryName} · ${shape}${basis}.`,
     );
 
