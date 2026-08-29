@@ -117,9 +117,6 @@ logic, which is where a wrong answer is silent rather than loud.
   cannot match.
 - **`format.ts`** — the compact thresholds (K starts at 1e4, not 1e3) and the
   money path.
-- **`data/attributes.ts`** — the arithmetic every chart rests on: the quantile
-  convention, that histogram bins account for every value and close at the top,
-  and that a filter condition is built from the definition id.
 - **`data/analysis.ts`** — what a saved analysis encodes and decodes.
 - **`data/table-columns.ts`** and **`data/table-export.ts`** — which columns a
   chart contributes, and the values a copied table carries.
@@ -129,10 +126,12 @@ logic, which is where a wrong answer is silent rather than loud.
   SDK at run time, since the bundle is CommonJS and takes the whole suite, and
   the deploy, down with it.
 
-Assertions there avoid pinning a locale. These functions call `Intl` with
-`undefined`, so separators come from the runner's environment; the tests assert
-what is actually ours — which suffix, how many fraction digits — rather than
-`en-US` punctuation.
+Assertions in the `format.ts` tests avoid pinning a locale. Those functions call
+`Intl` with `undefined`, so separators come from the runner's environment; the
+tests assert what is actually ours — which suffix, how many fraction digits —
+rather than `en-US` punctuation. Date fixtures elsewhere are built with
+`Date.UTC` for the same reason: a span that sits on a threshold in one zone
+crosses it in another.
 
 Beyond `ui/rail.ts`, the `ui/` and `viz/` layers are untested. They need a DOM
 environment and a separate argument about what is worth asserting about a
