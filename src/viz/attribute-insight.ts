@@ -1484,10 +1484,22 @@ export function mountAttributeInsight(
     if (node) countUp(node, filled * 100, (value) => `${Math.round(value)}%`);
     set('cov-state', word);
 
-    // A card has room for the part and the whole, not for the sentence the
-    // banner carried. The sentence survives as the card's title, where the
-    // attribute and the two counts it names are still one hover away.
-    set('cov-foot', `${formatCount(cover.withValue)} of ${formatCount(populated)}`);
+    // Not the part and the whole: the card beside this one already carries
+    // that pair. On a money attribute the hero is the total, which makes the
+    // second card the count — "1.001 of 1.191" — and this card would print the
+    // same two numbers immediately to its right. Everywhere else the hero is
+    // the count and the repeat is one card further away, but it is the same
+    // repeat. `figure` already declines to say "301 of 301"; this is that rule
+    // across two cards rather than within one.
+    //
+    // The gap is the number no other card carries, and it is what the unfilled
+    // part of the arc is showing. Where there is no gap it says nothing rather
+    // than "0 not set" — the arc reads 100% and the word says so.
+    const foot = container.querySelector<HTMLElement>('[data-k="cov-foot"]');
+    if (foot) {
+      foot.hidden = cover.notSet === 0;
+      foot.textContent = `${formatCount(cover.notSet)} not set`;
+    }
     coverageCard.title = `${formatCount(cover.withValue)} of ${formatCount(populated)} ${labelFor(type).toLowerCase()} objects have a value for ${choice.name} · ${formatCount(cover.notSet)} not set`;
   }
 
