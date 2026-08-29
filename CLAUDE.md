@@ -44,6 +44,34 @@ behaviour works — some *other* test may be doing the catching. Check which tes
 failed and for what reason. That mistake shipped three inert tests here, and
 the review caught them rather than the mutation run that was supposed to.
 
+## Four habits worth catching in yourself
+
+These were each repeated several times in one day before being named. They are
+cheap to check for and expensive to leave.
+
+**Fix the class, not the instance.** A review found the same defect in this
+file five times — a hand-kept list of which functions behave which way, always
+one entry behind the code. Four of those times the fix was to add the missing
+entry. The fifth deleted the lists, which is what should have happened the
+first time the shape repeated. When a second instance of a finding appears, the
+finding is about the shape.
+
+**Claim things about the diff, not about the workspace.** Three times a file
+here described something — a linked document, a tested module, a test fixture —
+that existed only on another unmerged branch. It is true on the machine and
+false for anyone who merges this. Ask what the claim means on `main` with only
+this branch applied.
+
+**A commit message is a claim like any other.** Three messages described work
+the commit did not contain: a fix applied to one of two files, a sentence
+removed that was not, a check run whose output went unread. Before writing the
+message, read the diff that is staged, not the intention.
+
+**Read the output of the command you just ran.** Twice a script raised an error
+mid-run, wrote part of its changes, and the commit went ahead in the same
+invocation with the failure scrolled past. Separate the step that changes files
+from the step that records them, and look in between.
+
 ## Two ways pull requests have gone wrong here
 
 **Do not stack a pull request on another branch.** It has been tried twice and
