@@ -719,16 +719,26 @@ export function mountAttributeInsight(
       money ? formatMoney(value, measure.currency) : formatCompact(value);
 
     set('title', `${measure.name} over ${when.name}`);
+
+    // A figure from a sample is a different claim from one over the population,
+    // and this is the path where the difference bites hardest. The distribution
+    // can still print an exact "Total" when its sample falls short, because
+    // `numericDistribution` asks the server for the sum instead; there is no
+    // such fallback here, since the backend has no date grouping and every
+    // period is computed from the objects that were actually read. So a money
+    // trend past `SAMPLE_LIMIT` is a lower bound — and it was being set in the
+    // same type as a complete total, under a label that said "Total".
     set(
       'subtitle',
-      `${measure.categoryName} · ${money ? 'totalled' : 'averaged'} per ${trend.grain || 'period'}, across ${formatCount(trend.counted)} ${labelFor(type)} objects carrying both a date and a value.`,
+      `${measure.categoryName} · ${money ? 'totalled' : 'averaged'} per ${trend.grain || 'period'}, across ${formatCount(trend.counted)} ${labelFor(type)} objects carrying both a date and a value${trend.truncated ? `, from the first ${formatCount(SAMPLE_LIMIT)} read` : ''}.`,
     );
 
     const self = selectionFor(filters.get(), when);
     const activeIndex = self ? trend.points.findIndex((p) => p.label === self.binLabel) : -1;
 
+    const lead = money ? `Total ${measure.name}` : `Average ${measure.name}`;
     kpi(
-      money ? `Total ${measure.name}` : `Average ${measure.name}`,
+      trend.truncated ? `${lead} in sample` : lead,
       {
         value: money
           ? trend.points.reduce((sum, point) => sum + point.measure, 0)
