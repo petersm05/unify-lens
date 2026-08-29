@@ -12,6 +12,22 @@ export function formatCount(value: number): string {
 }
 
 /**
+ * What a partial read actually covered, for the sentence that says so.
+ *
+ * `SAMPLE_LIMIT` is a ceiling, not a measurement, and naming the constant was
+ * wrong in every message that did it: `SampleStore` also stops on a time
+ * budget, so a slow read is truncated at whatever it reached — 2.500 of 10.000
+ * objects, under a caption claiming the first 4.000. The count travels beside
+ * the flag now, and this is the one place that turns it into words, so the
+ * next caption cannot reach for the constant again.
+ */
+export function sampledObjects(count: number | undefined): string {
+  return count === undefined
+    ? 'a partial read of the population'
+    : `the first ${formatCount(count)} objects read`;
+}
+
+/**
  * Compact suffixes, chosen over `Intl`'s own compact notation.
  *
  * The locale form is correct but not self-consistent: Dutch CLDR renders

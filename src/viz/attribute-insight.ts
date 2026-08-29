@@ -17,7 +17,6 @@ import {
   numericDistribution,
   quantiles,
   rank,
-  SAMPLE_LIMIT,
   scatterPoints,
   statsByCategory,
   thresholdCondition,
@@ -48,7 +47,7 @@ import { renderDonut } from './donut';
 import { renderScatter, type Quadrant } from './scatter';
 import { renderTimeline } from './timeline';
 import { renderHeatmap } from './heatmap';
-import { formatCompact, formatCount, formatMoney } from './theme';
+import { formatCompact, formatCount, formatMoney, sampledObjects } from './theme';
 
 /**
  * Above this many objects the population is not read speculatively.
@@ -730,7 +729,7 @@ export function mountAttributeInsight(
     // same type as a complete total, under a label that said "Total".
     set(
       'subtitle',
-      `${measure.categoryName} · ${money ? 'totalled' : 'averaged'} per ${trend.grain || 'period'}, across ${formatCount(trend.counted)} ${labelFor(type)} objects carrying both a date and a value${trend.truncated ? `, from the first ${formatCount(SAMPLE_LIMIT)} read` : ''}.`,
+      `${measure.categoryName} · ${money ? 'totalled' : 'averaged'} per ${trend.grain || 'period'}, across ${formatCount(trend.counted)} ${labelFor(type)} objects carrying both a date and a value${trend.truncated ? `, from ${sampledObjects(trend.sampled)}` : ''}.`,
     );
 
     const self = selectionFor(filters.get(), when);
@@ -877,7 +876,7 @@ export function mountAttributeInsight(
           : mark === 'frequency'
             ? `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`
             : distribution.truncated
-          ? `based on the first ${formatCount(SAMPLE_LIMIT)} objects`
+          ? `based on ${sampledObjects(distribution.sampled)}`
           : 'covering every object with a value';
     set(
       'subtitle',
@@ -898,7 +897,14 @@ export function mountAttributeInsight(
 
     if (top.length > 0) {
       topSection.hidden = false;
-      renderTop(top, inSlice ?? distribution.observations ?? [], choice, money, distribution.truncated);
+      renderTop(
+        top,
+        inSlice ?? distribution.observations ?? [],
+        choice,
+        money,
+        distribution.truncated,
+        distribution.sampled,
+      );
     } else {
       topSection.hidden = true;
     }
@@ -982,6 +988,7 @@ export function mountAttributeInsight(
     choice: AttributeChoice,
     money: (value: number) => string,
     truncated: boolean,
+    sampled: number | undefined,
   ): void {
     const heading = topSection.querySelector<HTMLElement>('h2');
     const caption = topSection.querySelector<HTMLElement>('.sub');
@@ -993,7 +1000,7 @@ export function mountAttributeInsight(
       if (heading) heading.textContent = 'Highest values';
       if (caption) {
         caption.textContent = truncated
-          ? `Highest among the first ${formatCount(SAMPLE_LIMIT)} objects read.`
+          ? `Highest among ${sampledObjects(sampled)}.`
           : 'Highest across every object carrying a value.';
       }
       renderBarList(
@@ -1126,7 +1133,7 @@ export function mountAttributeInsight(
     const sizeBy = resolveSize(x, y);
     const groupBy = choices.find((candidate) => keyOf(candidate) === groupKey);
 
-    const { points, truncated, groups } = await scatterPoints(
+    const { points, truncated, sampled, groups } = await scatterPoints(
       session.sample,
       type,
       x,
@@ -1151,7 +1158,7 @@ export function mountAttributeInsight(
     set(
       'subtitle',
       (truncated
-        ? `Only objects carrying both measures are plotted, from the first ${formatCount(SAMPLE_LIMIT)} read.`
+        ? `Only objects carrying both measures are plotted, from ${sampledObjects(sampled)}.`
         : 'Every object carrying both measures is plotted.') +
         (mark === 'quadrant'
           ? ` Split at the median of each axis — tap a quadrant to filter to it.${sized}`

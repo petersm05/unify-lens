@@ -49,6 +49,17 @@ export interface Distribution {
   readonly total: number;
   /** Set when the sample hit `SAMPLE_LIMIT` and the tail was not read. */
   readonly truncated: boolean;
+  /**
+   * How many objects the bins were counted from, where a bounded read is what
+   * produced them. Absent on the exact paths — server-side counts, and a
+   * sample that turned out to be complete — which have no shortfall to
+   * describe and never set `truncated`.
+   *
+   * It has to travel beside the flag, because `SAMPLE_LIMIT` cannot stand in
+   * for it: the read also stops on a time budget, so a truncated sample holds
+   * whatever it reached rather than the ceiling.
+   */
+  readonly sampled?: number;
   /** Server-side total, for numeric attributes only. */
   readonly sum?: number;
   /** The period a timeline was bucketed into. */
@@ -235,7 +246,7 @@ export async function scatterPoints(
   scope?: AttributeFilter<MetaModel>,
   size?: AttributeChoice,
   group?: AttributeChoice,
-): Promise<{ points: Point[]; truncated: boolean; groups: string[] }> {
+): Promise<{ points: Point[]; truncated: boolean; sampled: number; groups: string[] }> {
   const sample = await store.get(type, scope);
   const xKey = `${x.categoryId}::${x.name}`;
   const yKey = `${y.categoryId}::${y.name}`;
@@ -264,7 +275,12 @@ export async function scatterPoints(
     });
   }
 
-  return { points, truncated: sample.truncated, groups: [...seen].sort() };
+  return {
+    points,
+    truncated: sample.truncated,
+    sampled: sample.objects.length,
+    groups: [...seen].sort(),
+  };
 }
 
 export interface CrossTab {
@@ -520,7 +536,13 @@ export async function valueFrequency(
       },
     }));
 
-  return { bins, total, truncated: sample.truncated, distinct: tally.size };
+  return {
+    bins,
+    total,
+    truncated: sample.truncated,
+    sampled: sample.objects.length,
+    distinct: tally.size,
+  };
 }
 
 /** The server-side sum of one numeric attribute under an arbitrary scope. */
@@ -740,6 +762,7 @@ export async function numericDistribution(
     ...histogram(numbers, choice),
     total: numbers.length,
     truncated: sample.truncated,
+    sampled: sample.objects.length,
     sum,
     ...(stats ? { stats } : {}),
     top: rank(observations),
@@ -771,7 +794,8 @@ export async function dateDistribution(
     if (value instanceof Date) dates.push(value);
   }
 
-  if (dates.length === 0) return { bins: [], total: 0, truncated: sample.truncated };
+  if (dates.length === 0)
+    return { bins: [], total: 0, truncated: sample.truncated, sampled: sample.objects.length };
 
   const chosen: Grain = grain ?? suggestGrain(dates);
 
@@ -809,7 +833,12 @@ export async function dateDistribution(
       },
     }));
 
-  return { bins, total: dates.length, truncated: sample.truncated };
+  return {
+    bins,
+    total: dates.length,
+    truncated: sample.truncated,
+    sampled: sample.objects.length,
+  };
 }
 
 export interface TrendPoint extends Bin {
@@ -823,6 +852,8 @@ export interface Trend {
   /** True when the measure is summed rather than averaged. */
   readonly additive: boolean;
   readonly truncated: boolean;
+  /** How many objects were read to build it — see `Distribution.sampled`. */
+  readonly sampled: number;
   /** Objects carrying both a date and a measure — the population behind the line. */
   readonly counted: number;
 }
@@ -861,7 +892,14 @@ export async function measureOverTime(
 
   const chosen: Grain = grain ?? suggestGrain(paired.map((entry) => entry.date));
   if (paired.length === 0) {
-    return { points: [], grain: chosen, additive: false, truncated: sample.truncated, counted: 0 };
+    return {
+      points: [],
+      grain: chosen,
+      additive: false,
+      truncated: sample.truncated,
+      sampled: sample.objects.length,
+      counted: 0,
+    };
   }
 
   const additive = measure.kind === 'money';
@@ -909,6 +947,7 @@ export async function measureOverTime(
     grain: chosen,
     additive,
     truncated: sample.truncated,
+    sampled: sample.objects.length,
     counted: paired.length,
   };
 }
