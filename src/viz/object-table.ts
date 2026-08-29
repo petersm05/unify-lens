@@ -1,14 +1,14 @@
 import type { ObjectType, UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Session } from '../sdk/client';
 
+import { fetchTable } from '../data/object-table';
 import {
   columnFor,
   CREATED_COLUMN,
-  fetchTable,
   foldCharted,
   NAME_COLUMN,
   type Column,
-} from '../data/object-table';
+} from '../data/table-columns';
 import { equalsCondition, SAMPLE_LIMIT, type AttributeChoice } from '../data/attributes';
 import { scopeFor, type FilterStore } from '../data/filter';
 import { onContextRequest, showContextMenu } from '../ui/context-menu';
