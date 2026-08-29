@@ -67,6 +67,15 @@ const WORDED = [
   // that balanced them could not, having consumed the call whole.
   (names: string) =>
     new RegExp(String.raw`\b(?:${formatters.join('|')})\s*\(\s*[^)]*\b(?:${names})\b`, 'g'),
+  // Concatenated rather than interpolated. A template literal is the house
+  // style, but `'the first ' + SAMPLE_LIMIT + ' objects'` is the same caption
+  // and was walking past both patterns above.
+  (names: string) =>
+    new RegExp(String.raw`['"\`][^'"\`\n]*['"\`]\s*\+[^;\n]*\b(?:${names})\b`, 'g'),
+  (names: string) =>
+    new RegExp(String.raw`\b(?:${names})\b[^;\n]*\+\s*['"\`]`, 'g'),
+  // A method on the constant is only ever called to display it.
+  (names: string) => new RegExp(String.raw`\b(?:${names})\s*\.\s*\w+\s*\(`, 'g'),
 ];
 
 /** True where any pattern would report this source. */
@@ -103,6 +112,12 @@ describe('a caption describing a partial read', () => {
     expect(formatters.length).toBeGreaterThanOrEqual(4);
   });
 
+  // The alias arm can only be doing anything if the scan found an alias, and
+  // the two lists beside it are guarded the same way.
+  it('found the ceiling bound to another name somewhere in the tree', () => {
+    expect(names.split('|').length).toBeGreaterThanOrEqual(2);
+  });
+
   it('follows the ceiling through the names it is bound to', () => {
     expect(aliasesIn('const COPY_LIMIT = SAMPLE_LIMIT;')).toEqual(['COPY_LIMIT']);
     expect(aliasesIn('let cap = SAMPLE_LIMIT;')).toEqual(['cap']);
@@ -125,6 +140,9 @@ describe('a caption describing a partial read', () => {
     ['a nested call, in a template', '`from ${sampledObjects(Math.min(SAMPLE_LIMIT, n))}.`', true],
     ['a nested call, outside one', 'const note = sampledObjects(Math.min(SAMPLE_LIMIT, n));', true],
     ['an alias', 'sampledObjects(COPY_LIMIT)', true],
+    ['a concatenation, ceiling last', "note = 'the first ' + SAMPLE_LIMIT;", true],
+    ['a concatenation, ceiling first', "note = SAMPLE_LIMIT + ' objects read';", true],
+    ['a method called on it', 'note = SAMPLE_LIMIT.toLocaleString();', true],
     ['a comparison', 'if (objects.length >= SAMPLE_LIMIT) break;', false],
     ['arithmetic on it', 'Math.ceil(SAMPLE_LIMIT / PAGE)', false],
     ['a formatter given a real count', 'sampledObjects(Math.min(999, total))', false],
