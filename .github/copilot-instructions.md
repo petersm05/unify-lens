@@ -15,7 +15,8 @@ against these rather than against general TypeScript style.
 underneath, so the test runner's ESM loader cannot take a named export out of
 `ts-results` and dies *collecting* the file — which fails the whole suite while
 reporting every other test as passing, and stops the deploy. This has cost two
-deploys. `src/test-graph.test.ts` enforces it. The fix is always to move the
+deploys. `src/test-graph.test.ts` catches it, though only for static imports —
+a dynamic `await import(…)` would slip past and fail the same way. The fix is always to move the
 pure part into its own module (as `table-columns.ts` was split from
 `object-table.ts`), never to add a loader shim.
 
