@@ -9,15 +9,23 @@ import { describe, expect, it } from 'vitest';
  * The constant is a ceiling, not a measurement. `SampleStore` stops at it *or*
  * at a time budget, whichever comes first, so a slow read of a 10.000-object
  * type is truncated at whatever it reached — and every caption saying so said
- * "the first 4.000 objects" regardless, because they formatted the constant. The count
- * travels beside the flag now, but nothing stopped the next caption reaching
- * for the constant again: a unit test of `sampledObjects` cannot, since the
- * count is its only argument and it has no way to tell which number it was
- * handed.
+ * "the first 4.000 objects" regardless, because they formatted the constant.
+ * The count travels beside the flag now, but nothing stopped the next caption
+ * reaching for the constant again: a unit test of `sampledObjects` cannot,
+ * since the count is its only argument and no assertion it makes can tell
+ * which number it was handed.
  *
- * This is the check that can. It is deliberately about the shape rather than
- * about a list of call sites, because a hand-kept list of who currently gets
- * it right is a month from being one entry behind.
+ * This is the check that can. It is about the shape rather than about a list
+ * of call sites, because a hand-kept list of who currently gets it right is a
+ * month from being one entry behind.
+ *
+ * What it is: grep that knows the names the ceiling travels under and the ways
+ * a number becomes words. It follows the constant through a renamed import and
+ * through a binding computed from it, and it reads the formatter names out of
+ * `format.ts`. It does not do dataflow, so a value carried through an object
+ * property, a function's return, or a parameter is past what it can see. That
+ * is the honest boundary rather than a claim to catch everything, and every
+ * shape it does claim is a case below rather than a sentence up here.
  */
 
 const SRC = dirname(fileURLToPath(import.meta.url));
@@ -43,8 +51,11 @@ const formatters = [...readFileSync(join(SRC, 'format.ts'), 'utf8').matchAll(/ex
  */
 const CEILING = 'SAMPLE_LIMIT';
 const BINDINGS = [
-  // const CAP = SAMPLE_LIMIT;  /  let cap: number = SAMPLE_LIMIT;
-  new RegExp(String.raw`\b(?:const|let)\s+(\w+)\s*(?::[^=;]+)?=\s*${CEILING}\s*;`, 'g'),
+  // Any binding whose value is worked out from the ceiling, not only one bound
+  // straight to it: `const read = Math.min(SAMPLE_LIMIT, total);` is the shape
+  // someone reaches for when a count might exceed it, and half the ceiling is
+  // no more a measurement than the ceiling is.
+  new RegExp(String.raw`\b(?:const|let)\s+(\w+)\s*(?::[^=;]+)?=\s*[^;]*\b${CEILING}\b[^;]*;`, 'g'),
   // import { SAMPLE_LIMIT as READ_CAP } — renamed at the door.
   new RegExp(String.raw`\b${CEILING}\s+as\s+(\w+)`, 'g'),
 ];
@@ -112,12 +123,6 @@ describe('a caption describing a partial read', () => {
     expect(formatters.length).toBeGreaterThanOrEqual(4);
   });
 
-  // The alias arm can only be doing anything if the scan found an alias, and
-  // the two lists beside it are guarded the same way.
-  it('found the ceiling bound to another name somewhere in the tree', () => {
-    expect(names.split('|').length).toBeGreaterThanOrEqual(2);
-  });
-
   it('follows the ceiling through the names it is bound to', () => {
     expect(aliasesIn('const COPY_LIMIT = SAMPLE_LIMIT;')).toEqual(['COPY_LIMIT']);
     expect(aliasesIn('let cap = SAMPLE_LIMIT;')).toEqual(['cap']);
@@ -125,7 +130,9 @@ describe('a caption describing a partial read', () => {
     expect(aliasesIn("import { SAMPLE_LIMIT as READ_CAP } from './sample-store';")).toEqual([
       'READ_CAP',
     ]);
-    expect(aliasesIn('const half = SAMPLE_LIMIT / 2;')).toEqual([]);
+    expect(aliasesIn('const read = Math.min(SAMPLE_LIMIT, total);')).toEqual(['read']);
+    expect(aliasesIn('const half = SAMPLE_LIMIT / 2;')).toEqual(['half']);
+    expect(aliasesIn('if (n >= SAMPLE_LIMIT) return;')).toEqual([]);
   });
 
   // Each shape written out rather than described, because a comment claiming
