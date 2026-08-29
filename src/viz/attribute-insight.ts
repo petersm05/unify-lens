@@ -857,14 +857,14 @@ export function mountAttributeInsight(
       );
     } else if (stats) {
       kpi(
-        distribution.truncated ? 'Objects sampled' : countLabel,
+        countLabel,
         { value: counted, format: formatCompact, outOf: population },
         'Median',
         { value: stats.median, format: formatCompact },
       );
     } else {
       kpi(
-        distribution.truncated ? 'Objects sampled' : countLabel,
+        countLabel,
         { value: counted, format: formatCompact, outOf: population },
         'Distinct values',
         { value: distribution.bins.length, format: formatCount },
@@ -891,13 +891,18 @@ export function mountAttributeInsight(
             ? `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`
             : 'one bar per range of values';
     const basis = distribution.truncated
-      ? `based on ${sampledObjects(distribution.sampled)}`
-      : 'covering every object with a value';
+      ? `, based on ${sampledObjects(distribution.sampled)}`
+      : // A frequency chart plots the most common values and leaves the tail
+        // out, so completeness is not something it can claim: its own shape
+        // clause already says how many of how many distinct values are drawn.
+        mark === 'frequency'
+        ? ''
+        : ', covering every object with a value';
     set(
       'subtitle',
       self
         ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
-        : `${choice.categoryName} · ${shape}, ${basis}.`,
+        : `${choice.categoryName} · ${shape}${basis}.`,
     );
 
     if (stats) {
