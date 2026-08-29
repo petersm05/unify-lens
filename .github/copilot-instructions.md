@@ -24,13 +24,19 @@ pure part into its own module (as `table-columns.ts` was split from
 `import {} from '…'` and loads the module. A test taking SDK *types* is fine; a
 test that mentions `type` inside braces is not.
 
-**Attribute conditions address the definition id, never the display name.**
-`conditionName` builds `categoryId.definitionId`. A filter built from a label
-matches nothing and fails silently — no error, just an empty result.
+**An `attributeFilter` condition addresses the definition id, never the display
+name.** `conditionName` builds `categoryId.definitionId`. A filter built from a
+label matches nothing and fails silently — no error, just an empty result.
+
+The rule is about conditions only. Keys into a sample's value map are
+`categoryId::name` on purpose, because that is what the read returns; those are
+correct as they stand.
 
 **Sampling must not be swallowed.** `SAMPLE_LIMIT` bounds reads, and
-`truncated` is threaded through the distributions, `crossTab`, `scatterPoints`
-and `coverage` on purpose. A figure derived from a sample is a different claim
+`truncated` is threaded through the distributions, `crossTab` and
+`scatterPoints` on purpose. (`coverage` is the exception and carries no flag:
+where the sample cannot answer honestly it asks the server for counts instead,
+so its answer is always exact.) A figure derived from a sample is a different claim
 from one over the population. Dropping a `truncated` flag on the floor is a
 correctness bug, not a tidy-up.
 
@@ -76,8 +82,12 @@ not compile.
   and phones.
 - Accessibility: contrast against the *actual* surface a thing sits on, hit
   targets, and anything conveyed by colour with no text beside it.
-- Layout that breaks below 560px or on an iPad in portrait, where the attribute
-  rail and the detail pane take turns.
+- Layout that breaks at a narrow width or a short one. The panel and the chart
+  do **not** take turns — that was removed deliberately, and `src/ui/rail.ts`
+  says why. The panel sits beside the chart where there is room and over it
+  where there is not, and the chart is on screen either way. The widths that
+  matter are 900, 820 (where the panel becomes an overlay), 700 and 560, plus a
+  520px *height* breakpoint for a phone in landscape.
 
 ## What this app is not
 

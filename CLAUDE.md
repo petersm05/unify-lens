@@ -16,7 +16,8 @@ request, then:
    ignoring one is not.
 3. **Re-run the review.** A pass over the previous diff says nothing about the
    one that replaced it, and the fixes are the part most likely to be hasty.
-4. Repeat until it comes back clean, then hand it over as ready to merge.
+4. Repeat until it comes back clean **and CI is green**, then hand it over as
+   ready to merge. Both, not either — the next section is why.
 
 Merging is the maintainer's. So is anything the review raises that turns out to
 be a product decision rather than a defect — those go to them, not into the
