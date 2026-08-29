@@ -15,9 +15,10 @@ against these rather than against general TypeScript style.
 underneath, so the test runner's ESM loader cannot take a named export out of
 `ts-results` and dies *collecting* the file — which fails the whole suite while
 reporting every other test as passing, and stops the deploy. This has cost two
-deploys. `src/test-graph.test.ts` catches it, though only for static imports:
-a dynamic `await import(…)` slips past, and fails as one test rather than
-taking the collection down. The fix is always to move the
+deploys. `src/test-graph.test.ts` catches it, but not everything: a dynamic
+`await import(…)` is not matched, and a relative specifier it cannot resolve to
+a file is skipped rather than reported, so the walk can stop short without
+saying so (#54). The fix is always to move the
 pure part into its own module (as `table-columns.ts` was split from
 `src/data/object-table.ts` — note there is a `src/viz/object-table.ts` too),
 never to add a loader shim.

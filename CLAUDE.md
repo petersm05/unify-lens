@@ -49,9 +49,9 @@ the review caught them rather than the mutation run that was supposed to.
 These were each repeated several times in one day before being named. They are
 cheap to check for and expensive to leave.
 
-**Fix the class, not the instance.** A review found the same defect in this
-file five times — a hand-kept list of which functions behave which way, always
-one entry behind the code. Four of those times the fix was to add the missing
+**Fix the class, not the instance.** A review found the same defect five times
+across `.github/copilot-instructions.md` and the README — a hand-kept list of
+which functions behave which way, always one entry behind the code. Four of those times the fix was to add the missing
 entry. The fifth deleted the lists, which is what should have happened the
 first time the shape repeated. When a second instance of a finding appears, the
 finding is about the shape.
