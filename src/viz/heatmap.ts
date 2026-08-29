@@ -67,10 +67,12 @@ export function renderHeatmap(host: HTMLElement, table: CrossTab, options: Heatm
         cell.style.background = muted
           ? `color-mix(in srgb, var(--ord-${step}) 20%, var(--surface-1))`
           : `var(--ord-${step})`;
-        // Past the ramp's midpoint the fill is dark enough to need light ink —
-        // but a washed cell is pale whatever its step, and light ink on it
-        // would be the figure disappearing rather than receding.
-        if (step >= 3 && !muted) cell.classList.add('on-dark');
+        // The ink comes from the ramp, beside the fill it sits on, rather than
+        // from a threshold here: the two themes' ramps are different colours
+        // and darken at different rates, so where a figure has to stop being
+        // dark and start being light is a fact about the ramp. A washed cell
+        // is pale whatever its step and keeps the theme's own muted ink.
+        if (!muted) cell.style.color = `var(--on-ord-${step})`;
       }
 
       if (muted) cell.classList.add('muted');
