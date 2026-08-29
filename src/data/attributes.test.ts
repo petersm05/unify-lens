@@ -109,14 +109,21 @@ describe('rank', () => {
 });
 
 describe('suggestGrain', () => {
-  const years = (from: number, to: number) => [new Date(from, 0, 1), new Date(to, 0, 1)];
+  // UTC, not local. `new Date(y, 0, 1)` is midnight *somewhere*, so a span
+  // sitting exactly on a threshold lands either side of it depending on the
+  // machine — 2010 to 2022 is 12.000114 years in São Paulo and passes the
+  // `<= 12` test only in zones where it is not.
+  const years = (from: number, to: number) => [
+    new Date(Date.UTC(from, 0, 1)),
+    new Date(Date.UTC(to, 0, 1)),
+  ];
 
   it('falls back to years when there are no dates to judge by', () => {
     expect(suggestGrain([])).toBe('year');
   });
 
   it('uses months for a single date, whose span is nothing', () => {
-    expect(suggestGrain([new Date(2020, 5, 1)])).toBe('month');
+    expect(suggestGrain([new Date(Date.UTC(2020, 5, 1))])).toBe('month');
   });
 
   it('uses months for a couple of years and quarters beyond', () => {
@@ -140,7 +147,7 @@ describe('suggestGrain', () => {
   });
 
   it('reads the span, not the order the dates arrive in', () => {
-    expect(suggestGrain([new Date(2030, 0, 1), new Date(2000, 0, 1)])).toBe('year');
+    expect(suggestGrain([new Date(Date.UTC(2030, 0, 1)), new Date(Date.UTC(2000, 0, 1))])).toBe('year');
   });
 });
 
@@ -168,18 +175,35 @@ describe('histogram', () => {
   });
 
   it('keeps the largest value in the last bin rather than one past the end', () => {
+    // The maximum divides exactly by the step, so without the clamp its index
+    // is one past the last bin — which in JavaScript grows the array rather
+    // than failing, leaving a spurious bin that starts *at* the maximum. So
+    // the property is that the last bin starts below it: counting the values
+    // or checking the last bin is non-empty both hold either way.
     const values = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
     const { bins } = histogram(values, measure);
+    const last = bins[bins.length - 1]?.range;
 
-    expect(bins[bins.length - 1]?.count).toBeGreaterThan(0);
+    expect(last).toBeDefined();
+    expect(last!.from).toBeLessThan(100);
+    expect(last!.to).toBeGreaterThanOrEqual(100);
     expect(bins.reduce((total, bin) => total + bin.count, 0)).toBe(values.length);
   });
 
   it('leaves no gap between one bin and the next', () => {
     const { bins } = histogram([1, 7, 13, 19, 25, 31, 44, 58], measure);
 
+    expect(bins.length).toBeGreaterThan(1);
     for (let index = 1; index < bins.length; index += 1) {
-      expect(bins[index]?.range?.from).toBe(bins[index - 1]?.range?.to);
+      // Asserted present rather than optional-chained: `range` is optional on
+      // `Bin` and absent on the all-equal-values path, so chaining both sides
+      // would compare undefined with undefined and pass while testing nothing.
+      const previous = bins[index - 1]?.range;
+      const current = bins[index]?.range;
+
+      expect(previous).toBeDefined();
+      expect(current).toBeDefined();
+      expect(current!.from).toBe(previous!.to);
     }
   });
 
