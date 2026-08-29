@@ -392,25 +392,29 @@ main.pane {
    sweep stops short of a closed ring deliberately: the chart below can draw a
    donut, and two rings of one attribute read as two distributions. */
 .kpi.coverage {
-  /* Wider basis than the other two: the arc and the words beside it need the
-     room, and where the row cannot give it the card wraps to its own line
-     rather than crushing them. */
-  flex: 1 1 230px;
+  /* A little wider than the other two, so the arc and the two lines under it
+     are not crushed; where the row cannot give it the room the card wraps to
+     its own line instead. */
+  flex: 1 1 190px;
+  align-items: center;
+  text-align: center;
 }
 
-/* Arc beside the words, not above them: stacked, the card stood half again as
-   tall as the hero and dragged the whole row up with it. */
+/* The arc is centred in the card with the reading under it. It costs the row
+   some height against the arc sitting beside the words, and buys a card that
+   reads as one thing rather than as a figure with a chart stuck to its left. */
 .cov-body {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 5px;
   margin-top: 2px;
 }
 
 .gauge {
   position: relative;
   flex: none;
-  width: 92px;
+  width: 88px;
 }
 
 .gauge svg {
@@ -465,6 +469,7 @@ main.pane {
 .cov-read {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 1px;
   min-width: 0;
 }
@@ -4099,15 +4104,9 @@ header.bar h1,
     grid-column: 1 / -1;
   }
 
-  /* Half a phone's width is not enough for an arc with words beside it, so
-     the card stacks. It costs nothing net: the bar this replaced took a block
-     of the chart card that is now gone. */
-  .cov-body {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
+  /* Half a phone's width, so the arc gives some back. The card costs nothing
+     net even so: the bar it replaced took a block of the chart card that is
+     now gone. */
   .gauge {
     width: 74px;
   }
