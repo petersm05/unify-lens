@@ -221,7 +221,7 @@ node scripts/make-icons.mjs
 | `src/data/idb.ts` | IndexedDB wrapper; every operation resolves rather than rejects, so a denied quota costs speed and not function |
 | `src/data/schema-cache.ts` | The attribute schema per object type, kept in that store |
 | `src/data/live.ts` | `CREATE_*` / `UPDATE_*` subscriptions |
-| `src/data/incoming.ts` | Deliverables shared with you, and what has not been seen |
+| `src/data/incoming.ts` | Saved analyses shared with you, and which have not been seen |
 | `src/data/table-columns.ts` | What a table column is, and how a chart's attributes fold into a set |
 | `src/data/table-export.ts` | The table as something a spreadsheet will accept |
 | `src/data/attributes.ts` | Attribute schema, enum counts, numeric histograms |

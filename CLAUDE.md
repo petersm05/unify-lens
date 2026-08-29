@@ -8,13 +8,13 @@ change. This file is about the procedure around it.
 
 ## Every change goes through a pull request
 
-Branch from the current `main`, one concern per branch. Push, open a pull
-request, then:
+Branch from the current `main`, one concern per branch. Then:
 
-1. **Run the checks locally first** — `npm test` and `npm run build`. They take
-   seconds and catch the things a reading of the diff cannot, the SDK-in-tests
-   failure among them. Waiting on CI for those is a slow way to learn them.
-2. **Review it** — run the `code-review` skill against the pull request number.
+1. **Run `npm test` and `npm run build` before pushing.** They take seconds and
+   catch what a reading of the diff cannot, the SDK-in-tests failure among
+   them. Waiting on CI for those is a slow way to learn them.
+2. **Push and open a pull request, then review it** — run the `code-review`
+   skill against the pull request number.
 3. **Fix what it finds**, or say why a finding is wrong. Both are answers;
    ignoring one is not.
 4. **Re-run the review.** A pass over the previous diff says nothing about the
