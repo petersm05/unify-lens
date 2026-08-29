@@ -57,8 +57,8 @@ on a fresh branch, as a new pull request.
 ## Watch what you shipped
 
 `pages.yml` deploys on every push to `main` and runs the tests before it
-builds, so a failing test costs a publish rather than shipping a broken one.
-That is the right trade, and it means a red pipeline stops the site updating
-while appearing to succeed from the outside. After a merge, check the run
-rather than assuming — twice the deploy was red for the better part of an hour
-before anyone looked.
+builds, so a failing test costs a build and not a publish — the same trade the
+README and the workflow itself describe. It does mean a red pipeline stops the
+site updating while everything looks fine from the outside. After a merge,
+check the run rather than assuming: twice the deploy was red for the better
+part of an hour before anyone looked.
