@@ -87,6 +87,40 @@ export function columnFor(choice: AttributeChoice): Column {
   };
 }
 
+/**
+ * Folds the attributes a chart is built from into the columns already shown.
+ *
+ * A chart contributes a column per attribute it charts, so comparing two
+ * attributes puts both in the table rather than whichever half the chart
+ * happened to pass — the scatter used to keep y and drop x, the cross-tab keep
+ * the row and drop the column.
+ *
+ * Two things survive a change of chart. Columns someone added through the
+ * picker are theirs, so only the ones a chart added are taken back; `added` is
+ * what to remember for that, not `charted`, because an attribute that was
+ * already there by hand is not this chart's to remove later. And order is
+ * kept: existing columns stay where they were and the chart's go on the end,
+ * so a chart change does not reshuffle the table under the reader.
+ */
+export function foldCharted(
+  shown: readonly Column[],
+  fromLastChart: readonly string[],
+  charted: readonly AttributeChoice[],
+): { readonly columns: readonly Column[]; readonly added: readonly string[] } {
+  const kept = shown.filter((column) => !fromLastChart.includes(column.key));
+  const added: Column[] = [];
+
+  for (const choice of charted) {
+    const column = columnFor(choice);
+    const already =
+      kept.some((entry) => entry.key === column.key) ||
+      added.some((entry) => entry.key === column.key);
+    if (!already) added.push(column);
+  }
+
+  return { columns: [...kept, ...added], added: added.map((column) => column.key) };
+}
+
 const SELECTOR = { attributeCategories: true, systemAttributes: true } as const;
 
 export async function fetchTable(

@@ -752,7 +752,7 @@ export function mountAttributeInsight(
       onPick: (index) => pick(when, trend.points[index], self?.binLabel),
     });
 
-    syncObjectTable(measure);
+    syncObjectTable([when, measure]);
   }
 
   // ── one field: bars / histogram / donut ────────────────────────────
@@ -928,7 +928,7 @@ export function mountAttributeInsight(
         ...(activeSlice >= 0 ? { activeIndex: activeSlice } : {}),
         onPick: (index) => pick(choice, slices[index], self?.binLabel),
       });
-      syncObjectTable(choice);
+      syncObjectTable([choice]);
       set(
         'subtitle',
         `${choice.categoryName} · share of the ${formatCount(withValue)} objects that carry a value, in the order the metamodel defines them.`,
@@ -950,7 +950,7 @@ export function mountAttributeInsight(
         ...(activeIndex >= 0 ? { activeIndex } : {}),
         onPick: (index) => pick(choice, distribution.bins[index], self?.binLabel),
       });
-      syncObjectTable(choice);
+      syncObjectTable([choice]);
       return;
     }
 
@@ -964,7 +964,7 @@ export function mountAttributeInsight(
       ...(activeIndex >= 0 ? { activeIndex } : {}),
       onPick: (_datum, index) => pick(choice, distribution.bins[index], self?.binLabel),
     });
-    syncObjectTable(choice);
+    syncObjectTable([choice]);
   }
 
   /**
@@ -1119,7 +1119,7 @@ export function mountAttributeInsight(
       },
     });
 
-    syncObjectTable(row);
+    syncObjectTable([row, col]);
   }
 
   // ── two fields ─────────────────────────────────────────────────────
@@ -1228,7 +1228,7 @@ export function mountAttributeInsight(
       },
     );
     renderHighlightLegend(groupBy, groups);
-    syncObjectTable(y);
+    syncObjectTable([x, y]);
   }
 
   /**
@@ -1427,7 +1427,7 @@ export function mountAttributeInsight(
 
     // Averages do not compose into a whole, so the table drops the share
     // column and reports the same figures the bars show.
-    syncObjectTable(measure);
+    syncObjectTable([category, measure]);
   }
 
   // ── helpers ────────────────────────────────────────────────────────
@@ -1554,8 +1554,12 @@ export function mountAttributeInsight(
   /**
    * Once a slice is selected, the bucket-count table is answering a question
    * nobody is asking any more — so it gives way to the objects themselves.
+   *
+   * Takes every attribute the chart is built from, not one of them: comparing
+   * two attributes is a statement that both are of interest, so both get a
+   * column rather than whichever half this particular chart passed.
    */
-  function syncObjectTable(focus: AttributeChoice | null): void {
+  function syncObjectTable(charted: readonly AttributeChoice[]): void {
     const active = filters.isActive;
     objectsHost.hidden = !active;
 
@@ -1574,7 +1578,7 @@ export function mountAttributeInsight(
       openDetail,
     );
     // A fresh table already loads once; only nudge an existing one.
-    if (!created || focus) objectTable.setFocus(focus);
+    if (!created || charted.length > 0) objectTable.setFocus(charted);
   }
 
   /** A figure is either final text or a number to count up to. */

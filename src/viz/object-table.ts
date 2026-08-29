@@ -5,6 +5,7 @@ import {
   columnFor,
   CREATED_COLUMN,
   fetchTable,
+  foldCharted,
   NAME_COLUMN,
   type Column,
 } from '../data/object-table';
@@ -17,8 +18,11 @@ import { attributeIcon, controlsIcon, dragIcon } from '../ui/icons';
 import { formatCompact, formatCount, formatMoney } from './theme';
 
 export interface ObjectTable {
-  /** Keeps a column for the attribute currently being charted. */
-  setFocus(choice: AttributeChoice | null): void;
+  /**
+   * Keeps a column for each attribute the chart is built from — both of them
+   * where two are being compared.
+   */
+  setFocus(charted: readonly AttributeChoice[]): void;
   refresh(): void;
   destroy(): void;
 }
@@ -86,7 +90,8 @@ export function mountObjectTable(
   // identity and the click target, so a table that opened on some other column
   // would read as a list of values with no subject.
   let extraColumns: Column[] = [];
-  let focusKey: string | null = null;
+  /** Keys of the columns the current chart put there, and only those. */
+  let fromChart: readonly string[] = [];
   /** Kept across rebuilds so a rebuild does not wipe what someone just typed. */
   let colTerm = '';
 
@@ -232,7 +237,9 @@ export function mountObjectTable(
       remove.textContent = '✕';
       remove.addEventListener('click', () => {
         extraColumns = extraColumns.filter((entry) => entry.key !== column.key);
-        if (focusKey === column.key) focusKey = null;
+        // Taken away on purpose, so the next chart change must not bring it
+        // back as one of its own.
+        fromChart = fromChart.filter((key) => key !== column.key);
         settleSort();
         void load();
       });
@@ -510,14 +517,16 @@ export function mountObjectTable(
      * without anyone opening the column picker, and columns added by hand are
      * left alone.
      */
-    setFocus(choice: AttributeChoice | null): void {
-      const column = choice ? columnFor(choice) : null;
-      if (column?.key === focusKey) return;
+    setFocus(charted: readonly AttributeChoice[]): void {
+      const next = foldCharted(extraColumns, fromChart, charted);
+      fromChart = next.added;
 
-      const kept = extraColumns.filter((existing) => existing.key !== focusKey);
-      extraColumns =
-        column && !kept.some((existing) => existing.key === column.key) ? [...kept, column] : kept;
-      focusKey = column?.key ?? null;
+      const unchanged =
+        next.columns.length === extraColumns.length &&
+        next.columns.every((column, index) => column.key === extraColumns[index]?.key);
+      if (unchanged) return;
+
+      extraColumns = [...next.columns];
 
       settleSort();
       page = 0;
