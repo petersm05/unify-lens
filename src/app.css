@@ -37,6 +37,20 @@
   --ord-4: #7d3319;
   --ord-5: #5e2410;
 
+  /* Ink for a figure sitting *on* a ramp step, which only the heatmap does.
+     It belongs to the ramp rather than to the theme: both ramps run pale to
+     deep and so want dark ink at one end and light at the other, while
+     --text-primary and --surface-1 swap with the theme and would hand each end
+     the other's ink. The flip lands where it does because it was measured —
+     this ramp starts mid-toned and is dark enough by step 2; the dark theme's
+     starts near-white and is not until step 4. */
+  --on-ord-0: #2c2118;
+  --on-ord-1: #2c2118;
+  --on-ord-2: #faf5ea;
+  --on-ord-3: #faf5ea;
+  --on-ord-4: #faf5ea;
+  --on-ord-5: #faf5ea;
+
   /* hop distance 0 (focus) → 3 */
   --hop-0: #134540;
   --hop-1: #256760;
@@ -87,6 +101,13 @@
     --ord-3: #c8785a;
     --ord-4: #b05737;
     --ord-5: #9a4527;
+    /* A paler ramp than the light theme's, so the ink flips two steps later. */
+    --on-ord-0: #2c2118;
+    --on-ord-1: #2c2118;
+    --on-ord-2: #2c2118;
+    --on-ord-3: #2c2118;
+    --on-ord-4: #faf5ea;
+    --on-ord-5: #faf5ea;
     --hop-0: #a8d5cf;
     --hop-1: #79b0a8;
     --hop-2: #3f8880;
@@ -121,6 +142,12 @@
   --ord-3: #c8785a;
   --ord-4: #b05737;
   --ord-5: #9a4527;
+  --on-ord-0: #2c2118;
+  --on-ord-1: #2c2118;
+  --on-ord-2: #2c2118;
+  --on-ord-3: #2c2118;
+  --on-ord-4: #faf5ea;
+  --on-ord-5: #faf5ea;
   --hop-0: #a8d5cf;
   --hop-1: #79b0a8;
   --hop-2: #3f8880;
@@ -2756,11 +2783,6 @@ ul.facts {
 
 .heat-cell.enter {
   animation: row-enter 300ms cubic-bezier(0.22, 0.8, 0.3, 1) backwards;
-}
-
-/* Ink flips on the darker half of the ramp so the figure stays readable. */
-.heat-cell.on-dark {
-  color: var(--surface-1);
 }
 
 .heat-cell.empty {
