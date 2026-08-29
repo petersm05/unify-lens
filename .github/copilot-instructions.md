@@ -25,13 +25,17 @@ pure part into its own module (as `table-columns.ts` was split from
 `import {} from '…'` and loads the module. A test taking SDK *types* is fine; a
 test that mentions `type` inside braces is not.
 
-**An `attributeFilter` condition addresses the definition id, never the display
-name.** `conditionName` builds `categoryId.definitionId`. A filter built from a
-label matches nothing and fails silently — no error, just an empty result.
+**Anything naming an attribute to the server uses the definition id, never the
+display name.** That is `conditionName`'s `categoryId.definitionId` for a
+filter, and it is also the `aggregate` descriptor on `aggregateAttributeValues`
+— whose field is spelled `name` but holds `definitionId`, which is exactly the
+sort of thing that invites a helpful correction. Substituting the label there
+matches nothing and fails silently: no error, an empty result or a zero sum.
 
-The rule is about conditions only. Keys into a sample's value map are
-`categoryId::name` on purpose, because that is what the read returns; those are
-correct as they stand.
+Locally it is the other way round. Keys into a sample's value map are
+`categoryId::name`, because that is what the read hands back. So the question
+is not which field is called what, but which side of the wire the value is
+going to.
 
 **Sampling must not be swallowed.** `SAMPLE_LIMIT` bounds reads, and where a
 figure is derived from a sample, `truncated` travels with it and is surfaced.
