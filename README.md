@@ -120,8 +120,9 @@ logic, which is where a wrong answer is silent rather than loud.
 - **`data/analysis.ts`** — what a saved analysis encodes and decodes.
 - **`data/table-columns.ts`** and **`data/table-export.ts`** — which columns a
   chart contributes, and the values a copied table carries.
-- **`ui/rail.ts`** — the resting state of the attribute panel either side of the
-  breakpoint, which is behaviour rather than layout and needs no DOM.
+- **`ui/rail.ts`** — whether picking an attribute closes the panel, and the
+  wide-side resting state including what an untouched device stores. Behaviour
+  rather than layout, so it needs no DOM.
 - **`test-graph.test.ts`** — not a module but a rule: that no test reaches the
   SDK at run time, since the bundle is CommonJS and takes the whole suite, and
   the deploy, down with it.

@@ -19,7 +19,8 @@ deploys. `src/test-graph.test.ts` catches it, though only for static imports:
 a dynamic `await import(…)` slips past, and fails as one test rather than
 taking the collection down. The fix is always to move the
 pure part into its own module (as `table-columns.ts` was split from
-`object-table.ts`), never to add a loader shim.
+`src/data/object-table.ts` — note there is a `src/viz/object-table.ts` too),
+never to add a loader shim.
 
 **`import type` and `import { type X }` are different statements.**
 `verbatimModuleSyntax` is on. The first is erased; the second still emits
@@ -43,7 +44,9 @@ is not which field is called what, but which side of the wire the value is
 going to.
 
 **Sampling must not be swallowed.** `SAMPLE_LIMIT` bounds reads, and where a
-figure is derived from a sample, `truncated` travels with it and is surfaced.
+figure is derived from a sample, `truncated` travels with it and *must* be
+surfaced — stated as the rule rather than as a description, because a read
+returning the flag is no guarantee its caller reads it.
 A figure from a sample is a different claim from one over the population, so
 dropping the flag on the floor is a correctness bug, not a tidy-up.
 
