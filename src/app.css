@@ -2749,7 +2749,7 @@ ul.facts {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  transition: outline-color 120ms ease;
+  transition: outline-color 120ms ease, background 200ms ease;
   outline: 2px solid transparent;
   outline-offset: -2px;
 }
@@ -2773,6 +2773,14 @@ ul.facts {
 
 .heat-cell.active {
   outline-color: var(--text-primary);
+}
+
+/* Emphasis, as on the bars: one cell carries the point and the rest recede.
+   The wash itself is mixed per cell in heatmap.ts, because it keeps the cell's
+   own ramp step — what is left here is the figure, which has to fade with the
+   fill under it rather than stay full-strength on a pale square. */
+.heat-cell.muted {
+  color: var(--text-muted);
 }
 
 /* ── boot ──────────────────────────────────────────────────────────── */
