@@ -709,7 +709,7 @@ export function mountAttributeInsight(
 
     reveal();
     showSurface('timeline');
-    hideCoverage();
+    hideAccessories();
     teardownPlot?.();
     teardownPlot = null;
     legendHost.hidden = true;
@@ -1057,9 +1057,7 @@ export function mountAttributeInsight(
 
     reveal();
     showSurface('heatmap');
-    hideCoverage();
-    statsRow.hidden = true;
-    topSection.hidden = true;
+    hideAccessories();
     rows.replaceChildren();
     teardownPlot?.();
     teardownPlot = null;
@@ -1131,9 +1129,7 @@ export function mountAttributeInsight(
 
     reveal();
     showSurface('plot');
-    hideCoverage();
-    statsRow.hidden = true;
-    topSection.hidden = true;
+    hideAccessories();
     rows.replaceChildren();
     teardownPlot?.();
 
@@ -1320,9 +1316,7 @@ export function mountAttributeInsight(
 
     reveal();
     showSurface(mark === 'donut' ? 'donut' : 'bars');
-    hideCoverage();
-    statsRow.hidden = true;
-    topSection.hidden = true;
+    hideAccessories();
 
     const format = (value: number): string =>
       additive
@@ -1478,16 +1472,27 @@ export function mountAttributeInsight(
   }
 
   /**
-   * Takes the card out of the row where coverage of one attribute is not the
-   * question — a cross-tab, a scatter, a trend, a measure split by category.
+   * Takes down the three panels that describe one attribute's own values: the
+   * coverage gauge, the quantile row and the list of highest values.
    *
-   * `hidden` leaves it a child of the row, so the row says how many figures it
-   * is carrying rather than leaving the phone layout to infer it from
-   * `:last-child` and get it wrong.
+   * `showSurface` says which chart is drawn; this says whether the panels
+   * around it still describe it. Only `drawDistribution` ever puts them up, so
+   * every other chart takes all three away together. That was three
+   * assignments repeated at each of those call sites, and the trend was a line
+   * short of the others: it hid the gauge and left the quantiles and the
+   * highest-values list from the previous chart sitting under the trend line,
+   * describing an attribute the chart no longer showed. One call cannot be a
+   * line short.
+   *
+   * `hidden` leaves the card a child of the figure row, so the row says how
+   * many figures it is carrying rather than leaving the phone layout to infer
+   * it from `:last-child` and get it wrong.
    */
-  function hideCoverage(): void {
+  function hideAccessories(): void {
     coverageCard.hidden = true;
     kpiRow.classList.remove('has-coverage');
+    statsRow.hidden = true;
+    topSection.hidden = true;
   }
 
   /**
