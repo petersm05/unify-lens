@@ -11,6 +11,29 @@ export function formatCount(value: number): string {
   return integer.format(value);
 }
 
+/** Anything that knows how many objects its figures were read from. */
+export interface SampledRead {
+  readonly sampled: number;
+}
+
+/**
+ * What a partial read actually covered, for the sentence that says so.
+ *
+ * `SAMPLE_LIMIT` is a ceiling, not a measurement, and naming the constant was
+ * wrong in every message that did it: `SampleStore` also stops on a time
+ * budget, so a slow read is truncated at whatever it reached — 2.500 of 10.000
+ * objects, under a caption claiming the first 4.000.
+ *
+ * It takes the read rather than a number for that reason. A caption cannot
+ * reach for the constant again without first inventing something that claims
+ * to be a read, where `sampledObjects(SAMPLE_LIMIT)` would have compiled and
+ * looked ordinary — the compiler enforces on every build what a check on the
+ * source could only look for.
+ */
+export function sampledObjects(read: SampledRead): string {
+  return `the first ${formatCount(read.sampled)} objects read`;
+}
+
 /**
  * Compact suffixes, chosen over `Intl`'s own compact notation.
  *

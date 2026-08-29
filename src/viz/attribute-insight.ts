@@ -17,7 +17,6 @@ import {
   numericDistribution,
   quantiles,
   rank,
-  SAMPLE_LIMIT,
   scatterPoints,
   statsByCategory,
   thresholdCondition,
@@ -48,7 +47,8 @@ import { renderDonut } from './donut';
 import { renderScatter, type Quadrant } from './scatter';
 import { renderTimeline } from './timeline';
 import { renderHeatmap } from './heatmap';
-import { formatCompact, formatCount, formatMoney } from './theme';
+import { formatCompact, formatCount, formatMoney, sampledObjects } from './theme';
+import type { SampledRead } from './theme';
 
 /**
  * Above this many objects the population is not read speculatively.
@@ -719,23 +719,27 @@ export function mountAttributeInsight(
       money ? formatMoney(value, measure.currency) : formatCompact(value);
 
     set('title', `${measure.name} over ${when.name}`);
+
+    // A figure from a sample is a different claim from one over the population,
+    // and this is the path where the difference bites hardest. The distribution
+    // can still print an exact "Total" when its sample falls short, because
+    // `numericDistribution` asks the server for the sum instead; there is no
+    // such fallback here, since the backend has no date grouping and every
+    // period is computed from the objects that were actually read. So a money
+    // trend past `SAMPLE_LIMIT` is a lower bound — and it was being set in the
+    // same type as a complete total, under a label that said "Total".
     set(
       'subtitle',
-      `${measure.categoryName} · ${money ? 'totalled' : 'averaged'} per ${trend.grain || 'period'}, across ${formatCount(trend.counted)} ${labelFor(type)} objects carrying both a date and a value.`,
+      `${measure.categoryName} · ${money ? 'totalled' : 'averaged'} per ${trend.grain || 'period'}, across ${formatCount(trend.counted)} ${labelFor(type)} objects carrying both a date and a value${trend.truncated ? `, from ${sampledObjects(trend)}` : ''}.`,
     );
 
     const self = selectionFor(filters.get(), when);
     const activeIndex = self ? trend.points.findIndex((p) => p.label === self.binLabel) : -1;
 
+    const lead = money ? `Total ${measure.name}` : `Average ${measure.name}`;
     kpi(
-      money ? `Total ${measure.name}` : `Average ${measure.name}`,
-      {
-        value: money
-          ? trend.points.reduce((sum, point) => sum + point.measure, 0)
-          : trend.points.reduce((sum, point) => sum + point.measure, 0) /
-            Math.max(trend.points.length, 1),
-        format,
-      },
+      trend.truncated ? `${lead} in sample` : lead,
+      { value: trend.overall, format },
       'Periods',
       { value: trend.points.length, format: formatCount },
     );
@@ -859,6 +863,24 @@ export function mountAttributeInsight(
 
     const distinct = 'distinct' in distribution ? (distribution as { distinct: number }).distinct : 0;
 
+    // Whether the read was complete belongs to the bars alone: the figures
+    // above the chart do not share one provenance — a money headline is
+    // `sumOf`, exact and server-side, beside quantiles taken from the sample
+    // and a coverage gauge that is exact again. Which of those are estimates
+    // is a per-figure question, and #43 is open on it.
+    //
+    // It used to be an arm of the shape ternary, which meant only a numeric
+    // histogram could reach it: `marksFor` offers a date attribute `timeline`
+    // and a free-text one `frequency` and nothing else, so a 12.000-object
+    // timeline bucketed from the first 4.000 read said "9 periods, oldest
+    // first" and carried no caveat anywhere on the screen.
+    //
+    // What the bars *cover* is deliberately not said here. Stating it needs a
+    // different sentence per mark — an enum chart's "Not set" bin is objects
+    // with no value, a frequency chart leaves its tail out, a boolean chart is
+    // broken before it gets that far (#61) — and each attempt at one clause
+    // for all four made a claim that was false for one of them. It is the
+    // per-figure question again, which is #43's.
     const shape =
       choice.kind === 'enum' || choice.kind === 'boolean'
         ? 'values in the order the metamodel defines them'
@@ -866,14 +888,21 @@ export function mountAttributeInsight(
           ? `${formatCount(distribution.bins.length)} periods, oldest first`
           : mark === 'frequency'
             ? `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`
-            : distribution.truncated
-          ? `based on the first ${formatCount(SAMPLE_LIMIT)} objects`
-          : 'covering every object with a value';
+            : 'one bar per range of values';
+    const basis = distribution.truncated
+      ? `, based on ${sampledObjects(distribution)}`
+      : '';
+
     set(
       'subtitle',
       self
-        ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
-        : `${choice.categoryName} · ${shape}.`,
+        ? // `basis` goes on the distribution, not on "the figures above" — the
+          // same subject it takes in the other sentence. Attaching it to the
+          // figures would caption `sumOf`, an exact server-side total, as a
+          // sample estimate; attaching it to nothing left a truncated chart
+          // with a bar selected saying so nowhere on screen.
+          `${choice.categoryName} · the full distribution is kept for context${basis}; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
+        : `${choice.categoryName} · ${shape}${basis}.`,
     );
 
     if (stats) {
@@ -888,7 +917,14 @@ export function mountAttributeInsight(
 
     if (top.length > 0) {
       topSection.hidden = false;
-      renderTop(top, inSlice ?? distribution.observations ?? [], choice, money, distribution.truncated);
+      renderTop(
+        top,
+        inSlice ?? distribution.observations ?? [],
+        choice,
+        money,
+        distribution.truncated,
+        distribution,
+      );
     } else {
       topSection.hidden = true;
     }
@@ -972,6 +1008,7 @@ export function mountAttributeInsight(
     choice: AttributeChoice,
     money: (value: number) => string,
     truncated: boolean,
+    read: SampledRead,
   ): void {
     const heading = topSection.querySelector<HTMLElement>('h2');
     const caption = topSection.querySelector<HTMLElement>('.sub');
@@ -983,7 +1020,7 @@ export function mountAttributeInsight(
       if (heading) heading.textContent = 'Highest values';
       if (caption) {
         caption.textContent = truncated
-          ? `Highest among the first ${formatCount(SAMPLE_LIMIT)} objects read.`
+          ? `Highest among ${sampledObjects(read)}.`
           : 'Highest across every object carrying a value.';
       }
       renderBarList(
@@ -1116,7 +1153,7 @@ export function mountAttributeInsight(
     const sizeBy = resolveSize(x, y);
     const groupBy = choices.find((candidate) => keyOf(candidate) === groupKey);
 
-    const { points, truncated, groups } = await scatterPoints(
+    const plotted = await scatterPoints(
       session.sample,
       type,
       x,
@@ -1125,6 +1162,7 @@ export function mountAttributeInsight(
       sizeBy,
       groupBy,
     );
+    const { points, truncated, groups } = plotted;
     if (mine !== generation) return;
 
     reveal();
@@ -1141,7 +1179,7 @@ export function mountAttributeInsight(
     set(
       'subtitle',
       (truncated
-        ? `Only objects carrying both measures are plotted, from the first ${formatCount(SAMPLE_LIMIT)} read.`
+        ? `Only objects carrying both measures are plotted, from ${sampledObjects(plotted)}.`
         : 'Every object carrying both measures is plotted.') +
         (mark === 'quadrant'
           ? ` Split at the median of each axis — tap a quadrant to filter to it.${sized}`

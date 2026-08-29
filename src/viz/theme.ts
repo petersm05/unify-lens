@@ -11,4 +11,5 @@ export function hopColor(hop: number): string {
 
 export const HOP_LABELS = ['Focus', '1 hop', '2 hops', '3 hops'] as const;
 
-export { formatCount, formatCompact, formatMoney } from '../format';
+export { formatCount, formatCompact, formatMoney, sampledObjects } from '../format';
+export type { SampledRead } from '../format';

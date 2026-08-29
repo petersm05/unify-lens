@@ -17,7 +17,7 @@ import { onContextRequest, showContextMenu } from '../ui/context-menu';
 import { busy } from '../ui/busy';
 import { must } from '../ui/dom';
 import { attributeIcon, controlsIcon, dragIcon } from '../ui/icons';
-import { formatCompact, formatCount, formatMoney } from './theme';
+import { formatCompact, formatCount, formatMoney, sampledObjects } from './theme';
 
 export interface ObjectTable {
   /**
@@ -528,7 +528,7 @@ export function mountObjectTable(
     const incomplete = result.sortedBy === 'sample' && result.truncated;
     note.hidden = !incomplete;
     note.textContent = incomplete
-      ? `Ranked from the first ${formatCount(SAMPLE_LIMIT)} objects, so this order may not be complete.`
+      ? `Ranked from ${sampledObjects(result)}, so this order may not be complete.`
       : '';
 
     const from = result.total === 0 ? 0 : page * PAGE_SIZE + 1;

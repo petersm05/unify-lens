@@ -34,6 +34,12 @@ export interface TableResult {
   readonly sortedBy: SortMode;
   /** Set when a sample sort could not see the whole population. */
   readonly truncated: boolean;
+  /**
+   * How many objects the ranking saw, for the note that says it may be
+   * incomplete. Zero where the server did the ordering and nothing was read
+   * client-side — which is also where `truncated` is false.
+   */
+  readonly sampled: number;
 }
 
 const SELECTOR = { attributeCategories: true, systemAttributes: true } as const;
@@ -68,6 +74,7 @@ export async function fetchTable(
       total,
       sortedBy: column ? 'server' : 'none',
       truncated: false,
+      sampled: 0,
     };
   }
 
@@ -107,6 +114,8 @@ export async function fetchTable(
     total: rows.length,
     sortedBy: 'sample',
     truncated,
+    // Every row the ranking sorted, before this page was sliced out of them.
+    sampled: rows.length,
   };
 }
 

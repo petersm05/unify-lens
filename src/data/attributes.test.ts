@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { SampleStore } from './sample-store';
 import {
   conditionName,
+  measureOverTime,
   enumCondition,
   equalsCondition,
   histogram,
@@ -343,5 +345,154 @@ describe('enumCondition', () => {
   it('returns nothing for a label the attribute does not define', () => {
     expect(enumCondition(criticality, 'Invented')).toBeNull();
     expect(enumCondition(attribute({ kind: 'enum' }), 'Anything')).toBeNull();
+  });
+});
+
+/**
+ * A population read, without one.
+ *
+ * `SampleStore` needs a live graph; `measureOverTime` needs only what it hands
+ * back. `as unknown as` defeats the check outright — a change to `get`'s
+ * signature will not fail this file — which is the cost of testing a function
+ * that takes the store rather than the sample.
+ *
+ * An entry may carry only one of the pair, because `sampled` counts what was
+ * read and `counted` counts what could be plotted, and a fixture where every
+ * object carries both cannot tell them apart.
+ */
+function storeOf(
+  values: ReadonlyArray<{ when?: Date; measure?: number }>,
+  truncated = false,
+): SampleStore {
+  const objects = values.map((entry, index) => ({
+    id: `object-${index}`,
+    name: `Object ${index}`,
+    createdAt: null,
+    values: new Map<string, Date | number>([
+      ...(entry.when ? ([['lifecycle::Decommission date', entry.when]] as const) : []),
+      ...(entry.measure === undefined
+        ? []
+        : ([['general::Total cost of ownership', entry.measure]] as const)),
+    ]),
+  }));
+
+  return {
+    get: async () => ({ objects, truncated, complete: true }),
+  } as unknown as SampleStore;
+}
+
+const retires = attribute({
+  kind: 'date',
+  categoryId: 'lifecycle',
+  categoryName: 'Lifecycle',
+  name: 'Decommission date',
+  definitionId: 'def-retires',
+});
+// Not money: the point of these is the branch that averages rather than sums.
+const score = attribute({
+  kind: 'real',
+  name: 'Total cost of ownership',
+  definitionId: 'def-score',
+});
+
+const type = 'ApplicationComponent' as unknown as Parameters<typeof measureOverTime>[1];
+
+describe('measureOverTime', () => {
+  // Ten objects at 2 in January and one at 10 in February. Averaging the two
+  // periods' own averages gives 6, which is what the headline used to show:
+  // it hands a month holding one object the same say as a month holding ten.
+  // Plus one object with a date and no cost, and one with a cost and no date:
+  // thirteen were read, eleven can be plotted, so the two counts differ.
+  const lopsided = [
+    ...Array.from({ length: 10 }, () => ({ when: new Date(Date.UTC(2024, 0, 15)), measure: 2 })),
+    { when: new Date(Date.UTC(2024, 1, 15)), measure: 10 },
+    { when: new Date(Date.UTC(2024, 1, 20)) },
+    { measure: 900 },
+  ];
+
+  it('averages over objects rather than over periods', async () => {
+    const trend = await measureOverTime(storeOf(lopsided), type, retires, score, undefined, 'month');
+
+    expect(trend.overall).toBeCloseTo(30 / 11, 10);
+    expect(trend.overall).not.toBeCloseTo(6, 5);
+  });
+
+  it('still shows each period its own average', async () => {
+    const trend = await measureOverTime(storeOf(lopsided), type, retires, score, undefined, 'month');
+
+    expect(trend.points.map((point) => point.measure)).toEqual([2, 10]);
+    expect(trend.points.map((point) => point.count)).toEqual([10, 1]);
+  });
+
+  it('sums a money measure instead, where a total is the question', async () => {
+    const trend = await measureOverTime(storeOf(lopsided), type, retires, cost, undefined, 'month');
+
+    expect(trend.additive).toBe(true);
+    expect(trend.overall).toBe(30);
+  });
+
+  it('counts only objects carrying both, and says how many that was', async () => {
+    const trend = await measureOverTime(storeOf(lopsided), type, retires, score, undefined, 'month');
+
+    // Eleven of the thirteen carry both, so the other two are not plotted and
+    // the lone 900 is not in the total.
+    expect(trend.counted).toBe(11);
+    expect(trend.sampled).toBe(13);
+    expect(trend.overall).toBeCloseTo(30 / 11, 10);
+  });
+
+  it('carries how much was read beside the flag saying it fell short', async () => {
+    const trend = await measureOverTime(
+      storeOf(lopsided, true),
+      type,
+      retires,
+      score,
+      undefined,
+      'month',
+    );
+
+    expect(trend.truncated).toBe(true);
+    // `sampled` is what was read, `counted` what could be plotted. Keeping the
+    // two apart is the point; a fixture where they agree cannot check it.
+    expect(trend.sampled).toBe(13);
+    expect(trend.counted).toBe(11);
+  });
+
+  it('has no average to give when nothing carries both', async () => {
+    const trend = await measureOverTime(storeOf([]), type, retires, score, undefined, 'month');
+
+    expect(trend.overall).toBe(0);
+    expect(trend.counted).toBe(0);
+  });
+
+  it('knows a money measure is summed even with nothing to sum', async () => {
+    // `additive` is a fact about the measure, not about what was found. The
+    // empty return builds every field itself, so it can disagree with the
+    // path beside it — and did, reporting the same attribute as averaged with
+    // no pairs and summed with one.
+    const empty = await measureOverTime(storeOf([]), type, retires, cost, undefined, 'month');
+    const found = await measureOverTime(storeOf(lopsided), type, retires, cost, undefined, 'month');
+
+    expect(empty.additive).toBe(found.additive);
+    expect(empty.additive).toBe(true);
+  });
+
+  it('still says how much it read when none of it could be plotted', async () => {
+    // The early return has its own copy of every field, so it can drop the
+    // read size while the main path keeps it — and a truncated read with no
+    // pairs would then caption itself "from the first 0 objects read".
+    const unplottable = [{ measure: 5 }, { measure: 6 }, { measure: 7 }];
+    const trend = await measureOverTime(
+      storeOf(unplottable, true),
+      type,
+      retires,
+      score,
+      undefined,
+      'month',
+    );
+
+    expect(trend.counted).toBe(0);
+    expect(trend.truncated).toBe(true);
+    expect(trend.sampled).toBe(3);
   });
 });

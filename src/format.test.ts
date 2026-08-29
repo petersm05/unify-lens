@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatCompact, formatCount, formatMoney, formatMoneyExact } from './format';
+import {
+  formatCompact,
+  formatCount,
+  formatMoney,
+  formatMoneyExact,
+  sampledObjects,
+} from './format';
 
 /**
  * These assertions avoid pinning a locale.
@@ -101,5 +107,16 @@ describe('formatMoneyExact', () => {
 
   it('degrades to a trailing code rather than throwing on a bad currency', () => {
     expect(formatMoneyExact(16_000, 'NOT-A-CODE')).toBe(`${formatCount(16_000)} NOT-A-CODE`);
+  });
+});
+
+describe('sampledObjects', () => {
+  // Taking the read rather than a number is what stops a caption naming
+  // `SAMPLE_LIMIT` again, and the compiler enforces that on every build. What
+  // is left to check here is the wording the five captions share.
+  it('is one wording, shared by every caption that describes a partial read', () => {
+    expect(sampledObjects({ sampled: 12_500 })).toBe(
+      `the first ${formatCount(12_500)} objects read`,
+    );
   });
 });
