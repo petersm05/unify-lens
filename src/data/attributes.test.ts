@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { SampleStore } from './sample-store';
 import {
   conditionName,
+  measureOverTime,
   enumCondition,
   equalsCondition,
   histogram,
@@ -343,5 +345,105 @@ describe('enumCondition', () => {
   it('returns nothing for a label the attribute does not define', () => {
     expect(enumCondition(criticality, 'Invented')).toBeNull();
     expect(enumCondition(attribute({ kind: 'enum' }), 'Anything')).toBeNull();
+  });
+});
+
+/**
+ * A population read, without one.
+ *
+ * `SampleStore` needs a live graph; `measureOverTime` needs only what it hands
+ * back. The cast is to the store's shape rather than to `any`, so a change to
+ * `get`'s signature still fails here.
+ */
+function storeOf(
+  values: ReadonlyArray<{ when: Date; measure: number }>,
+  truncated = false,
+): SampleStore {
+  const objects = values.map((entry, index) => ({
+    id: `object-${index}`,
+    name: `Object ${index}`,
+    createdAt: null,
+    values: new Map<string, Date | number>([
+      ['lifecycle::Decommission date', entry.when],
+      ['general::Total cost of ownership', entry.measure],
+    ]),
+  }));
+
+  return {
+    get: async () => ({ objects, truncated, complete: true }),
+  } as unknown as SampleStore;
+}
+
+const retires = attribute({
+  kind: 'date',
+  categoryId: 'lifecycle',
+  categoryName: 'Lifecycle',
+  name: 'Decommission date',
+  definitionId: 'def-retires',
+});
+// Not money: the point of these is the branch that averages rather than sums.
+const score = attribute({
+  kind: 'real',
+  name: 'Total cost of ownership',
+  definitionId: 'def-score',
+});
+
+const type = 'ApplicationComponent' as unknown as Parameters<typeof measureOverTime>[1];
+
+describe('measureOverTime', () => {
+  // Ten objects at 2 in January and one at 10 in February. Averaging the two
+  // periods' own averages gives 6, which is what the headline used to show:
+  // it hands a month holding one object the same say as a month holding ten.
+  const lopsided = [
+    ...Array.from({ length: 10 }, () => ({ when: new Date(Date.UTC(2024, 0, 15)), measure: 2 })),
+    { when: new Date(Date.UTC(2024, 1, 15)), measure: 10 },
+  ];
+
+  it('averages over objects rather than over periods', async () => {
+    const trend = await measureOverTime(storeOf(lopsided), type, retires, score, undefined, 'month');
+
+    expect(trend.overall).toBeCloseTo(30 / 11, 10);
+    expect(trend.overall).not.toBeCloseTo(6, 5);
+  });
+
+  it('still shows each period its own average', async () => {
+    const trend = await measureOverTime(storeOf(lopsided), type, retires, score, undefined, 'month');
+
+    expect(trend.points.map((point) => point.measure)).toEqual([2, 10]);
+    expect(trend.points.map((point) => point.count)).toEqual([10, 1]);
+  });
+
+  it('sums a money measure instead, where a total is the question', async () => {
+    const trend = await measureOverTime(storeOf(lopsided), type, retires, cost, undefined, 'month');
+
+    expect(trend.additive).toBe(true);
+    expect(trend.overall).toBe(30);
+  });
+
+  it('counts only objects carrying both, and says how many that was', async () => {
+    const trend = await measureOverTime(storeOf(lopsided), type, retires, score, undefined, 'month');
+
+    expect(trend.counted).toBe(11);
+  });
+
+  it('carries how much was read beside the flag saying it fell short', async () => {
+    const trend = await measureOverTime(
+      storeOf(lopsided, true),
+      type,
+      retires,
+      score,
+      undefined,
+      'month',
+    );
+
+    expect(trend.truncated).toBe(true);
+    expect(trend.sampled).toBe(11);
+  });
+
+  it('has no average to give when nothing carries both', async () => {
+    const trend = await measureOverTime(storeOf([]), type, retires, score, undefined, 'month');
+
+    expect(trend.overall).toBe(0);
+    expect(trend.counted).toBe(0);
   });
 });

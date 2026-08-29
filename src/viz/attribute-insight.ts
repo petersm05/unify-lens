@@ -735,23 +735,10 @@ export function mountAttributeInsight(
     const self = selectionFor(filters.get(), when);
     const activeIndex = self ? trend.points.findIndex((p) => p.label === self.binLabel) : -1;
 
-    // Weighted by the objects in each period, not a mean of the periods' own
-    // means. Ten objects averaging 2 in one month and one object at 10 in the
-    // next is an average of 2,7 across the eleven — the unweighted form said 6,
-    // and gave a quiet month the same say as a busy one. Money is summed, where
-    // the distinction does not arise.
     const lead = money ? `Total ${measure.name}` : `Average ${measure.name}`;
     kpi(
       trend.truncated ? `${lead} in sample` : lead,
-      {
-        value: money
-          ? trend.points.reduce((sum, point) => sum + point.measure, 0)
-          : trend.counted === 0
-            ? 0
-            : trend.points.reduce((sum, point) => sum + point.measure * point.count, 0) /
-              trend.counted,
-        format,
-      },
+      { value: trend.overall, format },
       'Periods',
       { value: trend.points.length, format: formatCount },
     );
@@ -890,24 +877,23 @@ export function mountAttributeInsight(
           : mark === 'frequency'
             ? `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`
             : 'one bar per range of values';
-    // Belongs in both subtitles: picking a bar narrows which objects the
-    // figures describe, not which ones were read, so a selected bin's numbers
-    // come from the same partial read the whole chart does.
-    const sampledFrom = distribution.truncated
-      ? `, based on ${sampledObjects(distribution.sampled)}`
-      : '';
-    // Only the unselected subtitle claims coverage, and only where the bars
-    // cover everything: a frequency chart plots the most common values and
-    // leaves the tail out, and its own shape clause already says so.
+    // Says where the *bars* came from, which is the only claim this sentence
+    // can make: the figures above the chart do not share one provenance — a
+    // money headline is `sumOf`, exact and server-side, beside quantiles taken
+    // from the sample and a coverage gauge that is exact again. Which of those
+    // are estimates is a per-figure question, and #43 is open on it.
+    //
+    // A frequency chart claims no coverage either way: it plots the most
+    // common values and leaves the tail out, which its shape clause says.
     const basis = distribution.truncated
-      ? sampledFrom
+      ? `, based on ${sampledObjects(distribution.sampled)}`
       : mark === 'frequency'
         ? ''
         : ', covering every object with a value';
     set(
       'subtitle',
       self
-        ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}${sampledFrom}. Tap the highlighted bar to clear it.`
+        ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
         : `${choice.categoryName} · ${shape}${basis}.`,
     );
 

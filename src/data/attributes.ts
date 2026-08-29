@@ -866,6 +866,17 @@ export interface Trend {
   readonly sampled: number;
   /** Objects carrying both a date and a measure — the population behind the line. */
   readonly counted: number;
+  /**
+   * The measure across all of them, as the headline beside the chart.
+   *
+   * Averaged over objects rather than over periods, which is not the same
+   * number: ten objects averaging 2 in one month and one at 10 in the next is
+   * 2,7 across the eleven, where a mean of the two periods' means is 6 and
+   * gives a quiet month the same say as a busy one. Computed from the pairs
+   * rather than from the buckets, so it does not depend on the per-period
+   * arithmetic agreeing with it. Summed instead where the measure is money.
+   */
+  readonly overall: number;
 }
 
 /**
@@ -909,10 +920,12 @@ export async function measureOverTime(
       truncated: sample.truncated,
       sampled: sample.objects.length,
       counted: 0,
+      overall: 0,
     };
   }
 
   const additive = measure.kind === 'money';
+  const measured = paired.reduce((sum, entry) => sum + entry.value, 0);
   const buckets = new Map<string, { start: Date; end: Date; sum: number; count: number }>();
   for (const { date, value } of paired) {
     const bucket = bucketFor(date, chosen);
@@ -959,6 +972,7 @@ export async function measureOverTime(
     truncated: sample.truncated,
     sampled: sample.objects.length,
     counted: paired.length,
+    overall: additive ? measured : measured / paired.length,
   };
 }
 

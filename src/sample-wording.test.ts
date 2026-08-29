@@ -31,13 +31,26 @@ const formatters = [...readFileSync(join(SRC, 'format.ts'), 'utf8').matchAll(/ex
   .map((match) => match[1])
   .filter((name): name is string => name !== undefined);
 
+/**
+ * Names that hold the ceiling, read out of the tree rather than listed: an
+ * alias launders it past a check that only knows the original, and
+ * `COPY_LIMIT` in `viz/object-table.ts` is exactly that alias, in a file that
+ * writes captions.
+ */
+const CEILING = 'SAMPLE_LIMIT';
+const aliasesIn = (source: string): string[] =>
+  [...source.matchAll(new RegExp(String.raw`\b(?:const|let)\s+(\w+)\s*=\s*${CEILING}\s*;`, 'g'))]
+    .map((match) => match[1])
+    .filter((name): name is string => name !== undefined);
+
 /** `SAMPLE_LIMIT` where a formatter or a template will turn it into words. */
 const WORDED = [
   // Interpolated into a sentence, however it is dressed: `${SAMPLE_LIMIT}`,
   // `${formatCount(SAMPLE_LIMIT)}`, `${SAMPLE_LIMIT.toLocaleString()}`.
-  /\$\{[^{}]*\bSAMPLE_LIMIT\b[^{}]*\}/g,
+  (names: string) => new RegExp(String.raw`\$\{[^{}]*\b(?:${names})\b[^{}]*\}`, 'g'),
   // Handed to a formatter, wrapped across lines or with arguments beside it.
-  new RegExp(String.raw`\b(?:${formatters.join('|')})\s*\(\s*[^()]*\bSAMPLE_LIMIT\b`, 'g'),
+  (names: string) =>
+    new RegExp(String.raw`\b(?:${formatters.join('|')})\s*\(\s*[^()]*\b(?:${names})\b`, 'g'),
 ];
 
 function tsFilesIn(dir: string): string[] {
@@ -64,13 +77,21 @@ describe('a caption describing a partial read', () => {
     expect(formatters.length).toBeGreaterThanOrEqual(4);
   });
 
+  it('follows the ceiling through the names it is bound to', () => {
+    expect(aliasesIn('const COPY_LIMIT = SAMPLE_LIMIT;')).toEqual(['COPY_LIMIT']);
+    expect(aliasesIn(readFileSync(join(SRC, 'viz/object-table.ts'), 'utf8'))).toContain(
+      'COPY_LIMIT',
+    );
+  });
+
   // Reads each file whole rather than line by line, because a call wrapped
   // across two lines is exactly the shape a per-line check would miss.
   it('never puts the ceiling into words', () => {
     const offenders = sources.flatMap((file) => {
       const source = readFileSync(file, 'utf8');
-      return WORDED.flatMap((pattern) =>
-        [...source.matchAll(pattern)].map((match) => {
+      const names = [CEILING, ...aliasesIn(source)].join('|');
+      return WORDED.flatMap((build) =>
+        [...source.matchAll(build(names))].map((match) => {
           const line = source.slice(0, match.index).split('\n').length;
           return `${relative(SRC, file)}:${line} — ${match[0].replace(/\s+/g, ' ')}`;
         }),
