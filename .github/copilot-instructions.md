@@ -18,17 +18,18 @@ reporting every other test as passing, and stops the deploy. This has cost two
 deploys. `src/test-graph.test.ts` catches it, but not everything: a dynamic
 `await import(…)` is not matched, and a relative specifier it cannot resolve to
 a file is skipped rather than reported, so the walk can stop short without
-saying so (#54). The fix is always to move the
-pure part into its own module (as `table-columns.ts` was split from
-`src/data/object-table.ts` — note there is a `src/viz/object-table.ts` too),
-never to add a loader shim.
+saying so (#54). The fix is always to move the pure part into its own module
+(as `table-columns.ts` was split from `src/data/object-table.ts` — there is a
+`src/viz/object-table.ts` too), never to add a loader shim.
 
 **`import type` and `import { type X }` are different statements.**
 `verbatimModuleSyntax` is on. The first is erased; the second still emits
-`import {} from '…'` and loads the module. That difference only bites on the
-SDK: `import type { MetaModel } from '@bizzdesign/…'` in a test is fine, while
-`import { type MetaModel } from '@bizzdesign/…'` is not. Inline `type` beside
-real imports from a local module — `import { columnFor, type Column } from
+`import {} from '…'` and loads the module. That bites wherever the module
+loaded is the SDK *or reaches it*: `src/data/table-export.ts` takes `Row` from
+`./object-table` with `import type` for exactly this reason, since inlining it
+would load a module that value-imports the metamodel and through it the SDK,
+and the suite would die collecting. Inline `type` beside real imports from a
+module that does not reach the SDK — `import { columnFor, type Column } from
 './table-columns'` — is ordinary and correct.
 
 **Anything naming an attribute to the server uses the definition id, never the
@@ -72,10 +73,9 @@ of the ramp the other end's ink. That was a 1.11:1 contrast defect.
 
 `strict`, plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
 `noUnusedLocals`, `noImplicitReturns`, `noFallthroughCasesInSwitch`,
-`noImplicitOverride` and `isolatedModules`. In
-particular: indexing an array yields `T | undefined`, and an optional property
-will not accept an explicit `undefined`. A suggestion that ignores either will
-not compile.
+`noImplicitOverride` and `isolatedModules`. In particular: indexing an array
+yields `T | undefined`, and an optional property will not accept an explicit
+`undefined`. A suggestion that ignores either will not compile.
 
 ## Things that look like problems here and are not
 
