@@ -49,8 +49,13 @@ const WORDED = [
   // `${formatCount(SAMPLE_LIMIT)}`, `${SAMPLE_LIMIT.toLocaleString()}`.
   (names: string) => new RegExp(String.raw`\$\{[^{}]*\b(?:${names})\b[^{}]*\}`, 'g'),
   // Handed to a formatter, wrapped across lines or with arguments beside it.
+  // One level of nesting, so `sampledObjects(Math.min(SAMPLE_LIMIT, total))`
+  // is caught: an inner call is the likeliest way the constant comes back.
   (names: string) =>
-    new RegExp(String.raw`\b(?:${formatters.join('|')})\s*\(\s*[^()]*\b(?:${names})\b`, 'g'),
+    new RegExp(
+      String.raw`\b(?:${formatters.join('|')})\s*\(\s*(?:[^()]|\([^()]*\))*\b(?:${names})\b`,
+      'g',
+    ),
 ];
 
 function tsFilesIn(dir: string): string[] {

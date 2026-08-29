@@ -862,56 +862,41 @@ export function mountAttributeInsight(
 
     const distinct = 'distinct' in distribution ? (distribution as { distinct: number }).distinct : 0;
 
-    // Each mark says two things about itself: what one bar is, and what the
-    // set of them covers. Keeping those in separate expressions is how they
-    // drift — an enum chart carries a "Not set" bin, which is objects with no
-    // value, under a clause claiming to cover every object *with* one. So one
-    // place chooses both, and a mark that cannot claim coverage says nothing
-    // rather than borrowing a neighbour's claim.
-    //
-    // Whether the read was complete is the third thing, and it belongs to the
-    // bars alone: the figures above the chart do not share one provenance — a
-    // money headline is `sumOf`, exact and server-side, beside quantiles taken
-    // from the sample and a coverage gauge that is exact again. Which of those
-    // are estimates is a per-figure question, and #43 is open on it.
+    // Whether the read was complete belongs to the bars alone: the figures
+    // above the chart do not share one provenance — a money headline is
+    // `sumOf`, exact and server-side, beside quantiles taken from the sample
+    // and a coverage gauge that is exact again. Which of those are estimates
+    // is a per-figure question, and #43 is open on it.
     //
     // It used to be an arm of the shape ternary, which meant only a numeric
     // histogram could reach it: `marksFor` offers a date attribute `timeline`
     // and a free-text one `frequency` and nothing else, so a 12.000-object
     // timeline bucketed from the first 4.000 read said "9 periods, oldest
     // first" and carried no caveat anywhere on the screen.
-    const drawn: { shape: string; whole: string | undefined } =
+    //
+    // What the bars *cover* is deliberately not said here. Stating it needs a
+    // different sentence per mark — an enum chart's "Not set" bin is objects
+    // with no value, a frequency chart leaves its tail out, a boolean chart is
+    // broken before it gets that far (#61) — and each attempt at one clause
+    // for all four made a claim that was false for one of them. It is the
+    // per-figure question again, which is #43's.
+    const shape =
       choice.kind === 'enum' || choice.kind === 'boolean'
-        ? {
-            shape: 'values in the order the metamodel defines them',
-            // The "Not set" bin is one of the bars, so this covers the
-            // population rather than the part of it carrying a value.
-            whole: 'every object, set or not',
-          }
+        ? 'values in the order the metamodel defines them'
         : choice.kind === 'date'
-          ? {
-              shape: `${formatCount(distribution.bins.length)} periods, oldest first`,
-              whole: 'every object carrying a date',
-            }
+          ? `${formatCount(distribution.bins.length)} periods, oldest first`
           : mark === 'frequency'
-            ? {
-                shape: `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`,
-                // The tail is left out by construction, so there is no
-                // completeness to claim; the shape already says as much.
-                whole: undefined,
-              }
-            : { shape: 'one bar per range of values', whole: 'every object with a value' };
-
+            ? `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`
+            : 'one bar per range of values';
     const basis = distribution.truncated
       ? `, based on ${sampledObjects(distribution.sampled)}`
-      : drawn.whole === undefined
-        ? ''
-        : `, covering ${drawn.whole}`;
+      : '';
+
     set(
       'subtitle',
       self
         ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
-        : `${choice.categoryName} · ${drawn.shape}${basis}.`,
+        : `${choice.categoryName} · ${shape}${basis}.`,
     );
 
     if (stats) {
