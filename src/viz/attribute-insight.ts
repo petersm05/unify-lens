@@ -879,7 +879,7 @@ export function mountAttributeInsight(
     // facts, and they used to be arms of one ternary — so only a numeric
     // histogram could ever reach the truncation clause. A date attribute is
     // offered `timeline` and a free-text one `frequency` and nothing else
-    // (`markOptionsFor`), so both short-circuited above it: a 12.000-object
+    // (`marksFor`), so both short-circuited above it: a 12.000-object
     // timeline bucketed from the first 4.000 read said "9 periods, oldest
     // first" and carried no caveat anywhere on the screen.
     const shape =

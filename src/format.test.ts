@@ -111,10 +111,10 @@ describe('formatMoneyExact', () => {
 });
 
 describe('sampledObjects', () => {
-  it('names the count the read actually reached, not the ceiling', () => {
-    // The defect this replaced: every caption said "the first 4.000" because it
-    // formatted SAMPLE_LIMIT. `SampleStore` also stops on a time budget, so a
-    // slow read is truncated at whatever it got to.
+  // What it cannot check is that callers pass the count rather than the
+  // ceiling — the count is its only argument, so no assertion here can tell
+  // the two apart. `src/sample-wording.test.ts` is that guard.
+  it('is one wording, shared by every caption that describes a partial read', () => {
     expect(sampledObjects(2500)).toBe(`the first ${formatCount(2500)} objects read`);
   });
 });
