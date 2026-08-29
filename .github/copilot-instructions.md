@@ -15,19 +15,19 @@ against these rather than against general TypeScript style.
 underneath, so the test runner's ESM loader cannot take a named export out of
 `ts-results` and dies *collecting* the file — which fails the whole suite while
 reporting every other test as passing, and stops the deploy. This has cost two
-deploys. `src/test-graph.test.ts` catches it, though only for static imports —
-a dynamic `await import(…)` would slip past and fail the same way. The fix is always to move the
+deploys. `src/test-graph.test.ts` catches it, though only for static imports: a dynamic
+`await import(…)` slips past, and fails as one test rather than taking the
+collection down. The fix is always to move the
 pure part into its own module (as `table-columns.ts` was split from
 `object-table.ts`), never to add a loader shim.
 
 **`import type` and `import { type X }` are different statements.**
 `verbatimModuleSyntax` is on. The first is erased; the second still emits
 `import {} from '…'` and loads the module. That difference only bites on the
-SDK: `import type { MetaModel } from '@bizzdesign/…'` in a test is fine and
-several do it, while `import { type MetaModel } from '@bizzdesign/…'` is not.
-Inline `type` beside real imports from a local module —
-`import { columnFor, type Column } from './table-columns'` — is ordinary and
-correct, and most test files here have a line like it.
+SDK: `import type { MetaModel } from '@bizzdesign/…'` in a test is fine, while
+`import { type MetaModel } from '@bizzdesign/…'` is not. Inline `type` beside
+real imports from a local module — `import { columnFor, type Column } from
+'./table-columns'` — is ordinary and correct.
 
 **Anything naming an attribute to the server uses the definition id, never the
 display name.** That is `conditionName`'s `categoryId.definitionId` for a
@@ -51,8 +51,8 @@ exact either way: they use the shared sample when it is complete and fall back
 to server-side counts when it is not, so neither path is an extrapolation.
 `coverage` carries no flag at all, and `crossTab` and `enumDistribution` set
 `false` on every path because their counts are exact. That list is what is
-true today rather than a guarantee — check which of the two shapes a function has before
-calling a `false` an oversight.
+true today rather than a guarantee — check which of the two shapes a function
+has before calling a `false` an oversight.
 
 **Status is never colour alone.** Every state carries a word as well as a hue.
 
