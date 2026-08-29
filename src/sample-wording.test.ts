@@ -8,8 +8,8 @@ import { describe, expect, it } from 'vitest';
  *
  * The constant is a ceiling, not a measurement. `SampleStore` stops at it *or*
  * at a time budget, whichever comes first, so a slow read of a 10.000-object
- * type is truncated at whatever it reached — and five captions said "the first
- * 4.000 objects" regardless, because they formatted the constant. The count
+ * type is truncated at whatever it reached — and every caption saying so said
+ * "the first 4.000 objects" regardless, because they formatted the constant. The count
  * travels beside the flag now, but nothing stopped the next caption reaching
  * for the constant again: a unit test of `sampledObjects` cannot, since the
  * count is its only argument and it has no way to tell which number it was

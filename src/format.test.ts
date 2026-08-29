@@ -115,6 +115,6 @@ describe('sampledObjects', () => {
   // ceiling — the count is its only argument, so no assertion here can tell
   // the two apart. `src/sample-wording.test.ts` is that guard.
   it('is one wording, shared by every caption that describes a partial read', () => {
-    expect(sampledObjects(2500)).toBe(`the first ${formatCount(2500)} objects read`);
+    expect(sampledObjects(12_500)).toBe(`the first ${formatCount(12_500)} objects read`);
   });
 });
