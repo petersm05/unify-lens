@@ -32,16 +32,17 @@ The rule is about conditions only. Keys into a sample's value map are
 `categoryId::name` on purpose, because that is what the read returns; those are
 correct as they stand.
 
-**Sampling must not be swallowed.** `SAMPLE_LIMIT` bounds reads, and
-`truncated` is threaded through the distributions and `scatterPoints` on
-purpose.
+**Sampling must not be swallowed.** `SAMPLE_LIMIT` bounds reads, and where a
+figure is derived from a sample, `truncated` travels with it and is surfaced.
+A figure from a sample is a different claim from one over the population, so
+dropping the flag on the floor is a correctness bug, not a tidy-up.
 
-Two reads are exact instead, and carry no meaningful flag: `coverage` asks the
-server for counts where the sample cannot answer honestly, and `crossTab`
-counts per cell server-side — its `truncated` is `false` on both paths and
-nothing reads it. Do not raise a dropped-flag finding against either. A figure derived from a sample is a different claim
-from one over the population. Dropping a `truncated` flag on the floor is a
-correctness bug, not a tidy-up.
+`truncated: false` is not automatically a dropped flag, though. Some reads are
+exact by construction — they count server-side instead of from the sample — and
+so cannot be truncated: `coverage` carries no flag at all, and `crossTab` and
+`enumDistribution` set `false` on every path with nothing reading it. That list
+is what is true today rather than a guarantee; read the function before calling
+a `false` an oversight.
 
 **Status is never colour alone.** Every state carries a word as well as a hue.
 
