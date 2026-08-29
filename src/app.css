@@ -385,6 +385,97 @@ main.pane {
   color: var(--text-secondary);
 }
 
+/* ── coverage gauge ───────────────────────────────────────────────── */
+
+/* Coverage reads as the third figure, so the percentage is the figure and the
+   arc is the frame around it — not a chart the card happens to contain. The
+   sweep stops short of a closed ring deliberately: the chart below can draw a
+   donut, and two rings of one attribute read as two distributions. */
+.kpi.coverage {
+  /* Wider basis than the other two: the arc and the words beside it need the
+     room, and where the row cannot give it the card wraps to its own line
+     rather than crushing them. */
+  flex: 1 1 230px;
+}
+
+/* Arc beside the words, not above them: stacked, the card stood half again as
+   tall as the hero and dragged the whole row up with it. */
+.cov-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.gauge {
+  position: relative;
+  flex: none;
+  width: 92px;
+}
+
+.gauge svg {
+  display: block;
+  width: 100%;
+}
+
+.gauge-track,
+.gauge-fill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+/* Neutral until a state is known — the card is written before it is drawn. */
+.gauge-track {
+  stroke: color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
+
+/* Dashed from the start of the sweep, so the arc fills the way the bar did.
+   The dash length is the arc's own length — 270° at r=40 — and `GAUGE_ARC` in
+   attribute-insight.ts is the same number on the other side. */
+.gauge-fill {
+  stroke-dasharray: 188.5;
+  stroke-dashoffset: 188.5;
+  transition: stroke-dashoffset 420ms cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+.kpi.coverage.good .gauge-fill { stroke: var(--status-good); }
+.kpi.coverage.warning .gauge-fill { stroke: var(--status-warning); }
+.kpi.coverage.sparse .gauge-fill { stroke: var(--status-serious); }
+
+/* The unfilled track is a wash of the fill's own hue, so the state reads
+   around the whole arc rather than only as far as the fill reaches. */
+.kpi.coverage.good .gauge-track { stroke: color-mix(in srgb, var(--status-good) 24%, transparent); }
+.kpi.coverage.warning .gauge-track { stroke: color-mix(in srgb, var(--status-warning) 24%, transparent); }
+.kpi.coverage.sparse .gauge-track { stroke: color-mix(in srgb, var(--status-serious) 24%, transparent); }
+
+/* The viewBox is centred on the circle, so filling the box centres the figure
+   in the arc without a second set of numbers to keep in step. The size is set
+   to clear the stroke at three digits — "100%" is the widest the figure ever
+   gets, and it has to sit inside the arc rather than on it. */
+.kpi .gauge-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.cov-read {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+/* `.k-of` is a line under a figure everywhere else, which is where its -2px
+   sits; directly under the state word it is just an offset. */
+.cov-read .k-of {
+  font-size: 12px;
+  margin-top: 0;
+}
+
 /* ── controls ──────────────────────────────────────────────────────── */
 
 .controls {
@@ -592,50 +683,7 @@ main.pane {
   padding: 2px var(--gutter) 44px;
 }
 
-/* ── meter & stats ────────────────────────────────────────────────── */
-
-.meter-block {
-  margin: 0 0 26px;
-  max-width: 620px;
-}
-
-.meter-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 7px;
-}
-
-.meter-head span:last-child {
-  font-variant-numeric: tabular-nums;
-  font-weight: 570;
-  color: var(--text-primary);
-}
-
-/* The unfilled track is a lighter step of the fill's own ramp, so the state
-   reads across the whole bar rather than only where the fill ends. */
-.meter {
-  height: 10px;
-  border-radius: 5px;
-  background: var(--series-1-soft);
-  overflow: hidden;
-}
-
-.meter-fill {
-  display: block;
-  height: 100%;
-  border-radius: 5px;
-  background: var(--series-1);
-  transition: width 320ms cubic-bezier(0.22, 0.8, 0.3, 1);
-}
-
-.meter-foot {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: var(--text-muted);
-}
+/* ── stats ────────────────────────────────────────────────────────── */
 
 /* Quantiles are a footer to the chart, not a card of their own — as a
    standalone card they were a wide pale bar with four small numbers pinned to
@@ -1162,18 +1210,14 @@ table.data th.num {
   color: color-mix(in srgb, var(--on-accent) 82%, transparent);
 }
 
-/* Coverage state — status hue plus a word, never colour alone. */
-.meter-fill.good { background: var(--status-good); }
-.meter-fill.warning { background: var(--status-warning); }
-.meter-fill.sparse { background: var(--status-serious); }
-
+/* The word half of "status hue plus a word, never colour alone" — the hue is
+   the arc beside it now, so the word is plain ink rather than a second reading
+   of the same signal. It carried the hue itself when it was a badge on a bar
+   with no other colour to speak for the state. */
 .cov-state {
+  font-size: 12px;
   font-weight: 600;
 }
-
-.cov-state.good { color: var(--status-good); }
-.cov-state.warning { color: var(--text-primary); }
-.cov-state.sparse { color: var(--status-serious); }
 
 
 .marks {
@@ -1712,10 +1756,6 @@ nav.tabs button {
   margin-bottom: 16px;
 }
 
-.chart-card .meter-block {
-  max-width: none;
-}
-
 .detail .kpis {
   margin: 0 0 16px;
 }
@@ -1790,30 +1830,6 @@ nav.tabs button {
   margin: 0 0 16px;
 }
 
-/* Coverage is context for the chart, not a headline: a slim strip under the
-   title rather than a block above it. */
-.chart-card .meter-block {
-  margin: 0 0 4px;
-  padding: 12px 14px;
-  background: var(--plane);
-  border-radius: 11px;
-}
-
-.chart-card .meter-head {
-  font-size: 12px;
-  margin-bottom: 6px;
-}
-
-.chart-card .meter {
-  height: 6px;
-  border-radius: 3px;
-}
-
-.chart-card .meter-foot {
-  margin-top: 7px;
-  font-size: 11px;
-}
-
 
 .with-donut,
 .plot {
@@ -1879,34 +1895,6 @@ nav.tabs button {
   grid-template-columns: minmax(10ch, 26%) 1fr auto auto;
 }
 
-
-/* ── coverage banner, softened ─────────────────────────────────────── */
-
-/* It previously took the page plane, which is *darker* than the card in dark
-   mode — a black rectangle punched into a warm surface. A tint mixed from the
-   ink adapts to whatever it sits on, in either theme. */
-.chart-card .meter-block {
-  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
-  border: 1px solid color-mix(in srgb, var(--text-primary) 7%, transparent);
-}
-
-/* The unfilled track is a wash of the fill's own hue, so the state reads
-   across the whole bar rather than only where the fill ends. */
-.meter {
-  background: color-mix(in srgb, var(--text-primary) 9%, transparent);
-}
-
-.meter.good {
-  background: color-mix(in srgb, var(--status-good) 22%, transparent);
-}
-
-.meter.warning {
-  background: color-mix(in srgb, var(--status-warning) 22%, transparent);
-}
-
-.meter.sparse {
-  background: color-mix(in srgb, var(--status-serious) 22%, transparent);
-}
 
 
 /* The filter bar was a solid band of soft-accent, which in dark mode reads as
@@ -4100,10 +4088,32 @@ header.bar h1,
     grid-column: 1 / -1;
   }
 
-  /* The attribute view carries two figures rather than three, and the second
-     should not sit in half a row with nothing beside it. */
-  .kpis > .kpi:nth-child(2):last-child {
+  /* Where coverage does not apply — two attributes related to each other — the
+     attribute view is back to two figures, and the second should not sit in
+     half a row with nothing beside it. `:last-child` cannot say this any more:
+     the coverage card is hidden rather than removed, so it is still the last
+     child either way. The row says how many figures it is carrying instead.
+     Scoped to `.detail` because the population view's three figures are three
+     real ones, and none of them is coverage. */
+  .detail .kpis:not(.has-coverage) > .kpi:nth-child(2) {
     grid-column: 1 / -1;
+  }
+
+  /* Half a phone's width is not enough for an arc with words beside it, so
+     the card stacks. It costs nothing net: the bar this replaced took a block
+     of the chart card that is now gone. */
+  .cov-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .gauge {
+    width: 74px;
+  }
+
+  .kpi .gauge-value {
+    font-size: 14px;
   }
 
   .k-value {

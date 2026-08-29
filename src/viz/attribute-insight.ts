@@ -59,6 +59,14 @@ import { formatCompact, formatCount, formatMoney } from './theme';
  */
 const PREFETCH_LIMIT = 2000;
 
+/**
+ * Length of the gauge's sweep, for the arc the card's path draws.
+ *
+ * 270° at r=40, matching the `A 40 40` in that path. Two numbers that have to
+ * agree, so the one that is not in the markup says which one it is.
+ */
+const GAUGE_ARC = 40 * 1.5 * Math.PI;
+
 export interface AttributeSnapshot {
   readonly type?: ObjectType;
   readonly primary?: string;
@@ -131,6 +139,28 @@ export function mountAttributeInsight(
               <span class="k-value" data-k="second">—</span>
               <span class="k-of" data-k="second-of" hidden></span>
             </div>
+            <!-- Coverage is a figure about the population like the two beside
+                 it, so it takes the same shape — label, number, supporting
+                 line — and the arc is the frame around the number rather than
+                 a chart of its own. The sweep stops short of a full ring on
+                 purpose: the chart card below can draw a donut, and two rings
+                 of one attribute read as two distributions. -->
+            <div class="kpi coverage" hidden>
+              <span class="k-label">Coverage</span>
+              <div class="cov-body">
+                <div class="gauge">
+                  <svg viewBox="0 4 100 92" aria-hidden="true" focusable="false">
+                    <path class="gauge-track" d="M 21.72 78.28 A 40 40 0 1 1 78.28 78.28" />
+                    <path class="gauge-fill" d="M 21.72 78.28 A 40 40 0 1 1 78.28 78.28" />
+                  </svg>
+                  <span class="k-value gauge-value" data-k="cov-value">—</span>
+                </div>
+                <span class="cov-read">
+                  <span class="cov-state" data-k="cov-state"></span>
+                  <span class="k-of" data-k="cov-foot"></span>
+                </span>
+              </div>
+            </div>
           </div>
 
           <div class="card chart-card">
@@ -171,12 +201,6 @@ export function mountAttributeInsight(
                   </label>
                 </div>
               </div>
-            </div>
-
-            <div class="meter-block">
-              <div class="meter-head"><span>Coverage</span><span data-k="cov-value">—</span></div>
-              <div class="meter"><span class="meter-fill"></span></div>
-              <p class="meter-foot" data-k="cov-foot"></p>
             </div>
 
             <div class="plot" hidden></div>
@@ -261,8 +285,12 @@ export function mountAttributeInsight(
   const topSection = q('.top', 'top');
   const topRows = q('.top-rows', 'top rows');
   const statsRow = q('.stats', 'stats');
-  const meterBlock = q('.meter-block', 'meter block');
-  const meterFill = q('.meter-fill', 'meter');
+  const kpiRow = q('.kpis', 'figure row');
+  const coverageCard = q('.kpi.coverage', 'coverage card');
+  const gaugeFill = must(
+    container.querySelector<SVGPathElement>('.gauge-fill'),
+    'attributes: coverage gauge',
+  );
   const objectsHost = q('.objects-host', 'objects host');
 
   select.setOptions(types.map((entry) => ({ value: entry, label: labelFor(entry) })));
@@ -683,7 +711,7 @@ export function mountAttributeInsight(
     plot.hidden = true;
     donutHost.hidden = true;
     heatHost.hidden = true;
-    meterBlock.hidden = true;
+    hideCoverage();
     withDonut.classList.remove('has-donut');
     teardownPlot?.();
     teardownPlot = null;
@@ -789,7 +817,6 @@ export function mountAttributeInsight(
 
     reveal();
     plot.hidden = true;
-    meterBlock.hidden = false;
     heatHost.hidden = true;
     timelineHost.hidden = true;
 
@@ -876,7 +903,7 @@ export function mountAttributeInsight(
     if (mark === 'donut') {
       // "Not set" is the absence of a value, not one of the values, so it is
       // left out of the ring rather than pushing the slice count over the cap.
-      // The coverage meter above already accounts for it.
+      // The coverage gauge in the figure row already accounts for it.
       const slices = distribution.bins.filter((bin) => bin.label !== 'Not set');
       const withValue = slices.reduce((sum, bin) => sum + bin.count, 0);
 
@@ -1041,7 +1068,7 @@ export function mountAttributeInsight(
     reveal();
     plot.hidden = true;
     timelineHost.hidden = true;
-    meterBlock.hidden = true;
+    hideCoverage();
     statsRow.hidden = true;
     topSection.hidden = true;
     donutHost.hidden = true;
@@ -1117,7 +1144,7 @@ export function mountAttributeInsight(
     if (mine !== generation) return;
 
     reveal();
-    meterBlock.hidden = true;
+    hideCoverage();
     statsRow.hidden = true;
     topSection.hidden = true;
     donutHost.hidden = true;
@@ -1311,7 +1338,7 @@ export function mountAttributeInsight(
 
     reveal();
     plot.hidden = true;
-    meterBlock.hidden = true;
+    hideCoverage();
     heatHost.hidden = true;
     timelineHost.hidden = true;
     statsRow.hidden = true;
@@ -1420,30 +1447,61 @@ export function mountAttributeInsight(
     });
   }
 
+  /**
+   * Coverage, as the third figure in the row.
+   *
+   * The arc is drawn by dashing a path of known length rather than by
+   * measuring it: `getTotalLength` would have to be called after layout, and
+   * the card is written before it is ever shown. The number counts up the way
+   * the two figures beside it do, so the row animates as one thing.
+   */
   function drawCoverage(cover: { withValue: number; notSet: number }, choice: AttributeChoice): void {
     const populated = cover.withValue + cover.notSet;
     const filled = populated === 0 ? 0 : cover.withValue / populated;
-    meterFill.style.width = `${filled * 100}%`;
 
+    // The thresholds and the vocabulary are the bar's, unchanged: the shape
+    // moved, the reading did not.
     const state = filled >= 0.8 ? 'good' : filled >= 0.5 ? 'warning' : 'sparse';
     const word = state === 'good' ? 'Well covered' : state === 'warning' ? 'Partial' : 'Sparse';
-    meterFill.className = `meter-fill ${state}`;
-    if (meterFill.parentElement) meterFill.parentElement.className = `meter ${state}`;
+
+    const wasHidden = coverageCard.hidden;
+    coverageCard.hidden = false;
+    kpiRow.classList.add('has-coverage');
+    coverageCard.className = `kpi coverage ${state}`;
+
+    // Coming back from `display: none` in the same frame, the arc has no start
+    // value to transition from and would snap to its length while the figure
+    // inside it counts up. Empty it and flush, so the sweep has somewhere to
+    // start. Synchronous, so a render superseded a moment later cannot land a
+    // stale arc a frame after the one that replaced it.
+    if (wasHidden) {
+      gaugeFill.style.strokeDashoffset = `${GAUGE_ARC}`;
+      gaugeFill.getBoundingClientRect();
+    }
+    gaugeFill.style.strokeDashoffset = `${GAUGE_ARC * (1 - filled)}`;
 
     const node = container.querySelector<HTMLElement>('[data-k="cov-value"]');
-    if (node) {
-      node.innerHTML = '';
-      const badge = document.createElement('span');
-      badge.className = `cov-state ${state}`;
-      badge.textContent = word;
-      const pct = document.createElement('span');
-      pct.textContent = ` · ${Math.round(filled * 100)}%`;
-      node.append(badge, pct);
-    }
-    set(
-      'cov-foot',
-      `${formatCount(cover.withValue)} of ${formatCount(populated)} ${labelFor(type).toLowerCase()} objects have a value for ${choice.name} · ${formatCount(cover.notSet)} not set`,
-    );
+    if (node) countUp(node, filled * 100, (value) => `${Math.round(value)}%`);
+    set('cov-state', word);
+
+    // A card has room for the part and the whole, not for the sentence the
+    // banner carried. The sentence survives as the card's title, where the
+    // attribute and the two counts it names are still one hover away.
+    set('cov-foot', `${formatCount(cover.withValue)} of ${formatCount(populated)}`);
+    coverageCard.title = `${formatCount(cover.withValue)} of ${formatCount(populated)} ${labelFor(type).toLowerCase()} objects have a value for ${choice.name} · ${formatCount(cover.notSet)} not set`;
+  }
+
+  /**
+   * Takes the card out of the row where coverage of one attribute is not the
+   * question — a cross-tab, a scatter, a trend, a measure split by category.
+   *
+   * `hidden` leaves it a child of the row, so the row says how many figures it
+   * is carrying rather than leaving the phone layout to infer it from
+   * `:last-child` and get it wrong.
+   */
+  function hideCoverage(): void {
+    coverageCard.hidden = true;
+    kpiRow.classList.remove('has-coverage');
   }
 
   /**
