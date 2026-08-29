@@ -71,7 +71,7 @@ Two workflows, both needing one repository secret:
 
 | Workflow | Runs on | Does |
 | --- | --- | --- |
-| `ci.yml` | pull requests, and pushes to any branch but `main` | `npm run build` (`tsc --noEmit && vite build`) then `npm test` |
+| `ci.yml` | pull requests, or by hand | `npm run build` (`tsc --noEmit && vite build`) then `npm test` |
 | `pages.yml` | pushes to `main`, or by hand | `npm test`, then the same build with `DEPLOY=1`, then publishes `dist/` to Pages |
 
 Tests run before the deploy build rather than after, so a failing test costs a

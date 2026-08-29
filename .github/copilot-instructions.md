@@ -38,11 +38,12 @@ A figure from a sample is a different claim from one over the population, so
 dropping the flag on the floor is a correctness bug, not a tidy-up.
 
 `truncated: false` is not automatically a dropped flag, though. Some reads are
-exact by construction — they count server-side instead of from the sample — and
-so cannot be truncated: `coverage` carries no flag at all, and `crossTab` and
-`enumDistribution` set `false` on every path with nothing reading it. That list
-is what is true today rather than a guarantee; read the function before calling
-a `false` an oversight.
+exact either way: they use the shared sample when it is complete and fall back
+to server-side counts when it is not, so neither path is an extrapolation.
+`coverage` carries no flag at all, and `crossTab` and `enumDistribution` set
+`false` on every path with nothing reading it. That list is what is true today
+rather than a guarantee — check which of the two shapes a function has before
+calling a `false` an oversight.
 
 **Status is never colour alone.** Every state carries a word as well as a hue.
 
@@ -73,7 +74,12 @@ not compile.
   ramp values come from CSS custom properties and are set inline on purpose, so
   the palette stays in one place.
 - **`dev/phone-harness.html`.** A deliberate static harness for looking at
-  layouts without a live tenant. It imports the real modules; that is the point.
+  layouts without a live tenant, since the app connects before it renders and
+  there is no session here. It imports one real module — `src/ui/rail.ts`, so
+  the breakpoint decision is the app's own — and the rest of each view is its
+  `innerHTML` template pasted in and filled with representative strings. Editing
+  a template in `src/` therefore does *not* update the harness. Markup here that
+  has drifted from its module is worth flagging; its being a copy is not.
 
 ## What is genuinely useful to flag
 
