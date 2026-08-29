@@ -1505,6 +1505,28 @@ table.data th.num {
   color: var(--text-primary);
 }
 
+/* Beside Search and Columns, and quiet: copying is a thing you go looking for,
+   not the table's headline action. */
+.objects-copy {
+  appearance: none;
+  font: inherit;
+  /* The metrics are the Columns control's, so the three sit on one line. */
+  font-size: 14px;
+  min-height: 42px;
+  padding: 0 15px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.objects-copy:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
 .col-picker {
   position: relative;
 }
@@ -4342,10 +4364,14 @@ header.bar h1,
   .objects-tools {
     width: 100%;
     margin-left: 0;
+    flex-wrap: wrap;
   }
 
+  /* Three controls across a phone left the search box about twelve characters
+     wide. It takes the line instead, and Columns and Copy split the one below,
+     where both are a comfortable target. */
   .obj-search {
-    flex: 1;
+    flex: 1 1 100%;
     width: auto;
     min-width: 0;
   }

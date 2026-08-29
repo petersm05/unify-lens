@@ -1,7 +1,9 @@
 import type { ObjectType, UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Session } from '../sdk/client';
 
+import { labelFor } from '../sdk/metamodel';
 import { fetchTable } from '../data/object-table';
+import { toDelimitedTable } from '../data/table-export';
 import {
   columnFor,
   CREATED_COLUMN,
@@ -28,6 +30,16 @@ export interface ObjectTable {
 }
 
 const PAGE_SIZE = 25;
+/**
+ * How much a copy takes.
+ *
+ * The page on screen is 25 rows, which is not what anyone means by "copy this
+ * table". The whole selection is, and `SAMPLE_LIMIT` is the ceiling the rest
+ * of the app already reads to — past it the answer is a sample either way, and
+ * the heading says so.
+ */
+const COPY_LIMIT = SAMPLE_LIMIT;
+const COPIED_MS = 1_800;
 const DEBOUNCE_MS = 280;
 
 /**
@@ -56,6 +68,7 @@ export function mountObjectTable(
             <summary><span class="picker-label">Columns</span></summary>
             <div class="col-list"></div>
           </details>
+          <button type="button" class="objects-copy">Copy</button>
         </div>
       </div>
       <p class="sub" data-k="objects-note" hidden></p>
@@ -82,6 +95,7 @@ export function mountObjectTable(
   const body = must(host.querySelector<HTMLElement>('tbody'), 'objects: body');
   const note = must(host.querySelector<HTMLElement>('[data-k="objects-note"]'), 'objects: note');
   const pagerState = must(host.querySelector<HTMLElement>('.pager-state'), 'objects: pager');
+  const copyButton = must(host.querySelector<HTMLButtonElement>('.objects-copy'), 'objects: copy');
   const prev = must(host.querySelector<HTMLButtonElement>('[data-act="prev"]'), 'objects: prev');
   const next = must(host.querySelector<HTMLButtonElement>('[data-act="next"]'), 'objects: next');
 
@@ -121,6 +135,10 @@ export function mountObjectTable(
   next.addEventListener('click', () => {
     page += 1;
     void load();
+  });
+
+  copyButton.addEventListener('click', () => {
+    void copyTable();
   });
 
   const unsubscribe = filters.subscribe(() => {
@@ -376,6 +394,57 @@ export function mountObjectTable(
     element.className = 'col-spacer';
     element.setAttribute('aria-hidden', 'true');
     return element;
+  }
+
+  /**
+   * The whole selection on the clipboard, not the page on screen.
+   *
+   * Reuses `fetchTable` with one big page rather than a second query shape:
+   * the server-sorted path asks for that many at once, and the sample-sorted
+   * path already builds every row before it slices, so both answer this with
+   * the code that answers the table.
+   */
+  async function copyTable(): Promise<void> {
+    const { type } = getContext();
+    const columns = columnsNow();
+    const scope = scopeFor(filters.get());
+
+    const result = await busy.track(
+      fetchTable(session.kg, session.sample, {
+        type,
+        ...(scope ? { scope } : {}),
+        searchTerm: term,
+        columns,
+        sortKey,
+        descending,
+        page: 0,
+        pageSize: COPY_LIMIT,
+      }),
+    );
+
+    // What this is a list of. Without it a column of names is a column of
+    // names, and a week later nobody knows which question produced it.
+    const applied = filters.get().attributes.map((selection) => selection.label);
+    const heading = [labelFor(type), ...applied, new Date().toLocaleDateString()].join(' · ');
+
+    const table = toDelimitedTable(columns, result.rows, {
+      heading,
+      // Either the ranking could not see everything, or there were more rows
+      // than one copy takes. Both mean the same thing to whoever reads it.
+      sampled: result.truncated || result.total > result.rows.length,
+    });
+
+    const said = (message: string): void => {
+      copyButton.textContent = message;
+      globalThis.setTimeout(() => (copyButton.textContent = 'Copy'), COPIED_MS);
+    };
+
+    try {
+      await navigator.clipboard.writeText(table);
+      said(`Copied ${formatCount(result.rows.length)}`);
+    } catch {
+      said('Could not copy');
+    }
   }
 
   async function load(): Promise<void> {
