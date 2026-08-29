@@ -217,7 +217,8 @@ node scripts/make-icons.mjs
 | `src/sdk/client.ts` | Connect + authenticate once per page load; query batching on |
 | `src/sdk/metamodel.ts` | Per-metamodel type and role lists, display labels |
 | `src/data/population.ts` | Count fan-out, `sum` aggregation, streaming sync |
-| `src/data/cache.ts` | IndexedDB store, indexed by object type |
+| `src/data/idb.ts` | The smallest useful wrapper over IndexedDB — every operation resolves rather than rejecting, so a denied quota costs speed and not function |
+| `src/data/schema-cache.ts` | The attribute schema per object type, kept in that store |
 | `src/data/live.ts` | `CREATE_*` / `UPDATE_*` subscriptions |
 | `src/data/attributes.ts` | Attribute schema, enum counts, numeric histograms |
 | `src/data/analysis.ts` | The shareable description of a screen |
