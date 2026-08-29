@@ -928,8 +928,15 @@ export function quantiles(values: readonly number[]): NumericStats | undefined {
   return { min: sorted[0]!, median: at(0.5), p90: at(0.9), max: sorted[sorted.length - 1]! };
 }
 
-/** Equal-width bins over the observed range, rounded to readable boundaries. */
-function histogram(values: readonly number[], choice: AttributeChoice): { bins: Bin[] } {
+/**
+ * Equal-width bins over the observed range, rounded to readable boundaries.
+ *
+ * Exported for the tests that pin the boundaries: where a bin starts, which
+ * bin the maximum lands in, and that the counts still add up to what went in.
+ * Reaching it through `numericDistribution` would mean standing up a knowledge
+ * graph and a sample store to check arithmetic that needs neither.
+ */
+export function histogram(values: readonly number[], choice: AttributeChoice): { bins: Bin[] } {
   if (values.length === 0) return { bins: [] };
 
   const low = Math.min(...values);
