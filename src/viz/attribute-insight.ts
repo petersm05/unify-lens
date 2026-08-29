@@ -708,11 +708,8 @@ export function mountAttributeInsight(
     if (mine !== generation) return;
 
     reveal();
-    plot.hidden = true;
-    donutHost.hidden = true;
-    heatHost.hidden = true;
+    showSurface('timeline');
     hideCoverage();
-    withDonut.classList.remove('has-donut');
     teardownPlot?.();
     teardownPlot = null;
     legendHost.hidden = true;
@@ -744,7 +741,6 @@ export function mountAttributeInsight(
     );
 
     rows.replaceChildren();
-    timelineHost.hidden = false;
     renderTimeline(timelineHost, trend.points, {
       ...(activeIndex >= 0 ? { activeIndex } : {}),
       value: (_bin, index) => trend.points[index]?.measure ?? 0,
@@ -816,9 +812,6 @@ export function mountAttributeInsight(
     if (mine !== generation) return;
 
     reveal();
-    plot.hidden = true;
-    heatHost.hidden = true;
-    timelineHost.hidden = true;
 
     const money = (value: number): string =>
       choice.kind === 'money' ? formatMoney(value, choice.currency) : formatCompact(value);
@@ -907,8 +900,7 @@ export function mountAttributeInsight(
       const slices = distribution.bins.filter((bin) => bin.label !== 'Not set');
       const withValue = slices.reduce((sum, bin) => sum + bin.count, 0);
 
-      donutHost.hidden = false;
-      withDonut.classList.add('has-donut');
+      showSurface('donut');
       teardownPlot?.();
 
       // Indices address `slices`, which excludes "Not set" — picking by the
@@ -936,15 +928,13 @@ export function mountAttributeInsight(
       return;
     }
 
-    donutHost.hidden = true;
-    withDonut.classList.remove('has-donut');
     teardownPlot?.();
     teardownPlot = null;
 
     const activeIndex = self ? distribution.bins.findIndex((b) => b.label === self.binLabel) : -1;
     // Time reads left to right, so periods get columns rather than rows.
     if (mark === 'timeline') {
-      timelineHost.hidden = false;
+      showSurface('timeline');
       rows.replaceChildren();
       renderTimeline(timelineHost, distribution.bins, {
         ...(activeIndex >= 0 ? { activeIndex } : {}),
@@ -954,7 +944,7 @@ export function mountAttributeInsight(
       return;
     }
 
-    timelineHost.hidden = true;
+    showSurface('bars');
 
     renderBarList(rows, distribution.bins, {
       preserveOrder: mark !== 'frequency',
@@ -1066,17 +1056,13 @@ export function mountAttributeInsight(
     if (mine !== generation) return;
 
     reveal();
-    plot.hidden = true;
-    timelineHost.hidden = true;
+    showSurface('heatmap');
     hideCoverage();
     statsRow.hidden = true;
     topSection.hidden = true;
-    donutHost.hidden = true;
-    withDonut.classList.remove('has-donut');
     rows.replaceChildren();
     teardownPlot?.();
     teardownPlot = null;
-    heatHost.hidden = false;
 
     set('title', `${row.name} against ${col.name}`);
     set(
@@ -1144,16 +1130,12 @@ export function mountAttributeInsight(
     if (mine !== generation) return;
 
     reveal();
+    showSurface('plot');
     hideCoverage();
     statsRow.hidden = true;
     topSection.hidden = true;
-    donutHost.hidden = true;
-    withDonut.classList.remove('has-donut');
     rows.replaceChildren();
-    plot.hidden = false;
     teardownPlot?.();
-    heatHost.hidden = true;
-    timelineHost.hidden = true;
 
     set('title', `${y.name} against ${x.name}`);
     const splitX = median(points.map((point) => point.x));
@@ -1337,16 +1319,10 @@ export function mountAttributeInsight(
     }));
 
     reveal();
-    plot.hidden = true;
+    showSurface(mark === 'donut' ? 'donut' : 'bars');
     hideCoverage();
-    heatHost.hidden = true;
-    timelineHost.hidden = true;
     statsRow.hidden = true;
     topSection.hidden = true;
-    if (mark !== 'donut') {
-      donutHost.hidden = true;
-      withDonut.classList.remove('has-donut');
-    }
 
     const format = (value: number): string =>
       additive
@@ -1395,8 +1371,6 @@ export function mountAttributeInsight(
     const activeIndex = chosenIndex;
 
     if (mark === 'donut') {
-      donutHost.hidden = false;
-      withDonut.classList.add('has-donut');
       teardownPlot?.();
       teardownPlot = renderDonut(donutHost, bins, {
         format,
@@ -1549,6 +1523,26 @@ export function mountAttributeInsight(
   function reveal(): void {
     placeholder.hidden = true;
     insight.hidden = false;
+  }
+
+  /**
+   * Which of the mutually exclusive chart surfaces is on screen.
+   *
+   * A chart is a plot, or a heatmap, or a timeline, or a ring — never two. But
+   * each draw path used to say so by listing the ones it was not, six or seven
+   * lines of `hidden = true` apiece, which meant a sixth surface would have to
+   * be added to five separate lists and would be forgotten in one of them.
+   * Naming the surface that shows is the whole statement.
+   *
+   * `'bars'` is the horizontal bar list. It lives in `.rows`, which is always
+   * in the document, so it is the case where none of the four is shown.
+   */
+  function showSurface(which: 'plot' | 'heatmap' | 'timeline' | 'donut' | 'bars'): void {
+    plot.hidden = which !== 'plot';
+    heatHost.hidden = which !== 'heatmap';
+    timelineHost.hidden = which !== 'timeline';
+    donutHost.hidden = which !== 'donut';
+    withDonut.classList.toggle('has-donut', which === 'donut');
   }
 
   /**
