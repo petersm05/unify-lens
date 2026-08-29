@@ -402,7 +402,7 @@ describe('measureOverTime', () => {
   // periods' own averages gives 6, which is what the headline used to show:
   // it hands a month holding one object the same say as a month holding ten.
   // Plus one object with a date and no cost, and one with a cost and no date:
-  // twelve were read, eleven can be plotted, so the two counts differ.
+  // thirteen were read, eleven can be plotted, so the two counts differ.
   const lopsided = [
     ...Array.from({ length: 10 }, () => ({ when: new Date(Date.UTC(2024, 0, 15)), measure: 2 })),
     { when: new Date(Date.UTC(2024, 1, 15)), measure: 10 },
@@ -434,9 +434,9 @@ describe('measureOverTime', () => {
   it('counts only objects carrying both, and says how many that was', async () => {
     const trend = await measureOverTime(storeOf(lopsided), type, retires, score, undefined, 'month');
 
+    // Eleven of the thirteen carry both, so the other two are not plotted and
+    // the lone 900 is not in the total.
     expect(trend.counted).toBe(11);
-    // Thirteen were read; the two carrying only half a pair are not plottable
-    // and the 900 is not in the total.
     expect(trend.sampled).toBe(13);
     expect(trend.overall).toBeCloseTo(30 / 11, 10);
   });
@@ -452,7 +452,8 @@ describe('measureOverTime', () => {
     );
 
     expect(trend.truncated).toBe(true);
-    // What was read, not what could be plotted — eleven of the thirteen.
+    // `sampled` is what was read, `counted` what could be plotted. Keeping the
+    // two apart is the point; a fixture where they agree cannot check it.
     expect(trend.sampled).toBe(13);
     expect(trend.counted).toBe(11);
   });
@@ -462,5 +463,24 @@ describe('measureOverTime', () => {
 
     expect(trend.overall).toBe(0);
     expect(trend.counted).toBe(0);
+  });
+
+  it('still says how much it read when none of it could be plotted', async () => {
+    // The early return has its own copy of every field, so it can drop the
+    // read size while the main path keeps it — and a truncated read with no
+    // pairs would then caption itself "from the first 0 objects read".
+    const unplottable = [{ measure: 5 }, { measure: 6 }, { measure: 7 }];
+    const trend = await measureOverTime(
+      storeOf(unplottable, true),
+      type,
+      retires,
+      score,
+      undefined,
+      'month',
+    );
+
+    expect(trend.counted).toBe(0);
+    expect(trend.truncated).toBe(true);
+    expect(trend.sampled).toBe(3);
   });
 });
