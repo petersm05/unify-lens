@@ -42,25 +42,36 @@ const formatters = [...readFileSync(join(SRC, 'format.ts'), 'utf8').matchAll(/ex
  * be invisible to a check that only looked at one file at a time.
  */
 const CEILING = 'SAMPLE_LIMIT';
+const BINDINGS = [
+  // const CAP = SAMPLE_LIMIT;  /  let cap: number = SAMPLE_LIMIT;
+  new RegExp(String.raw`\b(?:const|let)\s+(\w+)\s*(?::[^=;]+)?=\s*${CEILING}\s*;`, 'g'),
+  // import { SAMPLE_LIMIT as READ_CAP } — renamed at the door.
+  new RegExp(String.raw`\b${CEILING}\s+as\s+(\w+)`, 'g'),
+];
 const aliasesIn = (source: string): string[] =>
-  [...source.matchAll(new RegExp(String.raw`\b(?:const|let)\s+(\w+)\s*=\s*${CEILING}\s*;`, 'g'))]
-    .map((match) => match[1])
-    .filter((name): name is string => name !== undefined);
+  BINDINGS.flatMap((pattern) =>
+    [...source.matchAll(pattern)]
+      .map((match) => match[1])
+      .filter((name): name is string => name !== undefined),
+  );
 
 /** `SAMPLE_LIMIT` where a formatter or a template will turn it into words. */
 const WORDED = [
   // Interpolated into a sentence, however it is dressed: `${SAMPLE_LIMIT}`,
   // `${formatCount(SAMPLE_LIMIT)}`, `${SAMPLE_LIMIT.toLocaleString()}`.
   (names: string) => new RegExp(String.raw`\$\{[^{}]*\b(?:${names})\b[^{}]*\}`, 'g'),
-  // Handed to a formatter, wrapped across lines or with arguments beside it.
-  // One level of nesting, so `sampledObjects(Math.min(SAMPLE_LIMIT, total))`
-  // is caught: an inner call is the likeliest way the constant comes back.
+  // Handed to a formatter: wrapped across lines, with arguments beside it, or
+  // through an inner call — `sampledObjects(Math.min(SAMPLE_LIMIT, total))` is
+  // what someone reaches for when a count might exceed the ceiling, and is the
+  // likeliest way it comes back. `[^)]*` crosses the inner bracket; a pattern
+  // that balanced them could not, having consumed the call whole.
   (names: string) =>
-    new RegExp(
-      String.raw`\b(?:${formatters.join('|')})\s*\(\s*(?:[^()]|\([^()]*\))*\b(?:${names})\b`,
-      'g',
-    ),
+    new RegExp(String.raw`\b(?:${formatters.join('|')})\s*\(\s*[^)]*\b(?:${names})\b`, 'g'),
 ];
+
+/** True where any pattern would report this source. */
+const worded = (source: string, names: string): boolean =>
+  WORDED.some((build) => build(names).test(source));
 
 function tsFilesIn(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -95,7 +106,30 @@ describe('a caption describing a partial read', () => {
   it('follows the ceiling through the names it is bound to', () => {
     expect(aliasesIn('const COPY_LIMIT = SAMPLE_LIMIT;')).toEqual(['COPY_LIMIT']);
     expect(aliasesIn('let cap = SAMPLE_LIMIT;')).toEqual(['cap']);
+    expect(aliasesIn('const cap: number = SAMPLE_LIMIT;')).toEqual(['cap']);
+    expect(aliasesIn("import { SAMPLE_LIMIT as READ_CAP } from './sample-store';")).toEqual([
+      'READ_CAP',
+    ]);
     expect(aliasesIn('const half = SAMPLE_LIMIT / 2;')).toEqual([]);
+  });
+
+  // Each shape written out rather than described, because a comment claiming
+  // a pattern catches something is exactly what went unchecked here before: a
+  // nested call was said to be covered while only the template-literal pattern
+  // happened to be catching it, and a call outside one walked past.
+  it.each([
+    ['a plain revert', 'the first ${formatCount(SAMPLE_LIMIT)} objects', true],
+    ['a bare interpolation', 'the first ${SAMPLE_LIMIT} objects', true],
+    ['a dressed-up one', 'the first ${SAMPLE_LIMIT.toLocaleString()} objects', true],
+    ['a wrapped call', 'sampledObjects(\n  SAMPLE_LIMIT,\n)', true],
+    ['a nested call, in a template', '`from ${sampledObjects(Math.min(SAMPLE_LIMIT, n))}.`', true],
+    ['a nested call, outside one', 'const note = sampledObjects(Math.min(SAMPLE_LIMIT, n));', true],
+    ['an alias', 'sampledObjects(COPY_LIMIT)', true],
+    ['a comparison', 'if (objects.length >= SAMPLE_LIMIT) break;', false],
+    ['arithmetic on it', 'Math.ceil(SAMPLE_LIMIT / PAGE)', false],
+    ['a formatter given a real count', 'sampledObjects(Math.min(999, total))', false],
+  ])('is reported for %s: %s', (_name, source, reported) => {
+    expect(worded(source, `${CEILING}|COPY_LIMIT`)).toBe(reported);
   });
 
   // Reads each file whole rather than line by line, because a call wrapped
