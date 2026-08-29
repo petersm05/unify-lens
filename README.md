@@ -129,9 +129,7 @@ logic, which is where a wrong answer is silent rather than loud.
 Assertions in the `format.ts` tests avoid pinning a locale. Those functions call
 `Intl` with `undefined`, so separators come from the runner's environment; the
 tests assert what is actually ours — which suffix, how many fraction digits —
-rather than `en-US` punctuation. Date fixtures elsewhere are built with
-`Date.UTC` for the same reason: a span that sits on a threshold in one zone
-crosses it in another.
+rather than `en-US` punctuation.
 
 Beyond `ui/rail.ts`, the `ui/` and `viz/` layers are untested. They need a DOM
 environment and a separate argument about what is worth asserting about a
