@@ -22,8 +22,12 @@ pure part into its own module (as `table-columns.ts` was split from
 
 **`import type` and `import { type X }` are different statements.**
 `verbatimModuleSyntax` is on. The first is erased; the second still emits
-`import {} from '…'` and loads the module. A test taking SDK *types* is fine; a
-test that mentions `type` inside braces is not.
+`import {} from '…'` and loads the module. That difference only bites on the
+SDK: `import type { MetaModel } from '@bizzdesign/…'` in a test is fine and
+several do it, while `import { type MetaModel } from '@bizzdesign/…'` is not.
+Inline `type` beside real imports from a local module —
+`import { columnFor, type Column } from './table-columns'` — is ordinary and
+correct, and most test files here have a line like it.
 
 **Anything naming an attribute to the server uses the definition id, never the
 display name.** That is `conditionName`'s `categoryId.definitionId` for a
