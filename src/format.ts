@@ -21,10 +21,8 @@ export function formatCount(value: number): string {
  * the flag now, and this is the one place that turns it into words, so the
  * next caption cannot reach for the constant again.
  */
-export function sampledObjects(count: number | undefined): string {
-  return count === undefined
-    ? 'a partial read of the population'
-    : `the first ${formatCount(count)} objects read`;
+export function sampledObjects(count: number): string {
+  return `the first ${formatCount(count)} objects read`;
 }
 
 /**

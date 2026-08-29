@@ -50,16 +50,15 @@ export interface Distribution {
   /** Set when the sample hit `SAMPLE_LIMIT` and the tail was not read. */
   readonly truncated: boolean;
   /**
-   * How many objects the bins were counted from, where a bounded read is what
-   * produced them. Absent on the exact paths — server-side counts, and a
-   * sample that turned out to be complete — which have no shortfall to
-   * describe and never set `truncated`.
+   * How many objects were read into the sample the bins came from — zero where
+   * they came from server-side counts and nothing was read.
    *
-   * It has to travel beside the flag, because `SAMPLE_LIMIT` cannot stand in
-   * for it: the read also stops on a time budget, so a truncated sample holds
-   * whatever it reached rather than the ceiling.
+   * Only meaningful beside `truncated`, and it has to travel with it, because
+   * `SAMPLE_LIMIT` cannot stand in for it: the read also stops on a time
+   * budget, so a truncated sample holds whatever it reached rather than the
+   * ceiling.
    */
-  readonly sampled?: number;
+  readonly sampled: number;
   /** Server-side total, for numeric attributes only. */
   readonly sum?: number;
   /** The period a timeline was bucketed into. */
@@ -673,7 +672,12 @@ export async function enumDistribution(
           ]
         : counted;
 
-    return { bins, total: bins.reduce((sum, bin) => sum + bin.count, 0), truncated: false };
+    return {
+      bins,
+      total: bins.reduce((sum, bin) => sum + bin.count, 0),
+      truncated: false,
+      sampled: sample.objects.length,
+    };
   }
 
   const counted = await Promise.all(
@@ -716,7 +720,13 @@ export async function enumDistribution(
       ? [...counted, { label: 'Not set', count: notSet, condition: notSetCondition }]
       : counted;
 
-  return { bins, total: bins.reduce((sum, bin) => sum + bin.count, 0), truncated: false };
+  return {
+    bins,
+    total: bins.reduce((sum, bin) => sum + bin.count, 0),
+    truncated: false,
+    // Counted server-side; no objects were read, so there is no read to size.
+    sampled: 0,
+  };
 }
 
 /**

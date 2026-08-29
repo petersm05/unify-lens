@@ -735,14 +735,21 @@ export function mountAttributeInsight(
     const self = selectionFor(filters.get(), when);
     const activeIndex = self ? trend.points.findIndex((p) => p.label === self.binLabel) : -1;
 
+    // Weighted by the objects in each period, not a mean of the periods' own
+    // means. Ten objects averaging 2 in one month and one object at 10 in the
+    // next is an average of 2,7 across the eleven — the unweighted form said 6,
+    // and gave a quiet month the same say as a busy one. Money is summed, where
+    // the distinction does not arise.
+    const objects = trend.points.reduce((count, point) => count + point.count, 0);
     const lead = money ? `Total ${measure.name}` : `Average ${measure.name}`;
     kpi(
       trend.truncated ? `${lead} in sample` : lead,
       {
         value: money
           ? trend.points.reduce((sum, point) => sum + point.measure, 0)
-          : trend.points.reduce((sum, point) => sum + point.measure, 0) /
-            Math.max(trend.points.length, 1),
+          : objects === 0
+            ? 0
+            : trend.points.reduce((sum, point) => sum + point.measure * point.count, 0) / objects,
         format,
       },
       'Periods',
@@ -850,14 +857,14 @@ export function mountAttributeInsight(
       );
     } else if (stats) {
       kpi(
-        countLabel,
+        distribution.truncated ? 'Objects sampled' : countLabel,
         { value: counted, format: formatCompact, outOf: population },
         'Median',
         { value: stats.median, format: formatCompact },
       );
     } else {
       kpi(
-        countLabel,
+        distribution.truncated ? 'Objects sampled' : countLabel,
         { value: counted, format: formatCompact, outOf: population },
         'Distinct values',
         { value: distribution.bins.length, format: formatCount },
@@ -868,6 +875,13 @@ export function mountAttributeInsight(
 
     const distinct = 'distinct' in distribution ? (distribution as { distinct: number }).distinct : 0;
 
+    // What the bars are and how much of the population they cover are two
+    // facts, and they used to be arms of one ternary — so only a numeric
+    // histogram could ever reach the truncation clause. A date attribute is
+    // offered `timeline` and a free-text one `frequency` and nothing else
+    // (`markOptionsFor`), so both short-circuited above it: a 12.000-object
+    // timeline bucketed from the first 4.000 read said "9 periods, oldest
+    // first" and carried no caveat anywhere on the screen.
     const shape =
       choice.kind === 'enum' || choice.kind === 'boolean'
         ? 'values in the order the metamodel defines them'
@@ -875,14 +889,15 @@ export function mountAttributeInsight(
           ? `${formatCount(distribution.bins.length)} periods, oldest first`
           : mark === 'frequency'
             ? `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`
-            : distribution.truncated
-          ? `based on ${sampledObjects(distribution.sampled)}`
-          : 'covering every object with a value';
+            : 'one bar per range of values';
+    const basis = distribution.truncated
+      ? `based on ${sampledObjects(distribution.sampled)}`
+      : 'covering every object with a value';
     set(
       'subtitle',
       self
         ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
-        : `${choice.categoryName} · ${shape}.`,
+        : `${choice.categoryName} · ${shape}, ${basis}.`,
     );
 
     if (stats) {
@@ -988,7 +1003,7 @@ export function mountAttributeInsight(
     choice: AttributeChoice,
     money: (value: number) => string,
     truncated: boolean,
-    sampled: number | undefined,
+    sampled: number,
   ): void {
     const heading = topSection.querySelector<HTMLElement>('h2');
     const caption = topSection.querySelector<HTMLElement>('.sub');

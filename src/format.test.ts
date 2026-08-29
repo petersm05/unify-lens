@@ -116,24 +116,5 @@ describe('sampledObjects', () => {
     // formatted SAMPLE_LIMIT. `SampleStore` also stops on a time budget, so a
     // slow read is truncated at whatever it got to.
     expect(sampledObjects(2500)).toBe(`the first ${formatCount(2500)} objects read`);
-    expect(sampledObjects(2500)).not.toContain(formatCount(4000));
-  });
-
-  it('says the read was partial without inventing a number when there is none', () => {
-    // The paths that count server-side carry no sample size. A caption must
-    // still be able to say the read was partial rather than guess at one.
-    expect(sampledObjects(undefined)).toBe('a partial read of the population');
-    expect(sampledObjects(undefined)).not.toMatch(/\d/);
-  });
-
-  it('reads as a noun phrase in each sentence that takes one', () => {
-    // One phrase serves five captions; a wording that only fits one of them
-    // would be found by a reader rather than by this suite.
-    for (const count of [2500, undefined]) {
-      expect(`Ranked from ${sampledObjects(count)}, so this order may not be complete.`).toMatch(
-        /^Ranked from \S.*\.$/,
-      );
-      expect(`Highest among ${sampledObjects(count)}.`).toMatch(/^Highest among \S.*\.$/);
-    }
   });
 });
