@@ -18,9 +18,10 @@ reporting every other test as passing, and stops the deploy. This has cost two
 deploys. `src/test-graph.test.ts` catches it, but not everything: a dynamic
 `await import(…)` is not matched, and a relative specifier it cannot resolve to
 a file is skipped rather than reported, so the walk can stop short without
-saying so (#54). The fix is always to move the pure part into its own module
-(as `table-columns.ts` was split from `src/data/object-table.ts` — there is a
-`src/viz/object-table.ts` too), never to add a loader shim.
+saying so (#54). The fix is `import type` where a type is all that is wanted,
+or moving the pure part into its own module where it is not — as
+`table-columns.ts` was split from `src/data/object-table.ts` (there is a
+`src/viz/object-table.ts` too). Never a loader shim.
 
 **`import type` and `import { type X }` are different statements.**
 `verbatimModuleSyntax` is on. The first is erased; the second still emits
@@ -112,9 +113,13 @@ yields `T | undefined`, and an optional property will not accept an explicit
 - Layout that breaks at a narrow width or a short one. The panel and the chart
   do **not** take turns — that was removed deliberately, and `src/ui/rail.ts`
   says why. The panel sits beside the chart where there is room and over it
-  where there is not, and the chart is on screen either way. The widths that
-  matter are 900, 820 (where the panel becomes an overlay), 700 and 560, plus a
-  520px *height* breakpoint for a phone in landscape.
+  where there is not, and the chart is on screen either way. The viewport
+  widths that matter are 900, 820 (where the panel becomes an overlay, and
+  the only one living in TypeScript), 700 and 560, plus a 520px *height*
+  breakpoint for a phone in landscape. Not everything is keyed to the
+  viewport, though: the coverage card lays itself out from a container query
+  on its own width, because the same iPad gives it a wrapped 500px card with
+  the panel open beside it and a 280px one without.
 
 ## What this app is not
 

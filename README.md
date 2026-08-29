@@ -221,6 +221,9 @@ node scripts/make-icons.mjs
 | `src/data/idb.ts` | IndexedDB wrapper; every operation resolves rather than rejects, so a denied quota costs speed and not function |
 | `src/data/schema-cache.ts` | The attribute schema per object type, kept in that store |
 | `src/data/live.ts` | `CREATE_*` / `UPDATE_*` subscriptions |
+| `src/data/incoming.ts` | Deliverables shared with you, and what has not been seen |
+| `src/data/table-columns.ts` | What a table column is, and how a chart's attributes fold into a set |
+| `src/data/table-export.ts` | The table as something a spreadsheet will accept |
 | `src/data/attributes.ts` | Attribute schema, enum counts, numeric histograms |
 | `src/data/analysis.ts` | The shareable description of a screen |
 | `src/data/chart-spec.ts` | Field types → the marks worth offering |
@@ -234,6 +237,9 @@ node scripts/make-icons.mjs
 | `src/data/object-detail.ts` | Everything the graph holds about one object |
 | `src/data/object-table.ts` | Paged, searchable, sortable object rows |
 | `src/viz/object-table.ts` | The table that replaces the chart legend once filtered |
+| `src/viz/heatmap.ts` | Two categoricals as a grid, one cell picked and the rest washed |
+| `src/viz/timeline.ts` | A measure per period |
+| `src/ui/rail.ts` | Where the attribute panel sits, and whether that is remembered |
 | `src/viz/scatter.ts` | Canvas scatter for two measures |
 | `src/viz/donut.ts` | Part-to-whole ring, gated to five slices |
 | `src/viz/type-bars.ts` | Population — KPI row over ranked bars, live-updating |
