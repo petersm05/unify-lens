@@ -33,10 +33,13 @@ The rule is about conditions only. Keys into a sample's value map are
 correct as they stand.
 
 **Sampling must not be swallowed.** `SAMPLE_LIMIT` bounds reads, and
-`truncated` is threaded through the distributions, `crossTab` and
-`scatterPoints` on purpose. (`coverage` is the exception and carries no flag:
-where the sample cannot answer honestly it asks the server for counts instead,
-so its answer is always exact.) A figure derived from a sample is a different claim
+`truncated` is threaded through the distributions and `scatterPoints` on
+purpose.
+
+Two reads are exact instead, and carry no meaningful flag: `coverage` asks the
+server for counts where the sample cannot answer honestly, and `crossTab`
+counts per cell server-side — its `truncated` is `false` on both paths and
+nothing reads it. Do not raise a dropped-flag finding against either. A figure derived from a sample is a different claim
 from one over the population. Dropping a `truncated` flag on the floor is a
 correctness bug, not a tidy-up.
 
