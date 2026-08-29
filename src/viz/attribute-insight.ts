@@ -862,39 +862,56 @@ export function mountAttributeInsight(
 
     const distinct = 'distinct' in distribution ? (distribution as { distinct: number }).distinct : 0;
 
-    // What the bars are and how much of the population they cover are two
-    // facts, and they used to be arms of one ternary — so only a numeric
-    // histogram could ever reach the truncation clause. A date attribute is
-    // offered `timeline` and a free-text one `frequency` and nothing else
-    // (`marksFor`), so both short-circuited above it: a 12.000-object
-    // timeline bucketed from the first 4.000 read said "9 periods, oldest
-    // first" and carried no caveat anywhere on the screen.
-    const shape =
-      choice.kind === 'enum' || choice.kind === 'boolean'
-        ? 'values in the order the metamodel defines them'
-        : choice.kind === 'date'
-          ? `${formatCount(distribution.bins.length)} periods, oldest first`
-          : mark === 'frequency'
-            ? `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`
-            : 'one bar per range of values';
-    // Says where the *bars* came from, which is the only claim this sentence
-    // can make: the figures above the chart do not share one provenance — a
+    // Each mark says two things about itself: what one bar is, and what the
+    // set of them covers. Keeping those in separate expressions is how they
+    // drift — an enum chart carries a "Not set" bin, which is objects with no
+    // value, under a clause claiming to cover every object *with* one. So one
+    // place chooses both, and a mark that cannot claim coverage says nothing
+    // rather than borrowing a neighbour's claim.
+    //
+    // Whether the read was complete is the third thing, and it belongs to the
+    // bars alone: the figures above the chart do not share one provenance — a
     // money headline is `sumOf`, exact and server-side, beside quantiles taken
     // from the sample and a coverage gauge that is exact again. Which of those
     // are estimates is a per-figure question, and #43 is open on it.
     //
-    // A frequency chart claims no coverage either way: it plots the most
-    // common values and leaves the tail out, which its shape clause says.
+    // It used to be an arm of the shape ternary, which meant only a numeric
+    // histogram could reach it: `marksFor` offers a date attribute `timeline`
+    // and a free-text one `frequency` and nothing else, so a 12.000-object
+    // timeline bucketed from the first 4.000 read said "9 periods, oldest
+    // first" and carried no caveat anywhere on the screen.
+    const drawn: { shape: string; whole: string | undefined } =
+      choice.kind === 'enum' || choice.kind === 'boolean'
+        ? {
+            shape: 'values in the order the metamodel defines them',
+            // The "Not set" bin is one of the bars, so this covers the
+            // population rather than the part of it carrying a value.
+            whole: 'every object, set or not',
+          }
+        : choice.kind === 'date'
+          ? {
+              shape: `${formatCount(distribution.bins.length)} periods, oldest first`,
+              whole: 'every object carrying a date',
+            }
+          : mark === 'frequency'
+            ? {
+                shape: `the ${formatCount(distribution.bins.length)} most common of ${formatCount(distinct)} distinct values`,
+                // The tail is left out by construction, so there is no
+                // completeness to claim; the shape already says as much.
+                whole: undefined,
+              }
+            : { shape: 'one bar per range of values', whole: 'every object with a value' };
+
     const basis = distribution.truncated
       ? `, based on ${sampledObjects(distribution.sampled)}`
-      : mark === 'frequency'
+      : drawn.whole === undefined
         ? ''
-        : ', covering every object with a value';
+        : `, covering ${drawn.whole}`;
     set(
       'subtitle',
       self
         ? `${choice.categoryName} · the full distribution is kept for context; the figures above describe ${self.binLabel}. Tap the highlighted bar to clear it.`
-        : `${choice.categoryName} · ${shape}${basis}.`,
+        : `${choice.categoryName} · ${drawn.shape}${basis}.`,
     );
 
     if (stats) {
