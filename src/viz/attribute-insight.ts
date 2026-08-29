@@ -1534,8 +1534,9 @@ export function mountAttributeInsight(
    * be added to five separate lists and would be forgotten in one of them.
    * Naming the surface that shows is the whole statement.
    *
-   * `'bars'` is the horizontal bar list. It lives in `.rows`, which is always
-   * in the document, so it is the case where none of the four is shown.
+   * `'bars'` is the horizontal bar list, which is the case where none of the
+   * four is shown: it draws into `.rows`, which is always in the document and
+   * is not one of the surfaces — the donut's legend is drawn there too.
    */
   function showSurface(which: 'plot' | 'heatmap' | 'timeline' | 'donut' | 'bars'): void {
     plot.hidden = which !== 'plot';
