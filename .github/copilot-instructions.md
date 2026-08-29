@@ -41,8 +41,8 @@ dropping the flag on the floor is a correctness bug, not a tidy-up.
 exact either way: they use the shared sample when it is complete and fall back
 to server-side counts when it is not, so neither path is an extrapolation.
 `coverage` carries no flag at all, and `crossTab` and `enumDistribution` set
-`false` on every path with nothing reading it. That list is what is true today
-rather than a guarantee — check which of the two shapes a function has before
+`false` on every path because their counts are exact. That list is what is
+true today rather than a guarantee — check which of the two shapes a function has before
 calling a `false` an oversight.
 
 **Status is never colour alone.** Every state carries a word as well as a hue.
@@ -57,7 +57,8 @@ of the ramp the other end's ink. That was a 1.11:1 contrast defect.
 ## The compiler settings a suggestion has to satisfy
 
 `strict`, plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
-`noUnusedLocals`, `noImplicitReturns`, `noFallthroughCasesInSwitch`. In
+`noUnusedLocals`, `noImplicitReturns`, `noFallthroughCasesInSwitch`,
+`noImplicitOverride` and `isolatedModules`. In
 particular: indexing an array yields `T | undefined`, and an optional property
 will not accept an explicit `undefined`. A suggestion that ignores either will
 not compile.
@@ -77,9 +78,11 @@ not compile.
   layouts without a live tenant, since the app connects before it renders and
   there is no session here. It imports one real module — `src/ui/rail.ts`, so
   the breakpoint decision is the app's own — and the rest of each view is its
-  `innerHTML` template pasted in and filled with representative strings. Editing
-  a template in `src/` therefore does *not* update the harness. Markup here that
-  has drifted from its module is worth flagging; its being a copy is not.
+  `innerHTML` template pasted in and filled with representative strings. So the
+  stylesheet is live — it links `../src/app.css`, which is why it lives in the
+  repo — and the markup is a copy. A CSS change reaches it; a template change
+  does not. Markup here that has drifted from its module is worth flagging; its
+  being a copy is not.
 
 ## What is genuinely useful to flag
 
