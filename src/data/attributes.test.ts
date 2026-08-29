@@ -465,6 +465,18 @@ describe('measureOverTime', () => {
     expect(trend.counted).toBe(0);
   });
 
+  it('knows a money measure is summed even with nothing to sum', async () => {
+    // `additive` is a fact about the measure, not about what was found. The
+    // empty return builds every field itself, so it can disagree with the
+    // path beside it — and did, reporting the same attribute as averaged with
+    // no pairs and summed with one.
+    const empty = await measureOverTime(storeOf([]), type, retires, cost, undefined, 'month');
+    const found = await measureOverTime(storeOf(lopsided), type, retires, cost, undefined, 'month');
+
+    expect(empty.additive).toBe(found.additive);
+    expect(empty.additive).toBe(true);
+  });
+
   it('still says how much it read when none of it could be plotted', async () => {
     // The early return has its own copy of every field, so it can drop the
     // read size while the main path keeps it — and a truncated read with no

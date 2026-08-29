@@ -36,6 +36,10 @@ const formatters = [...readFileSync(join(SRC, 'format.ts'), 'utf8').matchAll(/ex
  * alias launders it past a check that only knows the original, and
  * `COPY_LIMIT` in `viz/object-table.ts` is exactly that alias, in a file that
  * writes captions.
+ *
+ * Collected across the whole tree rather than per file, because an alias is
+ * worth exporting — bound in `sample-store.ts` and worded in a view, it would
+ * be invisible to a check that only looked at one file at a time.
  */
 const CEILING = 'SAMPLE_LIMIT';
 const aliasesIn = (source: string): string[] =>
@@ -68,6 +72,12 @@ function tsFilesIn(dir: string): string[] {
 
 const sources = tsFilesIn(SRC).filter((file) => !file.endsWith('.test.ts'));
 
+/** Every name the ceiling is bound to anywhere, so one file's alias is known in all. */
+const names = [
+  CEILING,
+  ...new Set(sources.flatMap((file) => aliasesIn(readFileSync(file, 'utf8')))),
+].join('|');
+
 describe('a caption describing a partial read', () => {
   // A check that quietly stops checking is worse than none: if the walk ever
   // finds nothing, this fails rather than passing on an empty set.
@@ -93,7 +103,6 @@ describe('a caption describing a partial read', () => {
   it('never puts the ceiling into words', () => {
     const offenders = sources.flatMap((file) => {
       const source = readFileSync(file, 'utf8');
-      const names = [CEILING, ...aliasesIn(source)].join('|');
       return WORDED.flatMap((build) =>
         [...source.matchAll(build(names))].map((match) => {
           const line = source.slice(0, match.index).split('\n').length;

@@ -912,11 +912,15 @@ export async function measureOverTime(
   }
 
   const chosen: Grain = grain ?? suggestGrain(paired.map((entry) => entry.date));
+  // A money measure is summed whether or not anything carried it: `additive`
+  // is a fact about the measure, and saying otherwise here made the same
+  // attribute report `true` with one pair and `false` with none.
+  const additive = measure.kind === 'money';
   if (paired.length === 0) {
     return {
       points: [],
       grain: chosen,
-      additive: false,
+      additive,
       truncated: sample.truncated,
       sampled: sample.objects.length,
       counted: 0,
@@ -924,7 +928,6 @@ export async function measureOverTime(
     };
   }
 
-  const additive = measure.kind === 'money';
   const measured = paired.reduce((sum, entry) => sum + entry.value, 0);
   const buckets = new Map<string, { start: Date; end: Date; sum: number; count: number }>();
   for (const { date, value } of paired) {
