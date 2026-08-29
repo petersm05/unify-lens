@@ -2,7 +2,8 @@
 
 A visualization surface for the Bizzdesign Unify knowledge graph, built on the
 published partner SDK. TypeScript, no framework, no runtime beyond the browser.
-`npm test` gates the deploy, so a failing test costs a publish.
+`pages.yml` runs `npm test` before it builds, so a failing test costs a build
+and not a publish — do not suggest reordering those steps.
 
 What follows is the set of rules that have actually been broken here, and the
 conventions that are deliberate rather than accidental. Please weigh findings
