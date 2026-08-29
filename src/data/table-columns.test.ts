@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AttributeChoice } from './attributes';
-import { columnFor, foldCharted, NAME_COLUMN, type Column } from './object-table';
+import { columnFor, foldCharted, NAME_COLUMN, type Column } from './table-columns';
 
 function attribute(definitionId: string, categoryId = 'category'): AttributeChoice {
   return {
