@@ -398,6 +398,8 @@ main.pane {
   flex: 1 1 190px;
   align-items: center;
   text-align: center;
+  container-type: inline-size;
+  container-name: coverage;
 }
 
 /* The arc is centred in the card with the reading under it. It costs the row
@@ -472,6 +474,29 @@ main.pane {
   align-items: center;
   gap: 1px;
   min-width: 0;
+}
+
+/* Where the card has a line to itself, a stacked arc leaves a lake of empty
+   card either side of it — an iPad in portrait is where this happens: three
+   figures do not fit across that pane, so coverage wraps and inherits its full
+   width. Given that much room the reading goes beside the arc and the pair
+   centres together, which gives the row its height back as well.
+
+   Keyed to the card and not to the viewport, because it is the card's width
+   that decides this and the viewport does not predict it: the same iPad has a
+   wrapped 500px card with the rail open beside it and a 280px one without. */
+@container coverage (min-width: 420px) {
+  .cov-body {
+    flex-direction: row;
+    gap: 14px;
+  }
+
+  /* Left under the state word, which is the line it belongs to — centred, the
+     two lines pull apart from each other and towards the arc. */
+  .cov-read {
+    align-items: flex-start;
+    text-align: left;
+  }
 }
 
 /* `.k-of` is a line under a figure everywhere else, which is where its -2px
