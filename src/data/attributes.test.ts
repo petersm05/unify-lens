@@ -211,10 +211,17 @@ describe('histogram', () => {
     // Otherwise the maximum is in a bin the bin's own filter excludes, and
     // tapping that bar returns fewer objects than it counts.
     const { bins } = histogram([0, 25, 50, 75, 100], measure);
-    const operatorsOf = (bin: (typeof bins)[number]) =>
-      ((bin.condition as { and: { condition: { operator: string } }[] }).and ?? []).map(
-        (part) => part.condition.operator,
-      );
+
+    // `AttributeFilter` is a readonly union in the SDK, so a direct cast to a
+    // mutable shape is rejected — which the stubbed types here cannot see, and
+    // CI can. Through `unknown`, and readonly throughout, so the assertion is
+    // about the one shape `histogram` builds rather than about the union.
+    const operatorsOf = (bin: (typeof bins)[number]) => {
+      const filter = bin.condition as unknown as
+        | { readonly and?: readonly { readonly condition: { readonly operator: string } }[] }
+        | undefined;
+      return (filter?.and ?? []).map((part) => part.condition.operator);
+    };
 
     expect(operatorsOf(bins[0]!)).toEqual(['greaterThanOrEquals', 'lessThan']);
     expect(operatorsOf(bins[bins.length - 1]!)).toEqual([
