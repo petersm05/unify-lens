@@ -352,11 +352,16 @@ describe('enumCondition', () => {
  * A population read, without one.
  *
  * `SampleStore` needs a live graph; `measureOverTime` needs only what it hands
- * back. The cast is to the store's shape rather than to `any`, so a change to
- * `get`'s signature still fails here.
+ * back. `as unknown as` defeats the check outright — a change to `get`'s
+ * signature will not fail this file — which is the cost of testing a function
+ * that takes the store rather than the sample.
+ *
+ * An entry may carry only one of the pair, because `sampled` counts what was
+ * read and `counted` counts what could be plotted, and a fixture where every
+ * object carries both cannot tell them apart.
  */
 function storeOf(
-  values: ReadonlyArray<{ when: Date; measure: number }>,
+  values: ReadonlyArray<{ when?: Date; measure?: number }>,
   truncated = false,
 ): SampleStore {
   const objects = values.map((entry, index) => ({
@@ -364,8 +369,10 @@ function storeOf(
     name: `Object ${index}`,
     createdAt: null,
     values: new Map<string, Date | number>([
-      ['lifecycle::Decommission date', entry.when],
-      ['general::Total cost of ownership', entry.measure],
+      ...(entry.when ? ([['lifecycle::Decommission date', entry.when]] as const) : []),
+      ...(entry.measure === undefined
+        ? []
+        : ([['general::Total cost of ownership', entry.measure]] as const)),
     ]),
   }));
 
@@ -394,9 +401,13 @@ describe('measureOverTime', () => {
   // Ten objects at 2 in January and one at 10 in February. Averaging the two
   // periods' own averages gives 6, which is what the headline used to show:
   // it hands a month holding one object the same say as a month holding ten.
+  // Plus one object with a date and no cost, and one with a cost and no date:
+  // twelve were read, eleven can be plotted, so the two counts differ.
   const lopsided = [
     ...Array.from({ length: 10 }, () => ({ when: new Date(Date.UTC(2024, 0, 15)), measure: 2 })),
     { when: new Date(Date.UTC(2024, 1, 15)), measure: 10 },
+    { when: new Date(Date.UTC(2024, 1, 20)) },
+    { measure: 900 },
   ];
 
   it('averages over objects rather than over periods', async () => {
@@ -424,6 +435,10 @@ describe('measureOverTime', () => {
     const trend = await measureOverTime(storeOf(lopsided), type, retires, score, undefined, 'month');
 
     expect(trend.counted).toBe(11);
+    // Thirteen were read; the two carrying only half a pair are not plottable
+    // and the 900 is not in the total.
+    expect(trend.sampled).toBe(13);
+    expect(trend.overall).toBeCloseTo(30 / 11, 10);
   });
 
   it('carries how much was read beside the flag saying it fell short', async () => {
@@ -437,7 +452,9 @@ describe('measureOverTime', () => {
     );
 
     expect(trend.truncated).toBe(true);
-    expect(trend.sampled).toBe(11);
+    // What was read, not what could be plotted — eleven of the thirteen.
+    expect(trend.sampled).toBe(13);
+    expect(trend.counted).toBe(11);
   });
 
   it('has no average to give when nothing carries both', async () => {

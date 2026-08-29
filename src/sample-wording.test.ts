@@ -79,9 +79,8 @@ describe('a caption describing a partial read', () => {
 
   it('follows the ceiling through the names it is bound to', () => {
     expect(aliasesIn('const COPY_LIMIT = SAMPLE_LIMIT;')).toEqual(['COPY_LIMIT']);
-    expect(aliasesIn(readFileSync(join(SRC, 'viz/object-table.ts'), 'utf8'))).toContain(
-      'COPY_LIMIT',
-    );
+    expect(aliasesIn('let cap = SAMPLE_LIMIT;')).toEqual(['cap']);
+    expect(aliasesIn('const half = SAMPLE_LIMIT / 2;')).toEqual([]);
   });
 
   // Reads each file whole rather than line by line, because a call wrapped
