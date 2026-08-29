@@ -71,7 +71,7 @@ Two workflows, both needing one repository secret:
 
 | Workflow | Runs on | Does |
 | --- | --- | --- |
-| `ci.yml` | pull requests, and pushes to any branch but `main` | `npm run build` (`tsc --noEmit && vite build`) then `npm test` |
+| `ci.yml` | pull requests, or by hand | `npm run build` (`tsc --noEmit && vite build`) then `npm test` |
 | `pages.yml` | pushes to `main`, or by hand | `npm test`, then the same build with `DEPLOY=1`, then publishes `dist/` to Pages |
 
 Tests run before the deploy build rather than after, so a failing test costs a
@@ -117,14 +117,24 @@ logic, which is where a wrong answer is silent rather than loud.
   cannot match.
 - **`format.ts`** — the compact thresholds (K starts at 1e4, not 1e3) and the
   money path.
+- **`data/analysis.ts`** — what a saved analysis encodes and decodes.
+- **`data/table-columns.ts`** and **`data/table-export.ts`** — which columns a
+  chart contributes, and the values a copied table carries.
+- **`ui/rail.ts`** — whether picking an attribute closes the panel, and the
+  wide-side resting state including what an untouched device stores. Behaviour
+  rather than layout, so it needs no DOM.
+- **`test-graph.test.ts`** — not a module but a rule: that no test reaches the
+  SDK at run time, since the bundle is CommonJS and takes the whole suite, and
+  the deploy, down with it.
 
-Assertions there avoid pinning a locale. These functions call `Intl` with
-`undefined`, so separators come from the runner's environment; the tests assert
-what is actually ours — which suffix, how many fraction digits — rather than
-`en-US` punctuation.
+Assertions in the `format.ts` tests avoid pinning a locale. Those functions call
+`Intl` with `undefined`, so separators come from the runner's environment; the
+tests assert what is actually ours — which suffix, how many fraction digits —
+rather than `en-US` punctuation.
 
-The `ui/` and `viz/` layers are untested. They need a DOM environment and a
-separate argument about what is worth asserting about a rendered chart.
+Beyond `ui/rail.ts`, the `ui/` and `viz/` layers are untested. They need a DOM
+environment and a separate argument about what is worth asserting about a
+rendered chart.
 
 ### The Cognito callback is the operational constraint
 
@@ -208,8 +218,12 @@ node scripts/make-icons.mjs
 | `src/sdk/client.ts` | Connect + authenticate once per page load; query batching on |
 | `src/sdk/metamodel.ts` | Per-metamodel type and role lists, display labels |
 | `src/data/population.ts` | Count fan-out, `sum` aggregation, streaming sync |
-| `src/data/cache.ts` | IndexedDB store, indexed by object type |
+| `src/data/idb.ts` | IndexedDB wrapper; every operation resolves rather than rejects, so a denied quota costs speed and not function |
+| `src/data/schema-cache.ts` | The attribute schema per object type, kept in that store |
 | `src/data/live.ts` | `CREATE_*` / `UPDATE_*` subscriptions |
+| `src/data/incoming.ts` | Saved analyses shared with you, and which have not been seen |
+| `src/data/table-columns.ts` | What a table column is, and how a chart's attributes fold into a set |
+| `src/data/table-export.ts` | The table as something a spreadsheet will accept |
 | `src/data/attributes.ts` | Attribute schema, enum counts, numeric histograms |
 | `src/data/analysis.ts` | The shareable description of a screen |
 | `src/data/chart-spec.ts` | Field types → the marks worth offering |
@@ -223,6 +237,9 @@ node scripts/make-icons.mjs
 | `src/data/object-detail.ts` | Everything the graph holds about one object |
 | `src/data/object-table.ts` | Paged, searchable, sortable object rows |
 | `src/viz/object-table.ts` | The table that replaces the chart legend once filtered |
+| `src/viz/heatmap.ts` | Two categoricals as a grid, one cell picked and the rest washed |
+| `src/viz/timeline.ts` | A measure per period |
+| `src/ui/rail.ts` | Where the attribute panel sits, and whether that is remembered |
 | `src/viz/scatter.ts` | Canvas scatter for two measures |
 | `src/viz/donut.ts` | Part-to-whole ring, gated to five slices |
 | `src/viz/type-bars.ts` | Population — KPI row over ranked bars, live-updating |
