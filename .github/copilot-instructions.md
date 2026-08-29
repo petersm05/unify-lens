@@ -30,11 +30,12 @@ real imports from a local module — `import { columnFor, type Column } from
 './table-columns'` — is ordinary and correct.
 
 **Anything naming an attribute to the server uses the definition id, never the
-display name.** That is `conditionName`'s `categoryId.definitionId` for a
-filter, and it is also the `aggregate` descriptor on `aggregateAttributeValues`
-— whose field is spelled `name` but holds `definitionId`, which is exactly the
-sort of thing that invites a helpful correction. Substituting the label there
-matches nothing and fails silently: no error, an empty result or a zero sum.
+display name.** `conditionName` builds `categoryId.definitionId` for a filter,
+and the descriptors passed to sorting and aggregation do the same — several of
+them in a field spelled `name` that holds `definitionId`, which is exactly the
+sort of thing that invites a helpful correction. Substituting the label matches
+nothing and fails silently: no error, an empty result, a zero sum, or a sort
+that quietly does not sort.
 
 Locally it is the other way round. Keys into a sample's value map are
 `categoryId::name`, because that is what the read hands back. So the question
@@ -46,13 +47,13 @@ figure is derived from a sample, `truncated` travels with it and is surfaced.
 A figure from a sample is a different claim from one over the population, so
 dropping the flag on the floor is a correctness bug, not a tidy-up.
 
-`truncated: false` is not automatically a dropped flag, though. Some reads are
-exact either way: they use the shared sample when it is complete and fall back
-to server-side counts when it is not, so neither path is an extrapolation.
-`coverage` carries no flag at all, and `crossTab` and `enumDistribution` set
-`false` on every path because their counts are exact. That list is what is
-true today rather than a guarantee — check which of the two shapes a function
-has before calling a `false` an oversight.
+`truncated: false` is not automatically a dropped flag, though. Several reads
+are exact either way: they use the shared sample when it is complete and fall
+back to server-side counts when it is not, so neither path extrapolates, and
+some of those return no flag at all. Which shape a function has is the
+question, and reading it is the only reliable way to answer — a list here would
+be one entry short of the code within a month, which is how this paragraph has
+already been wrong more than once.
 
 **Status is never colour alone.** Every state carries a word as well as a hue.
 
