@@ -181,7 +181,7 @@
 
           <div class="detail">
             <div class="insight">
-              <div class="kpis">
+              <div class="kpis has-coverage">
                 <div class="kpi hero">
                   <span class="k-label">Total in Mission critical</span>
                   <span class="k-value">€12,2M</span>
@@ -189,6 +189,27 @@
                 <div class="kpi">
                   <span class="k-label">Share of total</span>
                   <span class="k-value">38,4%</span>
+                </div>
+                <!-- Third figure. The dash offset is 188.5 × (1 − 0.84),
+                     which the app computes from GAUGE_ARC; written out here,
+                     because this block is a JavaScript template literal and a
+                     backtick in it ends the string. -->
+                <div class="kpi coverage good">
+                  <span class="k-label">Coverage</span>
+                  <div class="cov-body">
+                    <div class="gauge">
+                      <svg viewBox="0 4 100 92" aria-hidden="true" focusable="false">
+                        <path class="gauge-track" d="M 21.72 78.28 A 40 40 0 1 1 78.28 78.28" />
+                        <path class="gauge-fill" d="M 21.72 78.28 A 40 40 0 1 1 78.28 78.28"
+                              style="stroke-dashoffset:30.16" />
+                      </svg>
+                      <span class="k-value gauge-value">84%</span>
+                    </div>
+                    <span class="cov-read">
+                      <span class="cov-state">Well covered</span>
+                      <span class="k-of">1.001 of 1.191</span>
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -203,12 +224,6 @@
                       <span class="menu-current">Bars</span>
                     </button>
                   </div>
-                </div>
-
-                <div class="meter-block">
-                  <div class="meter-head"><span>Coverage</span><span>84%</span></div>
-                  <div class="meter"><span class="meter-fill" style="width:84%"></span></div>
-                  <p class="meter-foot">Well covered — 1.001 of 1.191 carry a value.</p>
                 </div>
 
                 <div class="with-donut has-donut">
