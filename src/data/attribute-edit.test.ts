@@ -78,7 +78,13 @@ describe('clearing', () => {
 });
 
 describe('enumerations', () => {
-  const context = { kind: 'enum', allowed: ['crit-1', 'crit-2', 'crit-3'] } as const;
+  const context = {
+    kind: 'enum',
+    options: [
+      { id: 'crit-1', name: 'Low' },
+      { id: 'crit-2', name: 'Mission critical' },
+    ],
+  } as const;
 
   it('takes a value the metamodel allows', () => {
     expect(parsed(context, 'crit-2')).toBe('crit-2');
@@ -88,14 +94,15 @@ describe('enumerations', () => {
     expect(rejection(context, 'crit-9')).toContain('allows');
   });
 
-  // The write carries the definition's id; the label is what the sheet shows.
-  // Substituting one for the other is the failure this whole app is careful
-  // about, so it must not be accepted here either.
-  it('refuses a display label that is not itself an allowed id', () => {
-    expect(rejection(context, 'Mission critical')).toContain('allows');
+  // A read may hand back either the id or the label, and `seedFor` opens the
+  // field on whatever it gave — so a context that only matched ids would
+  // refuse to save an enum nobody had touched. Either goes in; the id comes
+  // out, because that is what a write carries.
+  it('takes a display label and answers with its id', () => {
+    expect(parsed(context, 'Mission critical')).toBe('crit-2');
   });
 
-  it('refuses everything when the caller supplied no allowed values', () => {
+  it('refuses everything when the caller supplied no values', () => {
     expect(rejection({ kind: 'enum' }, 'crit-2')).toContain('allows');
   });
 });
@@ -305,6 +312,28 @@ describe('numbers', () => {
     expect(rejection({ kind: 'integer' }, '3180.5')).toContain('whole numbers');
   });
 
+  // An integer has no fraction, so the ambiguity a lone separator carries does
+  // not exist on one: `formatCount(3180)` prints `3.180` or `3,180`, and
+  // refusing that as "not whole" would be this app refusing its own output.
+  it('reads a lone separator in a whole number as a group', () => {
+    expect(parsed({ kind: 'integer' }, '3.180')).toBe(3180);
+    expect(parsed({ kind: 'integer' }, '3,180')).toBe(3180);
+    expect(parsed({ kind: 'integer' }, '12,345')).toBe(12345);
+  });
+
+  it('still refuses a real typed into a whole-number attribute', () => {
+    // Not groupable — a first group of four digits is not a group — so it
+    // falls through to the decimal reading and is refused for the right
+    // reason.
+    expect(rejection({ kind: 'integer' }, '3180.5')).toContain('whole numbers');
+    expect(rejection({ kind: 'integer' }, '1.5')).toContain('whole numbers');
+  });
+
+  it('leaves the other numeric kinds reading a lone separator as a decimal', () => {
+    expect(parsed({ kind: 'real' }, '3.180')).toBe(3.18);
+    expect(parsed({ kind: 'money' }, '3,180')).toBe(3.18);
+  });
+
   it('lets money carry a fraction', () => {
     expect(parsed({ kind: 'money' }, '1240000,50')).toBe(1240000.5);
   });
@@ -390,7 +419,9 @@ describe('seedFor', () => {
   });
 
   it('round-trips every kind of value back to itself', () => {
-    const cases: ReadonlyArray<[AttributeKind, EditValue, Partial<{ allowed: string[] }>]> = [
+    const cases: ReadonlyArray<
+      [AttributeKind, EditValue, Partial<{ options: Array<{ id: string; name: string }> }>]
+    > = [
       ['real', 1240000.5, {}],
       ['real', 1.234, {}],
       ['integer', 3180, {}],
@@ -399,7 +430,7 @@ describe('seedFor', () => {
       ['boolean', false, {}],
       ['string', 'Marieke de Vries', {}],
       ['text', 'First line.\n\nSecond.', {}],
-      ['enum', 'crit-2', { allowed: ['crit-1', 'crit-2'] }],
+      ['enum', 'crit-2', { options: [{ id: 'crit-1', name: 'Low' }, { id: 'crit-2', name: 'High' }] }],
       ['date', new Date(2019, 2, 14), {}],
     ];
 

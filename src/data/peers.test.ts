@@ -229,6 +229,14 @@ describe('enumerations', () => {
 describe('booleans', () => {
   const values: Value[] = [true, false, false, false];
 
+  // Checked rather than coerced. A string on a boolean attribute would be read
+  // as false, and the row above prints whatever it was given — so "true" would
+  // sit over a caption counting the objects that are not.
+  it('says nothing for a value that is not a boolean at all', () => {
+    expect(peers({ kind: 'boolean', values, own: 'true' })).toBeNull();
+    expect(peers({ kind: 'boolean', values, own: 1 })).toBeNull();
+  });
+
   it('shows the share that matches this object, whichever side it is on', () => {
     expect(peers({ kind: 'boolean', values, own: true })).toEqual({
       mark: { shape: 'share', share: 0.25 },

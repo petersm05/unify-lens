@@ -167,7 +167,13 @@ export function peersFor(input: PeerInput): Peers | null {
     }
 
     case 'boolean': {
-      const own = input.own === true;
+      // Checked rather than coerced, the way the numeric branch checks. A
+      // string arriving on a boolean attribute would otherwise be read as
+      // false, and the row above — which prints whatever it was given — would
+      // show "true" over a caption counting the objects that are not.
+      if (typeof input.own !== 'boolean') return null;
+
+      const own = input.own;
       const matching = counted(input.values.filter((value) => value === own).length);
       if (matching === null) return null;
 

@@ -24,13 +24,15 @@ export type Parsed =
 export interface EditContext {
   readonly kind: AttributeKind;
   /**
-   * For `enum` only: the value ids the metamodel allows.
+   * For `enum` only: the values the metamodel allows, id and label both.
    *
-   * Ids rather than labels, because that is what a write carries — the same
-   * distinction the rest of the app makes between what is shown and what is
-   * sent.
+   * Both, because the two ends of this disagree about which one a value is.
+   * A write carries the id; a read may hand back either, which is why
+   * `enumIdFor` exists — and `seedFor` opens the field on whatever the read
+   * gave, so a context of ids alone would refuse to save an enum nobody had
+   * touched.
    */
-  readonly allowed?: readonly string[];
+  readonly options?: readonly EnumOption[];
 }
 
 /**
@@ -122,10 +124,12 @@ export function parseEdit(context: EditContext, raw: string): Parsed {
 
   switch (editor) {
     case 'choice': {
-      const allowed = context.allowed ?? [];
-      return allowed.includes(text)
-        ? { ok: true, value: text }
-        : { ok: false, message: 'Pick one of the values this attribute allows.' };
+      // Resolved rather than matched, so a label and an id are both accepted
+      // and an id is what comes out — which is what a write has to carry.
+      const id = enumIdFor(context.options ?? [], text);
+      return id === null
+        ? { ok: false, message: 'Pick one of the values this attribute allows.' }
+        : { ok: true, value: id };
     }
     case 'toggle': {
       // A control emits `true`/`false`, and a person types Yes or No — which is
@@ -138,7 +142,11 @@ export function parseEdit(context: EditContext, raw: string): Parsed {
       return { ok: false, message: 'A yes-or-no attribute takes Yes, No, or nothing at all.' };
     }
     case 'number': {
-      const value = toNumber(text);
+      // An integer has no fraction, so a lone separator in one can only be
+      // grouping — where it groups. Without that, `formatCount(3180)` printing
+      // `3.180` would be refused as not whole, which is this app refusing its
+      // own output.
+      const value = toNumber(text, context.kind === 'integer');
       if (value === null) return { ok: false, message: `"${text}" is not a number.` };
       if (context.kind === 'integer' && !Number.isInteger(value)) {
         return { ok: false, message: 'This attribute holds whole numbers only.' };
@@ -294,7 +302,7 @@ export function parseDateInput(raw: string): Date | null {
  * point comes after all of them — so `1.24.000` is refused rather than guessed
  * at.
  */
-function toNumber(input: string): number | null {
+function toNumber(input: string, groupLone = false): number | null {
   const text = unspace(input);
   if (text === null) return null;
   if (!/^[+-]?[\d.,]*\d$/.test(text)) return null;
@@ -302,7 +310,7 @@ function toNumber(input: string): number | null {
   const sign = text.startsWith('-') ? -1 : 1;
   const body = text.replace(/^[+-]/, '');
 
-  const marks = separatorsIn(body);
+  const marks = separatorsIn(body, groupLone);
   if (marks === null) return null;
   const { decimalMark, groupMark } = marks;
 
@@ -363,6 +371,7 @@ function unspace(input: string): string | null {
 /** Which mark groups and which one separates the fraction, if either does. */
 function separatorsIn(
   body: string,
+  groupLone: boolean,
 ): { decimalMark: string | null; groupMark: string | null } | null {
   const commas = occurrences(body, ',');
   const dots = occurrences(body, '.');
@@ -379,11 +388,22 @@ function separatorsIn(
     return { decimalMark, groupMark: decimalMark === ',' ? '.' : ',' };
   }
 
-  // A separator on its own is a decimal point. Nothing here can tell a group
-  // from a decimal in `1,500`, and the reading that guesses is the one that
-  // silently rewrites a value the app itself put in the field.
-  if (commas === 1) return { decimalMark: ',', groupMark: null };
-  if (dots === 1) return { decimalMark: '.', groupMark: null };
+  if (commas === 1 || dots === 1) {
+    const mark = commas === 1 ? ',' : '.';
+
+    // Where the caller says a fraction is impossible, a lone separator groups
+    // — but only where the grouping holds, so `3180.5` still falls through to
+    // the decimal reading and is refused for not being whole rather than for
+    // not being a number.
+    if (groupLone && ungroup(body, mark) !== null) {
+      return { groupMark: mark, decimalMark: null };
+    }
+
+    // Otherwise a separator on its own is a decimal point. Nothing here can
+    // tell a group from a decimal in `1,500`, and the reading that guesses is
+    // the one that silently rewrites a value the app itself put in the field.
+    return { decimalMark: mark, groupMark: null };
+  }
 
   return { decimalMark: null, groupMark: null };
 }

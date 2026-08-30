@@ -138,10 +138,14 @@ export async function fetchDetail(kg: Kg, id: UUID): Promise<Detail | null> {
 function typedValue(attribute: { type: string; value?: unknown }): EditValue {
   const value = attribute.value;
   if (value === null || value === undefined || value === '') return null;
-  if (attribute.type === 'enum') return String(value);
   if (value instanceof Date) return value;
+
+  // The enum's `String` is inside the primitive guard, not ahead of it. An
+  // enum arriving as an object — a shape the public types do not rule out —
+  // would otherwise become the literal "[object Object]" and be carried around
+  // as this object's value.
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
-    return value;
+    return attribute.type === 'enum' ? String(value) : value;
   }
   return null;
 }
