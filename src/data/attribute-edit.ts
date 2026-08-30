@@ -181,23 +181,47 @@ export function parseEdit(context: EditContext, raw: string): Parsed {
 export function seedFor(value: EditValue): string {
   if (value === null) return '';
   if (value instanceof Date) return dateToInputValue(value);
-  if (typeof value === 'number') return PLAIN.format(value);
+  if (typeof value === 'number') return plainDigits(value);
   if (typeof value === 'boolean') return String(value);
   return value;
 }
 
 /**
- * Digits, never exponent notation.
+ * A number as digits, never in exponent notation.
  *
  * `String(1e21)` is `"1e+21"`, which `parseEdit` refuses — so opening a field
- * on a value the object already holds and saving it unchanged would fail. A
- * fixed locale because the field holds a number rather than a formatted one,
- * and `toNumber` reads a dot decimal in any locale.
+ * on a value the object already holds and saving it unchanged would fail.
+ *
+ * `String` everywhere else, rather than an `Intl` formatter, because `String`
+ * is exact: it prints the shortest text that reads back as the same double,
+ * and only reaches for an exponent below 1e-6 or at 1e21 and above. A
+ * formatter has to be told how many fraction digits to keep, and any number it
+ * is told is a number that truncates something — `maximumFractionDigits: 20`
+ * turned 1/30000 into a different value on the way into the field, which is
+ * the silent rewrite this pair exists to prevent. The limit can be raised to
+ * 100, but only on runtimes new enough to accept it, and one that is not
+ * throws rather than rounding.
+ *
+ * A dot for the decimal point whatever the locale, because the field holds a
+ * number rather than a rendering of one, and `toNumber` reads a dot in any
+ * locale.
  */
-const PLAIN = new Intl.NumberFormat('en-US', {
-  useGrouping: false,
-  maximumFractionDigits: 20,
-});
+function plainDigits(value: number): string {
+  const text = String(value);
+  const parts = /^(-?)(\d+)(?:\.(\d+))?e([+-]\d+)$/i.exec(text);
+  if (!parts) return text;
+
+  const sign = parts[1] ?? '';
+  const whole = parts[2] ?? '';
+  const fraction = parts[3] ?? '';
+  const digits = whole + fraction;
+  // Where the decimal point lands once the exponent is applied.
+  const point = whole.length + Number(parts[4] ?? '0');
+
+  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${'0'.repeat(point - digits.length)}`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+}
 
 /**
  * Whether a save would change anything.

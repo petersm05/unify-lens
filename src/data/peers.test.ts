@@ -306,6 +306,9 @@ describe('a population that does not contain this object', () => {
   it('still ranks a value against a population it is not part of', () => {
     const result = peers({ kind: 'money', values: [1, 2, 3, 4], own: 99, truncated: true });
     expect(result?.mark).toEqual({ shape: 'position', at: 1 });
+    // And says so: "all but a few" under a track filled to the end is the same
+    // mismatch the bottom end has its own phrase for.
+    expect(result?.caption).toBe('higher than all of 4');
   });
 });
 

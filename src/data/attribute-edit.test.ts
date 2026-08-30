@@ -411,7 +411,31 @@ describe('seedFor', () => {
   it('never seeds a field with exponent notation', () => {
     expect(seedFor(1e21)).toBe('1000000000000000000000');
     expect(seedFor(1e-7)).toBe('0.0000001');
+    expect(seedFor(-2.5e-8)).toBe('-0.000000025');
+    expect(seedFor(1.5e21)).toBe('1500000000000000000000');
     expect(parsed({ kind: 'real' }, seedFor(1e21))).toBe(1e21);
+  });
+
+  // A formatter has to be told how many fraction digits to keep, and any
+  // number it is told truncates something: at twenty, 1/30000 seeds as a
+  // different value than the field was opened on, and `isUnchanged` then lets
+  // a write through that rewrites it.
+  it('seeds a value that needs more digits than a formatter would keep', () => {
+    for (const value of [1 / 30000, 1 / 3, 2 / 7, 1e-9 / 3]) {
+      expect(parsed({ kind: 'real' }, seedFor(value))).toBe(value);
+    }
+  });
+
+  // The property the pair exists for, over a wide spread rather than a
+  // handful of chosen values.
+  it('round-trips whatever a double can hold', () => {
+    let seed = 12345;
+    for (let index = 0; index < 2000; index += 1) {
+      // A small deterministic generator, so a failure is reproducible.
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      const value = (seed / 2147483648 - 0.5) * 10 ** ((seed % 40) - 20);
+      expect(parsed({ kind: 'real' }, seedFor(value)), String(value)).toBe(value);
+    }
   });
 
   it('opens an unset attribute on an empty field', () => {

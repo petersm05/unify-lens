@@ -224,6 +224,11 @@ function rankPhrase(at: number, kind: AttributeKind, among: string): string {
   // claiming to be the one.
   if (at === 0) return `${verb} than none of ${among}`;
   if (at < 0.005) return `${verb} than a few of ${among}`;
+  // Exactly one means strictly above every value there is, which happens where
+  // the object is not among them — a read that stopped short of it, or a
+  // sample older than the object. "All but a few" under a track filled to the
+  // end is the same mismatch the other end was given its own phrase for.
+  if (at === 1) return `${verb} than all of ${among}`;
   if (at >= 0.995) return `${verb} than all but a few of ${among}`;
   return `${verb} than ${Math.round(at * 100)}% of ${among}`;
 }
