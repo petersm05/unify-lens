@@ -188,31 +188,26 @@ describe('numbers', () => {
     expect(parsed(real, '1 240 000')).toBe(1240000);
   });
 
-  // The documented tie-break for a single separator, both ways round.
-  it('takes a lone separator before three digits as a group', () => {
-    expect(parsed(real, '1,500')).toBe(1500);
-    expect(parsed(real, '1.500')).toBe(1500);
-  });
-
-  // A lone separator before three digits is a group only where the grouping
-  // holds. A first group of four digits is not a group, so this is a decimal
-  // point — reading it as a malformed grouping and refusing the figure would
-  // reject a number nobody would think twice about typing.
-  it('falls back to a decimal point where the grouping would not hold', () => {
-    expect(parsed(real, '1234.500')).toBe(1234.5);
-    expect(parsed(real, '1234,500')).toBe(1234.5);
-    expect(parsed(real, '12345,500')).toBe(12345.5);
-  });
-
-  it('takes it as a decimal point when a zero comes before it', () => {
+  // The judgement half of the rule: one separator is a decimal point, whatever
+  // follows it. Grouping has to be unambiguous — a repeated mark, or a pair —
+  // before it is read as grouping.
+  it('reads a lone separator as a decimal point, three digits or not', () => {
+    expect(parsed(real, '1,500')).toBe(1.5);
+    expect(parsed(real, '1.500')).toBe(1.5);
     expect(parsed(real, '0,750')).toBe(0.75);
-    expect(parsed(real, '0.750')).toBe(0.75);
+    expect(parsed(real, '1,5')).toBe(1.5);
+    expect(parsed(real, '1,2505')).toBe(1.2505);
+    expect(parsed(real, '1234.500')).toBe(1234.5);
   });
 
-  it('takes it as a decimal point when what follows is not three digits', () => {
-    expect(parsed(real, '1,5')).toBe(1.5);
-    expect(parsed(real, '1,25')).toBe(1.25);
-    expect(parsed(real, '1,2505')).toBe(1.2505);
+  // Why it goes that way. `seedFor` opens a field on the value the object
+  // already holds, and a group reading turns three decimals into three orders
+  // of magnitude — without anyone typing anything, and with `isUnchanged`
+  // seeing a change and letting the write through.
+  it('round-trips a three-decimal value the app itself seeded', () => {
+    for (const value of [1.234, 3.142, 12.345, 123.456, 0.001]) {
+      expect(parsed(real, seedFor(value))).toBe(value);
+    }
   });
 
   it('refuses groups that are not groups', () => {
@@ -249,9 +244,10 @@ describe('numbers', () => {
     ['3.14', 3.14],
     ['.5', 0.5],
     [',5', 0.5],
-    ['1,000', 1000],
-    ['1.000', 1000],
-    ['12,345', 12345],
+    ['1,000', 1],
+    ['1.000', 1],
+    ['12,345', 12.345],
+    ['1.234', 1.234],
     ['1,234,567', 1234567],
     ['1.234.567', 1234567],
     ['12.345.678.901', 12345678901],
@@ -377,6 +373,7 @@ describe('seedFor', () => {
   it('round-trips every kind of value back to itself', () => {
     const cases: ReadonlyArray<[AttributeKind, EditValue, Partial<{ allowed: string[] }>]> = [
       ['real', 1240000.5, {}],
+      ['real', 1.234, {}],
       ['integer', 3180, {}],
       ['money', 16000, {}],
       ['boolean', true, {}],

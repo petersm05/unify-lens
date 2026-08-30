@@ -130,6 +130,31 @@ describe('rowsFor', () => {
     expect(cost?.currency).toBe('EUR');
   });
 
+  // Where they disagree the value's own wins: the amount beside it was
+  // recorded in that currency, and printing it under the definition's symbol
+  // would put the wrong sign on a real figure.
+  it('prefers the currency the value was recorded in', () => {
+    const inDollars = detailOf([
+      {
+        category: 'Application',
+        values: [
+          {
+            categoryId: 'cat-app',
+            definitionId: 'def-cost',
+            name: 'Annual cost',
+            kind: 'money',
+            display: '$1,240,000',
+            value: 1240000,
+            currency: 'USD',
+            numeric: 1240000,
+          },
+        ],
+      },
+    ]);
+    const cost = rowsFor(inDollars, SCHEMA)[0]?.rows.find((row) => row.name === 'Annual cost');
+    expect(cost?.currency).toBe('USD');
+  });
+
   it('leaves the typed value on the row for an editor to open on', () => {
     const cost = rowsFor(DETAIL, SCHEMA)[0]?.rows.find((row) => row.name === 'Annual cost');
     expect(cost?.value).toBe(1240000);

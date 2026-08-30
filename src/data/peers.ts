@@ -178,8 +178,12 @@ export function peersFor(input: PeerInput): Peers | null {
         caption: `${formatCount(input.values.length)} of ${of} have one`,
       };
 
-    // No `reference` case: the guard above has already taken it out of the
-    // union, and TypeScript rejects a branch for a kind that cannot reach here.
+    default:
+      // No `reference` case above: the guard at the top has already taken it
+      // out of the union. This catches the other way in — `AttributeKind` is a
+      // cast over whatever the metamodel returned, so a kind this app does not
+      // model arrives here at run time however exhaustive the union looks.
+      return null;
   }
 }
 

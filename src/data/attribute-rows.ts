@@ -129,12 +129,12 @@ function rowFor(choice: AttributeChoice, value: AttributeValue | undefined): Att
     kind: choice.kind,
     display: value?.display ?? null,
     value: value?.value ?? null,
-    // The definition's currency first, because it is known for an attribute
-    // the object has no value for — which is what lets an unset money row
-    // still carry the right symbol. The value's own is the fallback: where the
-    // definition carries none at runtime, dropping it would turn €1.240.000
-    // into an unsymbolled figure under a generic ¤.
-    ...currencyOf(choice.currency ?? value?.currency),
+    // The value's own currency first: it is the one the amount beside it was
+    // recorded in, and where the two disagree the amount must not be printed
+    // under the other one's symbol. The definition's is the fallback, and it is
+    // what lets an attribute the object has *no* value for still carry a
+    // symbol at all.
+    ...currencyOf(value?.currency ?? choice.currency),
     ...(value?.numeric !== undefined ? { numeric: value.numeric } : {}),
     ...(choice.enumValues ? { order: choice.enumValues.map((entry) => entry.name) } : {}),
   };

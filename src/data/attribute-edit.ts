@@ -57,6 +57,17 @@ export function editorFor(kind: AttributeKind): Editor | null {
       return 'paragraph';
     case 'reference':
       return null;
+    default: {
+      // `AttributeKind` is a cast over whatever the metamodel returned, so a
+      // kind this app does not model reaches here at run time even though the
+      // union says it cannot. The assignment keeps the compiler's exhaustiveness
+      // check — adding a kind to the union fails here — while the return keeps
+      // `parseEdit` from falling off its own switch and handing a caller
+      // `undefined` where it promised a result.
+      const unmodelled: never = kind;
+      void unmodelled;
+      return null;
+    }
   }
 }
 
@@ -247,15 +258,26 @@ export function parseDateInput(raw: string): Date | null {
  * exactly the form `formatCount` prints and so exactly what someone copies out
  * of this app and types back into it.
  *
- * One separator on its own is genuinely ambiguous: `1,500` is fifteen hundred
- * to one reader and one and a half to another. It is taken as a group when it
- * is followed by exactly three digits and the part before it does not start
- * with a zero, so `1,500` is 1500 and `0,750` is 0.75. Anyone meaning one and
- * a half types `1,5`, which has no second reading.
+ * **One separator on its own is a decimal point**, always. `1,500` is one and
+ * a half, not fifteen hundred. That is the half of this that is a judgement,
+ * and it went the other way at first — a lone separator before three digits
+ * was read as a group, on the reasoning that nobody types `1,500` meaning one
+ * and a half.
  *
- * Groups are then checked: every one after the first is three digits, and the
- * decimal point comes after all of them. `1.24.000` is refused rather than
- * guessed at.
+ * What settled it is that the guess is not confined to what a person types.
+ * `seedFor` opens a field on the value the object already holds, in machine
+ * form with a dot: an attribute holding 1.234 seeded `"1.234"`, which the
+ * group reading turned into 1234. Open the editor on such a value, change
+ * nothing, save, and the figure is multiplied by a thousand — silently, and
+ * without anyone having typed anything. A guess that only misreads what
+ * someone typed is a guess they can see; one that misreads what the app itself
+ * wrote is not.
+ *
+ * So grouping has to be unambiguous to be read as grouping: a mark that
+ * repeats, or a pair where the other mark settles which is which. Groups are
+ * then checked — every one after the first is three digits, and the decimal
+ * point comes after all of them — so `1.24.000` is refused rather than guessed
+ * at.
  */
 function toNumber(input: string): number | null {
   // Several locales group with a non-breaking or narrow no-break space, so a
@@ -318,26 +340,11 @@ function separatorsIn(
     return { decimalMark, groupMark: decimalMark === ',' ? '.' : ',' };
   }
 
-  if (commas === 1 || dots === 1) {
-    const mark = commas === 1 ? ',' : '.';
-    const at = body.indexOf(mark);
-    const whole = body.slice(0, at);
-
-    // The group reading only wins where it produces a grouping that holds:
-    // `1,500` is fifteen hundred, but `1234.500` cannot be grouped — a first
-    // group of four digits is not a group — so it is 1234.5 rather than a
-    // rejection. The leading zero is its own tie-break: `0,750` groups
-    // perfectly well and is still nothing but three quarters.
-    const grouping =
-      body.length - at - 1 === 3 &&
-      whole.length > 0 &&
-      !whole.startsWith('0') &&
-      ungroup(body, mark) !== null;
-
-    return grouping
-      ? { groupMark: mark, decimalMark: null }
-      : { groupMark: null, decimalMark: mark };
-  }
+  // A separator on its own is a decimal point. Nothing here can tell a group
+  // from a decimal in `1,500`, and the reading that guesses is the one that
+  // silently rewrites a value the app itself put in the field.
+  if (commas === 1) return { decimalMark: ',', groupMark: null };
+  if (dots === 1) return { decimalMark: '.', groupMark: null };
 
   return { decimalMark: null, groupMark: null };
 }
