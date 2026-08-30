@@ -98,6 +98,10 @@ describe('percent', () => {
 
   it('never rounds a gap that exists up to everything', () => {
     expect(percent(3999 / 4000)).toBe('>99%');
+    // The boundary itself: 0.995 is the first share that rounds *to* 100, so
+    // it is the first that has to be held back from saying so.
+    expect(percent(199 / 200)).toBe('>99%');
+    expect(percent(198 / 200)).toBe('99%');
   });
 });
 

@@ -118,7 +118,10 @@ const WORDS: Readonly<Record<LeadKind, string>> = {
  */
 export function percent(share: number): string {
   if (share > 0 && share < 0.005) return '<1%';
-  if (share < 1 && share > 0.995) return '>99%';
+  // The gap is inclusive where the other is not, because rounding is: 0.995
+  // rounds *to* 100, so it is the first share that would print as a whole
+  // population, and 0.005 rounds to 1 rather than to nothing.
+  if (share < 1 && share >= 0.995) return '>99%';
   return `${Math.round(share * 100)}%`;
 }
 
