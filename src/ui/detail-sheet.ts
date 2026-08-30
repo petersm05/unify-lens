@@ -93,6 +93,11 @@ export function mountDetailSheet(
     kind.textContent = '';
     name.textContent = 'Loading…';
     body.replaceChildren();
+    // Dropped before the reads, not after them. "Show in network" reads this,
+    // and following a relation now waits on two awaits rather than one — so a
+    // tap while the next object is loading would otherwise hand the graph the
+    // object you just left.
+    current = null;
 
     const detail = await busy.track(fetchDetail(session.kg, id));
     if (mine !== generation) return;

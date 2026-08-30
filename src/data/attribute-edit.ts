@@ -89,9 +89,12 @@ export interface EnumOption {
  * A read hands enum values back inconsistently — `attributeCategories` carries
  * both a `value` and a `displayValue`, and which of the two a given field holds
  * is not something the public types settle. Rather than guess, this accepts
- * either and returns the id, because the id is what a write has to carry:
- * `conditionFor` in `attributes.ts` already resolves the same ambiguity the
- * same way round when it builds a filter.
+ * either and returns the id, because the id is what a write has to carry.
+ *
+ * `equalsCondition` in `attributes.ts` does the same resolution for a filter,
+ * and takes only the label — which it can, because what it is handed is a bin
+ * label off a chart. What reaches here is whatever the read gave, so both have
+ * to go in.
  *
  * Ids are matched first. A label that happens to equal some *other* value's id
  * would otherwise resolve to that other value, which is a silent wrong save.
