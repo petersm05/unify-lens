@@ -109,6 +109,15 @@ describe('scanForLeads', () => {
     ]);
   });
 
+  it('will not round a coverage share up onto the word’s own threshold', () => {
+    const criticality = attribute();
+    // 5.995 of 12.000 is 49,96%, which is below half and rounds to 50 — the
+    // one number that reads as a denial of the word beside it.
+    const scan = scanForLeads(covered(criticality, 12_000, 5995), [criticality]);
+
+    expect(scan.leads[0]).toMatchObject({ word: 'Sparse', headline: '<50% covered' });
+  });
+
   it('routes the row at the attribute it is about', () => {
     const criticality = attribute();
     const scan = scanForLeads(covered(criticality, 100, 10), [criticality]);

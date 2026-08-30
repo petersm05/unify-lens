@@ -124,6 +124,21 @@ const WORDS: Readonly<Record<LeadKind, string>> = {
   outlier: 'Outlier',
 };
 
+/**
+ * A coverage share, never rounded up onto the line its word stands on.
+ *
+ * `coverageLead` only fires below `SPARSE`, so a share that prints as exactly
+ * that threshold got there by rounding — and "50% covered" under the word
+ * "Sparse", where sparse *means* below half, reads as a contradiction of the
+ * row's own claim. The same rule as `percent`'s two ends, applied to the
+ * boundary this module is the one that knows about.
+ */
+function coveragePercent(share: number): string {
+  const line = `${Math.round(SPARSE * 100)}%`;
+  const printed = percent(share);
+  return printed === line ? `<${line}` : printed;
+}
+
 /** Counts against a population, printed the way the coverage card prints them. */
 function of(part: number, whole: number, noun: string): string {
   return `${formatCount(part)} of ${formatCount(whole)} ${noun}`;
@@ -282,7 +297,7 @@ function coverageLead(choice: AttributeChoice, withValue: number, total: number)
     word: WORDS.sparse,
     title: choice.name,
     note: choice.categoryName,
-    headline: `${percent(share)} covered`,
+    headline: `${coveragePercent(share)} covered`,
     detail: of(total - withValue, total, 'not set'),
     choice,
     magnitude: 1 - share,
@@ -409,7 +424,7 @@ function rollUpCategories(
       title: best.choice.categoryName,
       note: `${formatCount(bucket.defines)} attributes`,
       headline: 'every one is sparse',
-      detail: `best covered is ${best.choice.name}, at ${percent(bestShare)}`,
+      detail: `best covered is ${best.choice.name}, at ${coveragePercent(bestShare)}`,
       choice: best.choice,
       // Averaged over the members, so a category of eight empty attributes
       // ranks above one of three that are merely thin.

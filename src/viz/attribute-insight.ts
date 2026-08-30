@@ -365,6 +365,8 @@ export function mountAttributeInsight(
    * since that would cancel a schema load still in flight.
    */
   let leadRun = 0;
+  /** Set while `runScan` is reading, so nothing re-offers what it is doing. */
+  let scanning = false;
   /**
    * The type `choices` holds the attributes of, or null while that is unsettled.
    *
@@ -1865,6 +1867,7 @@ export function mountAttributeInsight(
     // half and a superseded one is thrown away either way.
     if (run !== leadRun) return;
     const label = leadScan.textContent ?? '';
+    scanning = true;
     leadScan.disabled = true;
     leadScan.textContent = 'Reading…';
     try {
@@ -1880,6 +1883,7 @@ export function mountAttributeInsight(
       if (run !== leadRun) return;
       present(scanForLeads(sample, choices, counts), run);
     } finally {
+      scanning = false;
       // Only where nothing replaced it. A scan that landed has already drawn
       // the screen, and that screen decides what this button says next —
       // putting the old label back over it would name an action it no longer
@@ -1895,10 +1899,12 @@ export function mountAttributeInsight(
   /** Holds on to a scan, and shows it where nothing has been charted yet. */
   function present(result: Scan, run: number): void {
     if (run !== leadRun) return;
-    // Nothing was read, so there is nothing to say — including on the cached
-    // path, where a population that is empty under the current filter arrives
-    // here without the count that would have caught it.
-    if (result.sampled === 0) {
+    // Nothing read, or nothing readable: either way there is nothing to say.
+    // The empty population reaches here without a count on the cached path,
+    // and a type whose attributes are all references would otherwise get a
+    // card reporting across none of them, under an offer to count coverage
+    // for none of them.
+    if (result.sampled === 0 || result.examined === 0) {
       clearLeads(run);
       return;
     }
@@ -1976,6 +1982,10 @@ export function mountAttributeInsight(
     // last row would otherwise be a one-way door — the ranking is still there,
     // and nothing else reaches it.
     leadScan.hidden = !(uncounted || putAway);
+    // A read this button started is still running — dismissing a row redraws
+    // the card, and re-enabling the control here would let a second one be
+    // fired over the top of it. It says "Reading…" until that lands.
+    if (scanning) return;
     leadScan.disabled = false;
     if (uncounted) {
       const run = leadRun;
