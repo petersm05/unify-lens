@@ -136,10 +136,16 @@ export function peersFor(input: PeerInput): Peers | null {
       const at = rankAmong(ranked, own);
       if (at === null) return null;
 
-      const among = input.truncated ? 'those read' : formatCount(ranked.length);
-      // "later than", not "older than 1 - at". The caption has to be the same
-      // number the mark draws, or a row says 78% under a bar filled to 22%.
-      return { mark: { shape: 'position', at }, caption: rankPhrase(at, input.kind, among) };
+      // Named as a count whether the read was complete or not — unlike the
+      // tallies below, which take `of`. "Of those read" means the whole sample
+      // everywhere else on the panel, including the line at its foot, and this
+      // is a rank over the objects that have a value: two of four thousand
+      // read, under a caption promising four thousand. The number is exact
+      // either way; that the read was partial is what the foot line is for.
+      return {
+        mark: { shape: 'position', at },
+        caption: rankPhrase(at, input.kind, formatCount(ranked.length)),
+      };
     }
 
     case 'enum': {
@@ -201,10 +207,16 @@ export function peersFor(input: PeerInput): Peers | null {
  * of 412". So the ends are said in words here, and nothing in between needs
  * guarding: with a population of any size, a rank that rounds to 0 or 100 has
  * already been caught by one of them.
+ *
+ * Every phrase stays true under ties, which `rankAmong` does not count.
  */
 function rankPhrase(at: number, kind: AttributeKind, among: string): string {
   const verb = kind === 'date' ? 'later' : 'higher';
-  if (at === 0) return `${kind === 'date' ? 'the earliest' : 'the lowest'} of ${among}`;
+  // "Than none", not "the lowest": ties are not counted below, so a rank of
+  // zero is shared by every object holding the minimum, and on an attribute
+  // where half the estate is zero that would be a great many sheets each
+  // claiming to be the one.
+  if (at === 0) return `${verb} than none of ${among}`;
   if (at < 0.005) return `${verb} than a few of ${among}`;
   if (at >= 0.995) return `${verb} than all but a few of ${among}`;
   return `${verb} than ${Math.round(at * 100)}% of ${among}`;

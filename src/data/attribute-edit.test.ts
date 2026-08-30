@@ -257,6 +257,12 @@ describe('numbers', () => {
     ['1.000', 1],
     ['12,345', 12.345],
     ['1.234', 1.234],
+    // The range where a grouped figure has only one separator, and so is read
+    // as a decimal. Stated here rather than left as a gap between 1,000 and
+    // 1,234,567 — it is the cost of the tie-break, not an oversight.
+    ['1,500', 1.5],
+    ['9,999', 9.999],
+    ['1.500', 1.5],
     ['1,234,567', 1234567],
     ['1.234.567', 1234567],
     ['12.345.678.901', 12345678901],

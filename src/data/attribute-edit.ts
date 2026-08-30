@@ -261,10 +261,17 @@ export function parseDateInput(raw: string): Date | null {
  * The rule turns on repetition rather than on position. **A decimal separator
  * occurs at most once**, so a mark that appears twice is a group separator
  * whatever else is going on, and the other mark is the decimal point. That
- * reads `1.240.000,50` and `1,234,567.89` alike, and — the case a position
- * rule gets wrong — reads a grouped whole number like `1,240,000`, which is
- * exactly the form `formatCount` prints and so exactly what someone copies out
- * of this app and types back into it.
+ * reads `1.240.000,50` and `1,234,567.89` alike, and reads a grouped whole
+ * number like `1,240,000` — which a position rule could not, and which is the
+ * form this app prints anything over a million in.
+ *
+ * A figure between a thousand and ten thousand has only one separator when it
+ * is grouped, so `formatCount(1500)` prints `1,500` and this reads it as one
+ * and a half. That is the cost of the paragraph below, and it is a real one:
+ * a figure copied off the screen in that range and typed back changes by three
+ * orders of magnitude. What makes it the better half of the trade is that it
+ * takes a person typing, in a field showing them what they typed, where the
+ * alternative went wrong on its own.
  *
  * **One separator on its own is a decimal point**, always. `1,500` is one and
  * a half, not fifteen hundred. That is the half of this that is a judgement,

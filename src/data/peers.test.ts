@@ -109,7 +109,7 @@ describe('numeric attributes', () => {
       peers({ kind: 'real', values, own: 100 })?.caption,
       peers({ kind: 'date', values: [new Date(2020, 0, 1), new Date(2021, 0, 1)], own: new Date(2020, 0, 1) })?.caption,
     ];
-    expect(captions).toEqual(['the lowest of 5', 'the earliest of 2']);
+    expect(captions).toEqual(['higher than none of 5', 'later than none of 2']);
 
     const many = Array.from({ length: 400 }, (_, index) => index);
     expect(peers({ kind: 'real', values: many, own: 399 })?.caption).toBe(
@@ -118,6 +118,14 @@ describe('numeric attributes', () => {
     expect(peers({ kind: 'real', values: many, own: 1 })?.caption).toBe(
       'higher than a few of 400',
     );
+  });
+
+  // `rankAmong` does not count ties, so a rank of zero is shared by every
+  // object holding the minimum. "The lowest of 7" would be claimed by five of
+  // them at once; "higher than none" is true for all five.
+  it('does not call one of several equal minimums the lowest', () => {
+    const result = peers({ kind: 'integer', values: [0, 0, 0, 0, 0, 5, 9], own: 0 });
+    expect(result?.caption).toBe('higher than none of 7');
   });
 
   it('treats the three numeric kinds alike', () => {
@@ -316,20 +324,19 @@ describe('a truncated read', () => {
   // The rule the whole line lives under: a figure from a sample is a different
   // claim from one over the population, so the caption stops naming a total it
   // does not have.
-  it('stops naming a total it does not have', () => {
-    const complete = peers({ kind: 'money', values: [1, 2, 3, 4], own: 3 });
-    const partial = peers({ kind: 'money', values: [1, 2, 3, 4], own: 3, truncated: true });
+  it('stops naming a total the tally does not have', () => {
+    const complete = peers({ kind: 'enum', values: ['a', 'b'], own: 'a' });
+    const partial = peers({ kind: 'enum', values: ['a', 'b'], own: 'a', truncated: true });
 
-    expect(complete?.caption).toBe('higher than 50% of 4');
-    expect(partial?.caption).toBe('higher than 50% of those read');
+    expect(complete?.caption).toBe('1 of 2 share it');
+    expect(partial?.caption).toBe('1 of those read share it');
   });
 
-  it('qualifies every kind of caption, not only the ranked ones', () => {
+  it('qualifies every tally, not only some of them', () => {
     const captions = [
       peers({ kind: 'enum', values: ['a'], own: 'a', truncated: true }),
       peers({ kind: 'boolean', values: [true], own: true, truncated: true }),
       peers({ kind: 'string', values: ['a'], own: 'a', truncated: true }),
-      peers({ kind: 'date', values: [new Date(2020, 0, 1)], own: new Date(2020, 0, 1), truncated: true }),
       peers({ kind: 'money', values: [], missing: 2, own: null, truncated: true }),
     ].map((result) => result?.caption ?? '');
 
@@ -337,6 +344,15 @@ describe('a truncated read', () => {
       expect(caption, caption).toContain('those read');
       expect(caption, caption).not.toMatch(/of \d/);
     }
+  });
+
+  // A rank names its count either way. "Of those read" means the whole sample
+  // everywhere else on the panel, and a rank is taken over the objects that
+  // have a value — two of four thousand read, under a caption that would
+  // otherwise promise four thousand.
+  it('names what a rank was actually taken over, read whole or not', () => {
+    const partial = peers({ kind: 'money', values: [100, 200], missing: 3998, own: 200, truncated: true });
+    expect(partial?.caption).toBe('higher than 50% of 2');
   });
 });
 
