@@ -234,7 +234,7 @@ node scripts/make-icons.mjs
 | `src/data/view-writer.ts` | Writes a graph back to Unify as a view |
 | `src/data/attribute-rows.ts` | The object's values merged onto its type's schema, so the sheet can list what is *not* set |
 | `src/data/peers.ts` | Where one object's value sits among its peers — the record sheet's second line |
-| `src/data/attribute-edit.ts` | Reading what someone typed into a value of the right kind — separators, dates, what counts as unchanged. Nothing calls it: it is the half of editing that can be tested without a session, and the editor itself is #63 |
+| `src/data/attribute-edit.ts` | Reading what someone typed into a value of the right kind — separators, dates, what counts as unchanged. The half of editing that can be tested without a session; only `enumIdFor` has a caller so far, and the editor itself is #63 |
 | `src/ui/detail-sheet.ts` | The record slide-over |
 | `src/ui/search.ts` | Relevance-ranked object search |
 | `src/viz/bars.ts` | Shared single-series bar list, legend + table view |

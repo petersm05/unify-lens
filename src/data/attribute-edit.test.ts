@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AttributeKind } from './attributes';
 import {
   dateToInputValue,
@@ -344,6 +344,27 @@ describe('numbers', () => {
 });
 
 describe('dates', () => {
+  /**
+   * Run west of Greenwich, deliberately.
+   *
+   * A UTC-based implementation and a local one are the same code in UTC, so
+   * every assertion below passes on both — and CI runs in UTC. The bug these
+   * two functions exist to prevent would therefore ship green. Node re-reads
+   * `TZ` when it is assigned, so moving the clock for this block is what makes
+   * the assertions bite: under New York, `new Date('2019-03-14')` is the 13th.
+   */
+  const zone = process.env['TZ'];
+  beforeAll(() => {
+    process.env['TZ'] = 'America/New_York';
+  });
+  afterAll(() => {
+    process.env['TZ'] = zone;
+  });
+
+  it('is running somewhere the two implementations differ', () => {
+    expect(new Date(2019, 2, 14).getTimezoneOffset()).not.toBe(0);
+  });
+
   it('reads a date field value as that day, not the day before', () => {
     const value = parsed({ kind: 'date' }, '2019-03-14');
     expect(value).toBeInstanceOf(Date);
@@ -361,12 +382,8 @@ describe('dates', () => {
     }
   });
 
-  // The bug this pair exists to prevent is `new Date('2019-03-14')`, which is
-  // UTC midnight and so the 13th anywhere west of Greenwich. It cannot be
-  // caught by comparing the two parses: where the runner is itself in UTC they
-  // agree exactly, and CI's is. What *is* checkable everywhere is the property
-  // that makes the difference — local midnight of the named day — which a UTC
-  // parse fails in every zone but one, and this asserts in all of them.
+  // The bug this pair exists to prevent: `new Date('2019-03-14')` is UTC
+  // midnight, which is the 13th here.
   it('lands on local midnight rather than on an instant', () => {
     const date = parseDateInput('2019-03-14') as Date;
     expect([date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds()]).toEqual(

@@ -23,14 +23,20 @@ export interface AttributeRow {
   /** What the sheet prints, or `null` where the object has no value. */
   readonly display: string | null;
   /**
-   * The value as its own type, and for an enum always the **id**.
+   * The value as its own type, and for an enum its **id** wherever the schema
+   * can say which id it is.
    *
-   * A read hands an enum back as either its id or its label, and the two
-   * travel to different places: the id is what a write carries, the label is
-   * what `display` prints and what a sampled population is keyed by. Resolving
-   * it here means the ambiguity is settled once, at the edge, rather than
-   * followed around — and it is why comparing this value before and after an
-   * edit can be a plain comparison.
+   * A read hands an enum back as either its id or its label, and the two travel
+   * to different places: the id is what a write carries, the label is what
+   * `display` prints and what a sampled population is keyed by. Resolving it
+   * here settles the ambiguity once, at the edge, rather than following it
+   * around — which is what lets a comparison before and after an edit be a
+   * plain comparison.
+   *
+   * Wherever, not always: a row the schema did not list has no `enumValues` to
+   * resolve against, and neither does a value the metamodel has since dropped.
+   * Both keep what the read gave, because showing what the object holds beats
+   * showing nothing — so anything that must have an id has to check it has one.
    */
   readonly value: EditValue;
   readonly currency?: string;
