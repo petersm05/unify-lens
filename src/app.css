@@ -2276,12 +2276,6 @@ nav.tabs button {
   color: var(--text-secondary);
 }
 
-.sheet-note {
-  margin: 14px 0 0;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
 .sheet-section {
   margin-top: 22px;
 }
@@ -2611,64 +2605,277 @@ ul.facts {
 }
 
 /* One grid shared by every row, so icons, names and values line up in columns
-   down the whole sheet. */
+   down the whole sheet.
+
+   Two areas rather than two templates: the second holds the peer line, which
+   only a screen with room for it displays. Where it is not displayed the track
+   collapses and the row is the single line it has always been — so there is no
+   phone layout to keep in step with this one. */
 .fact {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.15fr) 14px;
+  grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.15fr) 36px;
+  grid-template-areas:
+    'icon name value chart'
+    '.    peer peer  .';
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
+  /* Set with the peer line, not here. The second track is declared either way,
+     so a gap left on would space the row against an empty track and make every
+     phone row 3px taller than the one it replaced. */
+  row-gap: 0;
   width: 100%;
   min-height: 40px;
-  padding: 5px 10px;
-  margin-left: -10px;
+  padding: 4px 8px;
+  margin-left: -8px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   background: transparent;
   font: inherit;
   text-align: left;
   color: inherit;
 }
 
+.fact > .icon {
+  grid-area: icon;
+}
+
 .plain-fact {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  grid-template-areas: 'name value';
 }
 
 .f-name {
+  grid-area: name;
   font-size: 13px;
   color: var(--text-secondary);
 }
 
+/* The value is what the row is about — the largest thing in it, right-aligned
+   so every value in the sheet ends on one edge, and in tabular figures so a
+   column of them can be read down.
+
+   A proportional track rather than `max-content`: a `text` attribute's value
+   is a paragraph, and a track sized to one takes the whole row and leaves the
+   name column at nothing. Right-aligning inside a fixed column puts every
+   value on the same edge anyway, which is all the alignment was for. */
 .f-value {
+  grid-area: value;
+  font-size: 15px;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* A `text` attribute's value is a paragraph, and a row is not where anyone
+   reads one — seven right-aligned lines at value weight is a wall where a
+   value should be. Two lines and then an ellipsis, with `title` carrying the
+   rest for a pointer.
+
+   On that kind alone. A blanket clamp reached a long vendor name, an enum
+   label and the Record block's own list of labels, each of which wrapped
+   perfectly well before and had nothing to tap for what was cut off. */
+.f-value.clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.f-value.unset {
+  font-size: 14px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* The Record block is a two-column list of facts about the object rather than
+   a column of measured values — a source, a date, a comma-separated set of
+   labels — so it keeps the older setting. */
+.plain-fact .f-value {
+  text-align: left;
   font-size: 14px;
   font-weight: 500;
+  font-variant-numeric: normal;
 }
 
-/* The affordance sits in its own column at the row's end — present but quiet,
-   and never shifting the columns beside it. */
-.f-go {
+/* Charting is its own control in a fixed final column, at the same horizontal
+   position on every row. That was the objection to an inline button here, and
+   it is the whole of it — what broke the column the names read down was a
+   control that moved, not a control.
+
+   Never fully faded: a tablet has no hover to bring it back with. */
+.f-chart {
+  grid-area: chart;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
   font-size: 13px;
   color: var(--series-1);
-  opacity: 0.9;
-  transition: opacity 130ms ease;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  position: relative;
 }
 
-.fact.chartable:hover {
+/* The glyph stays 36px so the row stays 44px tall, and the target it presents
+   is 44px square. The inset reaches into the row's own padding rather than
+   growing the row — this control replaced one that was the whole row, and it
+   should not be harder to hit than what it replaced. */
+.f-chart::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.f-chart:hover {
   background: var(--surface-2);
 }
 
-.fact.chartable:hover .f-go,
-.fact.chartable:focus-visible .f-go {
-  opacity: 1;
-  color: var(--series-1);
+@media (hover: hover) {
+  .f-chart {
+    opacity: 0.62;
+  }
+
+  .f-chart:hover,
+  .f-chart:focus-visible {
+    opacity: 1;
+  }
 }
 
-/* Where hovering exists the glyph can rest a little quieter, because hovering
-   the row brings it to full strength. It must never reach zero: a tablet has no
-   hover at all, so a control hidden until hover is a control nobody finds. */
-@media (hover: hover) {
-  .fact.chartable .f-go {
-    opacity: 0.55;
+/* ── the peer line ─────────────────────────────────────────────────── */
+
+/* Hidden by default and switched on, rather than drawn and then taken away: a
+   phone, a short landscape window and a sheet with no population to draw from
+   are then one code path instead of three.
+
+   700px clears an iPad mini in portrait (744) and stays above the widest phone
+   (430). The height bound is what keeps a phone in landscape out of it — 844
+   wide and 390 tall would pass the width test, and it has the least room of
+   the three. Forty two-line rows there is twice the scrolling for a comparison
+   nobody is on a phone to make. */
+.peer,
+.peer-note {
+  display: none;
+}
+
+@media (min-width: 700px) and (min-height: 600px) {
+  /* Only where there is a line to space away from. A sheet opened with no
+     population to draw from has no `.peer` at all, and would otherwise get the
+     gap anyway — three pixels taller per row than the same sheet on a phone,
+     for a track that is not there. */
+  .fact:has(.peer) {
+    row-gap: 3px;
   }
+
+  .peer {
+    grid-area: peer;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-height: 14px;
+  }
+
+  .peer-note {
+    display: block;
+  }
+}
+
+.peer .cap {
+  font-size: 11.5px;
+  line-height: 1.2;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.peer-track {
+  position: relative;
+  width: 104px;
+  flex: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--de-emphasis);
+}
+
+.peer-track .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: var(--series-1);
+}
+
+/* The marker carries a ring in the surface colour, so it stays a separate mark
+   where it sits on top of the fill rather than merging into its end. */
+.peer-track .tick {
+  position: absolute;
+  top: -3px;
+  width: 4px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--surface-1);
+}
+
+/* One segment per allowed value, in the metamodel's order, with the object's
+   own filled. How many there can be, and what colour the filled one takes, are
+   decided where the mark is built. */
+.peer-steps {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  width: 104px;
+  flex: none;
+  height: 6px;
+}
+
+.peer-steps i {
+  border-radius: 1px;
+  background: var(--de-emphasis);
+}
+
+.peer-steps i:first-child {
+  border-radius: 3px 1px 1px 3px;
+}
+
+.peer-steps i:last-child {
+  border-radius: 1px 3px 3px 1px;
+}
+
+.peer-note {
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+/* ── category headings ─────────────────────────────────────────────── */
+
+.cat-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cat-head h3 {
+  margin: 0;
+}
+
+.cat-head em {
+  font-style: normal;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  flex: none;
 }
 
 /* Matches .menu-btn, so the two options controls are visibly the same thing. */
