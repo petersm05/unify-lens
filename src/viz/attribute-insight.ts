@@ -1,7 +1,8 @@
-import type { ObjectType, UUID } from '@bizzdesign/sdk-bundle/browser';
+import type { AttributeFilter, MetaModel, ObjectType, UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Session } from '../sdk/client';
 import { labelFor, objectTypesFor } from '../sdk/metamodel';
 import {
+  conditionName,
   coverage,
   crossTab,
   type Grain,
@@ -25,13 +26,22 @@ import {
   type Bin,
   type RankedObject,
 } from '../data/attributes';
+import { scanForLeads, scannedAttributes, shortlist, type Lead, type Scan } from '../data/leads';
+import type { Sample } from '../data/sample-store';
 import { attributesForCached } from '../data/schema-cache';
 import { compatible, levelOf, marksFor, type Mark } from '../data/chart-spec';
 import { scopeExcluding, scopeFor, selectionFor, type FilterStore } from '../data/filter';
 import { busy } from '../ui/busy';
 import { countUp } from '../ui/motion';
 import { must } from '../ui/dom';
-import { attributeIcon, controlsIcon, filterIcon, sidebarIcon } from '../ui/icons';
+import {
+  attributeIcon,
+  controlsIcon,
+  dismissIcon,
+  filterIcon,
+  ideaIcon,
+  sidebarIcon,
+} from '../ui/icons';
 import {
   closesOnPick,
   laneNow,
@@ -47,7 +57,7 @@ import { renderDonut } from './donut';
 import { renderScatter, type Quadrant } from './scatter';
 import { renderTimeline } from './timeline';
 import { renderHeatmap } from './heatmap';
-import { formatCompact, formatCount, formatMoney, sampledObjects } from './theme';
+import { formatCompact, formatCount, formatMoney, percent, sampledObjects } from './theme';
 import type { SampledRead } from './theme';
 
 /**
@@ -110,6 +120,15 @@ export function mountAttributeInsight(
           <span>Object type</span>
           <div class="type-select"></div>
         </label>
+        <!-- The way back to the opening screen once a chart has replaced it.
+             Hidden until there is a screen behind it — an offer counts, since
+             taking it is what makes one. Deliberately the
+             rail's own row component: it is a row in the attribute panel, and
+             a second look-alike set of styles is how the two drift apart. -->
+        <button type="button" class="attr leads-link" hidden>
+          <span class="a-name">Worth a look</span>
+        </button>
+
         <div class="attr-list" role="list" aria-label="Attributes"></div>
       </aside>
 
@@ -232,6 +251,19 @@ export function mountAttributeInsight(
           <div class="objects-host card"></div>
         </div>
 
+        <!-- What the view opens on: an answer rather than a prompt. Sits
+             beside the placeholder rather than replacing it, because there are
+             populations too large to read speculatively and those still open
+             on the empty line and the list. -->
+        <section class="card leads" hidden aria-label="Worth a look">
+          <div class="card-title">
+            <h2>Worth a look</h2>
+            <p class="sub" data-k="leads-sub"></p>
+          </div>
+          <div class="lead-rows" role="list"></div>
+          <button type="button" class="lead-scan" hidden></button>
+        </section>
+
         <button type="button" class="placeholder" disabled>Pick an attribute to chart it.</button>
       </div>
     </section>
@@ -262,6 +294,11 @@ export function mountAttributeInsight(
   railToggle.prepend(sidebarIcon());
   const insight = q('.insight', 'insight');
   const placeholder = q<HTMLButtonElement>('.placeholder', 'placeholder');
+  const leadsCard = q('.leads', 'leads card');
+  const leadRows = q('.lead-rows', 'lead rows');
+  const leadScan = q<HTMLButtonElement>('.lead-scan', 'scan button');
+  const leadsLink = q<HTMLButtonElement>('.leads-link', 'leads link');
+  leadsLink.prepend(ideaIcon());
 
   /**
    * The empty pane's line.
@@ -275,6 +312,10 @@ export function mountAttributeInsight(
     placeholder.hidden = false;
     placeholder.textContent = message;
     placeholder.disabled = !canPick;
+    // The line and the opening screen are two answers to an empty pane, so
+    // saying one takes the other down. Structural rather than remembered at
+    // each call: a scan landing after a restore had already put both up.
+    leadsCard.hidden = true;
   }
   const plot = q('.plot', 'plot');
   const donutHost = q('.donut', 'donut');
@@ -310,6 +351,46 @@ export function mountAttributeInsight(
   /** '' = choose from the span; otherwise a fixed period. */
   let grain: '' | Grain = '';
   let generation = 0;
+  /** The opening screen's readings, once a population has been scanned. */
+  let scan: Scan | null = null;
+  /**
+   * Invalidates a scan, and it is the only thing that does.
+   *
+   * Not `generation`, which every chart bumps: a scan started before an
+   * attribute was picked is still true of the population when the chart
+   * lands, and checking it against `generation` threw away exactly the scan
+   * the rail's way back was there to return to. What makes a scan stale is a
+   * different population — another type, another filter — and both of those
+   * come through here. A filter change must not bump `generation` either,
+   * since that would cancel a schema load still in flight.
+   */
+  let leadRun = 0;
+  /** Set while `runScan` is reading, so nothing re-offers what it is doing. */
+  let scanning = false;
+  /**
+   * The type `choices` holds the attributes of, or null while that is unsettled.
+   *
+   * A scan is one type's attributes against that type's population, and the two
+   * halves arrive separately — so this is what says they agree. `select.onChange`
+   * sets the shared filter *before* loading the schema, so every subscriber is
+   * called with the new type on screen and the previous one's `choices` in hand,
+   * and `prune` calls them again from inside the load. Both used to start a scan
+   * of one type's objects through another type's schema.
+   *
+   * Set last in `loadAttributes` and only on the path that has something to
+   * chart, so `schemaType === type` also means `choices` is not empty.
+   */
+  let schemaType: ObjectType | null = null;
+  /**
+   * Rows put away, per type, for as long as the view is mounted.
+   *
+   * Not stored anywhere. A dismissal is "not this, now" against a ranking of a
+   * model that keeps moving; carrying last week's into a model that has since
+   * changed would hide the row that has become the point. Which is also the
+   * answer to what ranks above what: the order is an opinion, and dismissing
+   * is how a reader disagrees with it.
+   */
+  const dismissed = new Map<ObjectType, Set<string>>();
   let teardownPlot: (() => void) | null = null;
 
   /**
@@ -356,8 +437,8 @@ export function mountAttributeInsight(
       // Onto the row they are already on, so the list opens where they left it
       // rather than at the top of forty-odd attributes.
       (
-        rail.querySelector<HTMLElement>('.attr.on') ??
-        rail.querySelector<HTMLElement>('.attr:not(:disabled)') ??
+        rail.querySelector<HTMLElement>('.attr.on:not([hidden])') ??
+        rail.querySelector<HTMLElement>('.attr:not(:disabled):not([hidden])') ??
         rail
       ).focus();
     } else {
@@ -377,6 +458,7 @@ export function mountAttributeInsight(
   }
 
   placeholder.addEventListener('click', () => setRail(true));
+  leadsLink.addEventListener('click', () => showLeads());
   railToggle.addEventListener('click', () =>
     setRail(!(lane === 'wide' ? wideOpen : narrowOpen)),
   );
@@ -473,12 +555,28 @@ export function mountAttributeInsight(
       void loadAttributes().catch(fail);
       return;
     }
-    if (primary) void render().catch(fail);
+    // A different scope is a different population, so whatever the opening
+    // screen was holding is about something else now.
+    if (!primary) {
+      restartLeads();
+      return;
+    }
+    // With a chart up it is dropped rather than rescanned: nobody is looking
+    // at that screen, and rescanning on every bar tapped would start a
+    // population read per filter. The row in the rail asks for one when there
+    // is actually someone waiting for the answer.
+    dropScan();
+    void render().catch(fail);
   });
 
   async function loadAttributes(): Promise<void> {
     const mine = ++generation;
+    schemaType = null;
     insight.hidden = true;
+    leadsCard.hidden = true;
+    leadsLink.hidden = true;
+    leadsLink.classList.remove('on');
+    dropScan();
     say('Reading the attribute schema…');
     attrList.replaceChildren();
     primary = null;
@@ -524,10 +622,16 @@ export function mountAttributeInsight(
 
     say('Pick an attribute to chart it.', true);
 
+    // The schema and the type on screen now agree, which is what a scan needs
+    // and what every other caller of it is waiting for. After `prune` above,
+    // so its own notification is refused rather than starting a second one.
+    schemaType = type;
+
     // The type is settled and the population read takes seconds, so it starts
     // now rather than when an attribute is tapped — the moment when someone is
     // actually waiting. Nothing is guessed here: this is the type they chose.
-    void prefetchPopulation(type, mine);
+    // What it reads also answers the opening screen.
+    void beginLeads().catch(fail);
 
     // Grouped by category with a sticky heading: the category was previously
     // repeated on all forty-odd rows, which is a lot of ink to say the same
@@ -554,6 +658,10 @@ export function mountAttributeInsight(
             item.setAttribute('role', 'listitem');
             item.disabled = !isPlottable(choice);
             item.title = `${choice.name} · ${choice.kind}`;
+            // What `markRail` matches on. Two attributes can share a name —
+            // and one name can be a prefix of another, which is how "Cost"
+            // used to light up "Cost centre" beside it.
+            item.dataset['key'] = keyOf(choice);
 
             const name = document.createElement('span');
             name.className = 'a-name';
@@ -563,9 +671,8 @@ export function mountAttributeInsight(
 
             if (!item.disabled) {
               item.addEventListener('click', () => {
-                attrList.querySelectorAll('.attr').forEach((other) => other.classList.remove('on'));
-                item.classList.add('on');
                 primary = choice;
+                markRail();
                 secondary = null;
                 mark = null;
                 // The list has done its job; where they take turns the chart
@@ -592,6 +699,10 @@ export function mountAttributeInsight(
   async function render(): Promise<void> {
     if (!primary) return;
     const mine = ++generation;
+    // A chart is what the leads were offering; it replaces them rather than
+    // pushing them down the page.
+    leadsCard.hidden = true;
+    leadsLink.classList.remove('on');
 
     const pairs = compatible(primary, choices);
     compare.setOptions([
@@ -1486,8 +1597,11 @@ export function mountAttributeInsight(
     }
     gaugeFill.style.strokeDashoffset = `${GAUGE_ARC * (1 - filled)}`;
 
+    // The same rule the opening screen's rows print by, which is the point of
+    // it being one rule: a row reading "<1% covered" opened a gauge that
+    // rounded the same share to "0%".
     const node = container.querySelector<HTMLElement>('[data-k="cov-value"]');
-    if (node) countUp(node, filled * 100, (value) => `${Math.round(value)}%`);
+    if (node) countUp(node, filled * 100, (value) => percent(value / 100));
     set('cov-state', word);
 
     // Not the part and the whole: the card beside this one already carries
@@ -1533,34 +1647,476 @@ export function mountAttributeInsight(
     topSection.hidden = true;
   }
 
-  /**
-   * Reads the population ahead of being asked for it, when that is a good trade.
-   *
-   * Not always: an enum chart is two counts, and `enumDistribution` uses a
-   * sample only when a complete one already exists rather than starting a read
-   * for one. Fetching thousands of objects so an enum chart can skip two counts
-   * would be a loss, and a larger estate makes it a worse one. So the size is
-   * checked first — a count is cheap — and the read only happens where it is
-   * bounded enough to pay for every chart that follows.
-   */
-  async function prefetchPopulation(forType: ObjectType, mine: number): Promise<void> {
-    const scope = scopeFor(filters.get());
-    if (session.sample.peek(forType, scope)) return;
+  // ── worth a look: the opening screen ───────────────────────────────
 
+  /**
+   * Reads the population ahead of being asked for it, and says what is in it.
+   *
+   * The read is not always worth starting: an enum chart is two counts, and
+   * `enumDistribution` uses a sample only when a complete one already exists
+   * rather than starting a read for one. Fetching thousands of objects so an
+   * enum chart can skip two counts would be a loss, and a larger estate makes
+   * it a worse one. So the size is checked first — a count is cheap — and the
+   * read only happens where it is bounded enough to pay for every chart that
+   * follows.
+   *
+   * That same bound decides whether the opening screen answers or asks. Within
+   * it the scan is free: the population is being read anyway, it carries every
+   * attribute of every object, and `scanForLeads` needs nothing else — so the
+   * view opens on what is worth looking at instead of on an empty pane. Past
+   * it, the honest offer is a button: a screen that takes twelve seconds to
+   * tell you what to look at is worse than one that admits it has not looked.
+   */
+  async function beginLeads(): Promise<void> {
+    if (!scannable()) return;
+
+    const forType = type;
+    const run = ++leadRun;
+    const scope = scopeFor(filters.get());
+
+    const held = session.sample.peek(forType, scope);
+    if (held) {
+      present(scanForLeads(held, choices), run);
+      return;
+    }
+
+    // Each read is caught on its own rather than the whole body: reading is
+    // best effort — whatever needs the population will ask for it again — but
+    // a failure in what is drawn from it is a defect, and one `catch` around
+    // both would swallow it.
+    let count: number;
     try {
-      const count = await session.kg
+      count = await session.kg
         .getObjects({
           filter: { types: [forType], ...(scope ? { attributeFilter: scope } : {}) },
         })
         .getCount();
-      if (mine !== generation || count === 0 || count > PREFETCH_LIMIT) return;
+    } catch {
+      clearLeads(run);
+      return;
+    }
+    if (run !== leadRun) return;
 
+    // Nothing to look at, and something else may be on screen saying there is
+    // — a filter that matches nothing arrives here after a scan of the
+    // population it narrowed.
+    if (count === 0) {
+      clearLeads(run);
+      return;
+    }
+
+    if (count > PREFETCH_LIMIT) {
+      offerScan(forType, count, run);
+      return;
+    }
+
+    let sample: Sample;
+    try {
       // Deliberately outside busy.track: this is work nobody asked for, and a
       // progress bar for it would report the app as busy when it is not.
-      await session.sample.get(forType, scope);
+      sample = await session.sample.get(forType, scope);
     } catch {
-      // Best effort. Whatever needs the population will read it itself.
+      clearLeads(run);
+      return;
     }
+    if (run !== leadRun) return;
+
+    present(scanForLeads(sample, choices), run);
+  }
+
+  /**
+   * Coverage for every attribute a scan reads, counted server-side.
+   *
+   * Only ever on a path someone asked for. A complete sample already holds
+   * coverage exactly, and where it fell short the scan leaves coverage out
+   * rather than reading a prefix as a population — so this is what buys the
+   * coverage rows back, and it is not cheap enough to spend unasked: two
+   * counts per attribute, forty-odd attributes, and `batchMaxRequests` is 16,
+   * so it is several round trips rather than the one a batch suggests. No
+   * items are fetched by any of them.
+   *
+   * Best effort: without the counts the scan still has its value readings to
+   * show, and `exactCoverage` is what says which of the two it is.
+   */
+  async function coverageCounts(
+    forType: ObjectType,
+    scope: AttributeFilter<MetaModel> | undefined,
+  ): Promise<ReadonlyMap<string, Coverage> | undefined> {
+    try {
+      const counted = await Promise.all(
+        scannedAttributes(choices).map(
+          async (choice) =>
+            [
+              conditionName(choice),
+              await coverage(session.kg, session.sample, forType, choice, scope),
+            ] as const,
+        ),
+      );
+      return new Map(counted);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Drops the scan in hand, and any still in flight with it.
+   *
+   * Both, always: dropping only the one in hand leaves a read started against
+   * the old population free to land afterwards and put its readings back.
+   */
+  function dropScan(): void {
+    leadRun += 1;
+    scan = null;
+  }
+
+  /**
+   * Scans again, for a population that has just become a different one.
+   *
+   * The rows stay up while it runs, dimmed and inert — the same trade the
+   * chart makes, and for the same reason: taking them down loses the reader's
+   * place, and being inert is what stops a stale row from being opened or
+   * dismissed in the meantime.
+   */
+  function restartLeads(): void {
+    dropScan();
+    // Only dimmed where something is going to replace it. A schema load in
+    // flight takes the card down itself, and dimming it on the way would be a
+    // card left grey with nothing coming.
+    if (!scannable()) return;
+    leadsBusy(true);
+    void beginLeads().catch(fail);
+  }
+
+  /**
+   * Dims the opening screen while the next scan runs, and takes it out of
+   * reach — or puts it back.
+   *
+   * `pointer-events: none` is only half of out of reach: the rows are buttons,
+   * and a keyboard gets to them regardless, which is a stale row opened or
+   * dismissed while the list that replaces it is being computed.
+   */
+  function leadsBusy(working: boolean): void {
+    leadsCard.classList.toggle('busy', working);
+    leadsCard.inert = working;
+  }
+
+  /**
+   * Whether a scan would describe what is on screen.
+   *
+   * The whole precondition: a load in progress leaves `schemaType` null and
+   * starts the scan itself when it has both halves, so nothing else has to
+   * know when that is.
+   */
+  function scannable(): boolean {
+    return schemaType === type;
+  }
+
+  /**
+   * Takes the opening screen down, where there is nothing behind it.
+   *
+   * A stale card is worse than none: it is a set of readings about a
+   * population that is no longer the one on screen.
+   */
+  function clearLeads(run: number): void {
+    if (run !== leadRun) return;
+    scan = null;
+    leadsCard.hidden = true;
+    leadsBusy(false);
+    leadsLink.hidden = true;
+    leadsLink.classList.remove('on');
+    if (!primary) say('Pick an attribute to chart it.', true);
+  }
+
+  /**
+   * The offer, where the population is too large to read on spec.
+   *
+   * It says how much it is about to read, because that is the part the reader
+   * is being asked to decide about — and it is the same read every chart of
+   * this type would start anyway, so nothing is wasted by saying yes.
+   */
+  function offerScan(forType: ObjectType, count: number, run: number): void {
+    scan = null;
+    // There is a screen behind the row now, even though it is an offer rather
+    // than an answer — and after a chart has covered it, the row is the only
+    // way back to it.
+    leadsLink.hidden = false;
+    if (primary) return;
+    leadsCard.hidden = false;
+    leadsBusy(false);
+    placeholder.hidden = true;
+    leadRows.replaceChildren();
+    set(
+      'leads-sub',
+      `${formatCount(count)} ${labelFor(forType)} objects is more than is read without being asked. One read covers every attribute at once, and the rows say so where it has to stop short of the whole population.`,
+    );
+    leadScan.hidden = false;
+    leadScan.disabled = false;
+    leadScan.textContent = 'Scan the population';
+    leadScan.onclick = () => void runScan(forType, run).catch(fail);
+  }
+
+  /**
+   * The scan someone asked for.
+   *
+   * Inside `busy.track`, unlike the speculative read: this one has a person
+   * waiting on it, which is exactly what the progress bar is for.
+   */
+  async function runScan(forType: ObjectType, run: number): Promise<void> {
+    // The offer this button belongs to may have been superseded — checked
+    // before the read rather than after it, since the read is the expensive
+    // half and a superseded one is thrown away either way.
+    if (run !== leadRun) return;
+    const label = leadScan.textContent ?? '';
+    scanning = true;
+    leadScan.disabled = true;
+    leadScan.textContent = 'Reading…';
+    try {
+      const scope = scopeFor(filters.get());
+      const sample = await busy.track(session.sample.get(forType, scope));
+      if (run !== leadRun) return;
+
+      // Only where the read fell short: a complete one is the population, and
+      // the scan takes coverage straight off it.
+      const counts = sample.truncated
+        ? await busy.track(coverageCounts(forType, scope))
+        : undefined;
+      if (run !== leadRun) return;
+      present(scanForLeads(sample, choices, counts), run);
+    } finally {
+      scanning = false;
+      // Only where nothing replaced it. A scan that landed has already drawn
+      // the screen, and that screen decides what this button says next —
+      // putting the old label back over it would name an action it no longer
+      // performs. Where the run was superseded, an enabled button reading
+      // "Reading…" that does nothing is the thing to avoid.
+      if (run !== leadRun) {
+        leadScan.disabled = false;
+        leadScan.textContent = label;
+      }
+    }
+  }
+
+  /** Holds on to a scan, and shows it where nothing has been charted yet. */
+  function present(result: Scan, run: number): void {
+    if (run !== leadRun) return;
+    // Nothing read, or nothing readable: either way there is nothing to say.
+    // The empty population reaches here without a count on the cached path,
+    // and a type whose attributes are all references would otherwise get a
+    // card reporting across none of them, under an offer to count coverage
+    // for none of them.
+    if (result.sampled === 0 || result.examined === 0) {
+      clearLeads(run);
+      return;
+    }
+    scan = result;
+    leadsLink.hidden = false;
+    // A chart is already up — from a link, from a record, or because the read
+    // took long enough that an attribute was picked while it ran. The scan is
+    // kept and the rail carries the way to it rather than pulling the chart
+    // out from under someone who asked for it.
+    if (primary) return;
+    renderLeads();
+  }
+
+  /**
+   * The rows themselves.
+   *
+   * Re-run rather than patched when a row is dismissed, because the shortlist
+   * is a window onto a longer ranking: taking one row out promotes the next of
+   * its kind, which is a different list and not a shorter one.
+   */
+  function renderLeads(): void {
+    if (!scan) return;
+    const shown = shortlist(scan.leads, dismissedFor(type));
+    const putAway = shown.length === 0 && scan.leads.length > 0;
+    /** The scan left coverage out, and asking for it is a round trip away. */
+    const uncounted = scan.truncated && !scan.exactCoverage;
+
+    insight.hidden = true;
+
+    // The count of attributes and the read behind them. A truncated scan is a
+    // reading of a prefix, and the caveat has to cover the whole row and not
+    // only its percentage: the counts beside it are counts within that read,
+    // and an outlier's multiple is a ratio of two figures found inside it.
+    const basis = scan.truncated
+      ? sampledObjects(scan)
+      : `${formatCount(scan.sampled)} ${labelFor(type)} objects`;
+    const across = `${formatCount(scan.examined)} attribute${scan.examined === 1 ? '' : 's'} of ${basis}`;
+    const caveat = !scan.truncated
+      ? ''
+      : scan.exactCoverage
+        ? ' Coverage is counted across the whole population; every other figure is that read’s.'
+        : ' Coverage is left out: this read stopped short, and a share of what it reached is not a share of the whole. Every figure here is that read’s.';
+    // An empty list has two meanings and they are not the same claim: nothing
+    // was found, or everything found has been put away by the reader. The
+    // first is the empty pane's own line, which is also the control that opens
+    // the attribute list — a card telling someone to pick an attribute while
+    // hiding the button that does it is a dead end on a phone.
+    if (shown.length === 0 && !putAway && !uncounted) {
+      say(`Nothing stands out across ${across}. Pick an attribute to chart it.`, true);
+      leadsLink.classList.remove('on');
+      return;
+    }
+
+    placeholder.hidden = true;
+    leadsCard.hidden = false;
+    leadsBusy(false);
+    // The rail's own row for this screen reads as selected while it is the
+    // screen, the way an attribute's row does.
+    leadsLink.classList.add('on');
+
+    set(
+      'leads-sub',
+      putAway
+        ? `Everything found across ${across} has been put away.`
+        : shown.length === 0
+          ? `Nothing stands out across ${across}.${caveat}`
+          : `Across ${across}. Each row opens the chart behind it.${caveat}`,
+    );
+
+    leadRows.replaceChildren(...shown.map(leadRow));
+
+    // One action, and which one it is has an order: counting coverage changes
+    // what the list contains, so it comes first, and bringing rows back is
+    // still there afterwards if they are still all put away. Dismissing the
+    // last row would otherwise be a one-way door — the ranking is still there,
+    // and nothing else reaches it.
+    leadScan.hidden = !(uncounted || putAway);
+    // A read this button started is still running — dismissing a row redraws
+    // the card, and re-enabling the control here would let a second one be
+    // fired over the top of it. It says "Reading…" until that lands.
+    if (scanning) return;
+    leadScan.disabled = false;
+    if (uncounted) {
+      const run = leadRun;
+      leadScan.textContent = 'Count coverage across the population';
+      leadScan.onclick = () => void runScan(type, run).catch(fail);
+    } else if (putAway) {
+      leadScan.textContent = 'Bring back the rows I put away';
+      leadScan.onclick = () => {
+        dismissedFor(type).clear();
+        renderLeads();
+      };
+    }
+  }
+
+  /**
+   * One row: the reading, and a way to put it away.
+   *
+   * Two buttons rather than one with a corner that behaves differently —
+   * opening the chart and dismissing the row are separate targets, both of
+   * them large enough to hit on a phone.
+   */
+  function leadRow(lead: Lead): HTMLElement {
+    const row = document.createElement('div');
+    row.className = `lead ${lead.kind}`;
+    row.setAttribute('role', 'listitem');
+
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'lead-open';
+
+    // The kind as a word, not only as the hue behind it.
+    const word = document.createElement('span');
+    word.className = 'lead-word';
+    word.textContent = lead.word;
+
+    const title = document.createElement('span');
+    title.className = 'lead-title';
+    title.textContent = lead.title;
+
+    const note = document.createElement('span');
+    note.className = 'lead-note';
+    note.textContent = lead.note;
+
+    const headline = document.createElement('span');
+    headline.className = 'lead-headline';
+    headline.textContent = lead.headline;
+
+    const detail = document.createElement('span');
+    detail.className = 'lead-detail';
+    detail.textContent = lead.detail;
+
+    open.append(word, title, note, headline, detail);
+    open.addEventListener('click', () => openLead(lead));
+
+    const hide = document.createElement('button');
+    hide.type = 'button';
+    hide.className = 'lead-hide';
+    hide.setAttribute('aria-label', `Dismiss ${lead.title}`);
+    hide.title = `Dismiss ${lead.title}`;
+    hide.append(dismissIcon());
+    hide.addEventListener('click', () => {
+      dismissedFor(type).add(lead.id);
+      renderLeads();
+    });
+
+    row.append(open, hide);
+    return row;
+  }
+
+  /** Opens the chart a row is about, which is the whole point of the row. */
+  function openLead(lead: Lead): void {
+    // The scan holds the choices it was given, so this is the same object the
+    // rail lists — but it is looked up rather than assumed, since a schema
+    // revalidation can replace the array underneath a rendered row.
+    primary = choices.find((candidate) => isSame(candidate, lead.choice)) ?? lead.choice;
+    secondary = null;
+    mark = null;
+    sizeKey = null;
+    markRail();
+    void render().catch(fail);
+  }
+
+  /**
+   * Back to the opening screen, from the rail.
+   *
+   * Nothing is re-read: the scan is the one already in hand, and the rows are
+   * re-derived because a dismissal may have moved the list on since.
+   */
+  function showLeads(): void {
+    generation += 1;
+    insight.classList.remove('busy');
+    insight.hidden = true;
+    primary = null;
+    secondary = null;
+    mark = null;
+    markRail();
+    if (closesOnPick(lane)) narrowOpen = false;
+    applyRail(true);
+    onStateChange();
+
+    if (scan) {
+      renderLeads();
+      return;
+    }
+
+    // The population was too large to read on spec, so the row leads to the
+    // offer rather than to an answer — and asking again is worth it, because
+    // a chart drawn since may have read the population already, in which case
+    // this comes back with the answer instead.
+    say('Looking for what is worth a chart…');
+    restartLeads();
+  }
+
+  function dismissedFor(forType: ObjectType): Set<string> {
+    const put = dismissed.get(forType) ?? new Set<string>();
+    dismissed.set(forType, put);
+    return put;
+  }
+
+  /**
+   * Marks the rail row for whatever is charted, and clears every other.
+   *
+   * By the key the row was built with, not by its text: a row was matched with
+   * `textContent.includes(name)`, so charting "Cost" also marked "Cost centre",
+   * and `applyRail` then opened the panel focused on whichever came first.
+   */
+  function markRail(): void {
+    const key = primary ? keyOf(primary) : null;
+    attrList.querySelectorAll<HTMLElement>('.attr').forEach((item) => {
+      item.classList.toggle('on', key !== null && item.dataset['key'] === key);
+    });
   }
 
   function reveal(): void {
@@ -1770,6 +2326,7 @@ export function mountAttributeInsight(
   function fail(error: unknown): void {
     insight.classList.remove('busy');
     insight.hidden = true;
+    leadsCard.hidden = true;
     say(error instanceof Error ? error.message : String(error));
   }
 
@@ -1825,9 +2382,7 @@ export function mountAttributeInsight(
     mark = null;
     sizeKey = null;
 
-    attrList.querySelectorAll('.attr').forEach((item) => {
-      item.classList.toggle('on', item.textContent?.includes(primary?.name ?? '\u0000') === true);
-    });
+    markRail();
 
     // Charting from a record is a request for that chart, so it lands on the
     // chart rather than on the list it was picked from. Before the render, so
@@ -1861,13 +2416,14 @@ export function mountAttributeInsight(
 
     if (!primary) {
       insight.hidden = true;
-      say('Pick an attribute to chart it.', true);
+      // Not over the opening screen: a population already in hand is scanned
+      // during the load above, and that screen is what a link with no chart
+      // in it should land on.
+      if (leadsCard.hidden) say('Pick an attribute to chart it.', true);
       return;
     }
 
-    attrList.querySelectorAll('.attr').forEach((item) => {
-      item.classList.toggle('on', item.textContent?.includes(primary?.name ?? '\u0000') === true);
-    });
+    markRail();
     // A shared link describes a chart, not a device: where the panels take
     // turns it opens on the chart it names, and where both fit the reader's own
     // remembered choice stands, because the rail is theirs and not the
@@ -1903,6 +2459,9 @@ export function mountAttributeInsight(
       document.removeEventListener('keydown', onRailEscape);
       stopLane();
       unsubscribe();
+      // A scan still in flight draws into this view when it lands, so it is
+      // invalidated here the way a chart is by `generation`.
+      dropScan();
       objectTable?.destroy();
       teardownPlot?.();
       generation += 1;

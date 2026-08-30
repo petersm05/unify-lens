@@ -364,6 +364,192 @@ main.pane {
   color: var(--text-primary);
 }
 
+/* ── worth a look ──────────────────────────────────────────────────── */
+
+/* The screen the view opens on. Its own container, for the same reason the
+   coverage card carries one: the same iPad gives this card a 500px column with
+   the attribute panel open beside it and a 280px one without, and neither is
+   the viewport width. */
+.leads {
+  container-type: inline-size;
+  container-name: leads;
+}
+
+.lead-rows {
+  display: grid;
+  gap: 6px;
+}
+
+/* The row and the way to put it away, side by side — one button with a corner
+   that behaves differently is how a dismissal gets tapped by accident. */
+.lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 4px;
+  border-radius: 12px;
+}
+
+.lead-open {
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 12px;
+  min-height: 52px;
+  padding: 9px 12px;
+  display: grid;
+  grid-template-columns: 9ch minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-areas:
+    'word title headline'
+    'word note detail';
+  align-items: center;
+  column-gap: 14px;
+  row-gap: 1px;
+  transition: background 130ms ease;
+}
+
+.lead-open:hover,
+.lead-open:active {
+  background: var(--surface-2);
+}
+
+/* The kind as a word first. Only the two coverage readings take a hue, and it
+   is the gauge's own: an attribute this calls sparse opens on a gauge that
+   says sparse in the same colour. A dominant value and a distant maximum are
+   observations rather than states — colouring them would claim a severity the
+   figures do not support. */
+.lead-word {
+  grid-area: word;
+  align-self: center;
+  font-size: 11px;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.lead.sparse .lead-word,
+.lead.empty .lead-word {
+  color: var(--status-serious);
+}
+
+.lead-title {
+  grid-area: title;
+  font-size: 14px;
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lead-note {
+  grid-area: note;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lead-headline {
+  grid-area: headline;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.lead-detail {
+  grid-area: detail;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.lead-hide {
+  appearance: none;
+  font: inherit;
+  flex: none;
+  width: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  transition: background 130ms ease;
+}
+
+.lead-hide:hover,
+.lead-hide:active {
+  background: var(--surface-2);
+}
+
+.lead-hide .icon {
+  color: var(--text-muted);
+}
+
+/* Where the card is narrow the three columns become one. The reading stays
+   under the name it is about rather than being squeezed beside it. */
+@container leads (max-width: 470px) {
+  .lead-open {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'word'
+      'title'
+      'note'
+      'headline'
+      'detail';
+    row-gap: 2px;
+    padding: 11px 12px;
+  }
+
+  .lead-word {
+    padding: 0 0 2px;
+  }
+
+  /* Stacked, the rows are tall blocks of text and the gap alone stops reading
+     as a boundary between them. */
+  .lead + .lead {
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+}
+
+/* The card's one action — an offer to read, or the way back to rows that were
+   put away. Set off from whatever is above it, which is a sentence in one case
+   and the last row in the other. */
+.lead-scan {
+  appearance: none;
+  margin-top: 8px;
+  border: 0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 560;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 11px;
+  background: var(--series-1);
+  color: var(--on-accent);
+}
+
+.lead-scan:disabled {
+  opacity: 0.6;
+}
+
+/* Separated from the attributes below it: it is a screen, not one of them.
+   Qualified by the panel it sits in on purpose — `.attr` is redefined further
+   down the file, and at equal specificity the later rule takes the border and
+   the padding back off again. */
+.rail .leads-link {
+  margin-bottom: 6px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+}
+
 /* ── figures ───────────────────────────────────────────────────────── */
 
 .kpis {
@@ -484,8 +670,9 @@ main.pane {
 
 /* The viewBox is centred on the circle, so filling the box centres the figure
    in the arc without a second set of numbers to keep in step. The size is set
-   to clear the stroke at three digits — "100%" is the widest the figure ever
-   gets, and it has to sit inside the arc rather than on it. */
+   to clear the stroke at four characters — "100%" and ">99%", which `percent`
+   prints where a gap is real but rounds away — and it has to sit inside the
+   arc rather than on it. */
 .kpi .gauge-value {
   position: absolute;
   inset: 0;
@@ -1449,8 +1636,10 @@ table.data th.num {
 }
 
 /* The previous chart stays readable while the next one is computed — it is
-   dimmed and inert rather than replaced, so the reader keeps their place. */
-.insight.busy {
+   dimmed and inert rather than replaced, so the reader keeps their place. The
+   opening screen makes the same trade while it is rescanned. */
+.insight.busy,
+.leads.busy {
   opacity: 0.45;
   pointer-events: none;
   transition: opacity 140ms ease;

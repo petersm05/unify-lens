@@ -155,6 +155,10 @@
                 </button>
               </div>
             </label>
+            <button type="button" class="attr leads-link">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="a-name">Worth a look</span>
+            </button>
             <div class="attr-list" role="list" aria-label="Attributes">
               <h3 class="rail-head">General</h3>
               <button type="button" class="attr on" role="listitem">
@@ -241,6 +245,76 @@
 
               <div class="objects-host card"></div>
             </div>
+            <section class="card leads" aria-label="Worth a look">
+              <div class="card-title">
+                <h2>Worth a look</h2>
+                <p class="sub"></p>
+              </div>
+              <div class="lead-rows" role="list">
+                <div class="lead empty coverage-row" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">Unused</span>
+                    <span class="lead-title">Financials</span>
+                    <span class="lead-note">8 attributes</span>
+                    <span class="lead-headline">every one is sparse</span>
+                    <span class="lead-detail">best covered is Contract value, at 9%</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss Financials">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="lead sparse coverage-row" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">Sparse</span>
+                    <span class="lead-title">Business criticality</span>
+                    <span class="lead-note">General</span>
+                    <span class="lead-headline">12% covered</span>
+                    <span class="lead-detail">1.048 of 1.191 not set</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss Business criticality">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="lead sparse coverage-row" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">Sparse</span>
+                    <span class="lead-title">${LONG}</span>
+                    <span class="lead-note">Application portfolio management</span>
+                    <span class="lead-headline">&lt;1% covered</span>
+                    <span class="lead-detail">1.186 of 1.191 not set</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="lead concentrated" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">One value</span>
+                    <span class="lead-title">Lifecycle</span>
+                    <span class="lead-note">General</span>
+                    <span class="lead-headline">94% are “Production”</span>
+                    <span class="lead-detail">1.048 of the 1.115 objects with a value</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss Lifecycle">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="lead outlier" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">Outlier</span>
+                    <span class="lead-title">Total cost of ownership</span>
+                    <span class="lead-note">Financials</span>
+                    <span class="lead-headline">highest value is 41× the median</span>
+                    <span class="lead-detail">€3,8M against a median of €92.400</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss Total cost of ownership">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+              </div>
+              <button type="button" class="lead-scan" hidden>Scan the population</button>
+            </section>
+
             <button type="button" class="placeholder">Pick an attribute to chart it.</button>
           </div>
         `;
@@ -250,7 +324,44 @@
         section.querySelector('.rail-scrim').hidden = !open || lane === 'wide';
         section.querySelector('.rail-toggle').setAttribute('aria-expanded', String(open));
         section.querySelector('.insight').hidden = !charted;
-        section.querySelector('.placeholder').hidden = charted;
+        // Four states share the empty pane. `?charted=no` is the one the view
+        // opens on where the population was small enough to have been read:
+        // the leads. `?leads=offer` is the same screen where it was not,
+        // `?leads=coverage` is a read that stopped short — rows, and the
+        // action under them — and `?leads=no` is the bare line from before
+        // there was anything to say.
+        const leads = new URL(location.href).searchParams.get('leads') ?? 'rows';
+        const offering = leads === 'offer';
+        const uncounted = leads === 'coverage';
+        const card = section.querySelector('.leads');
+        card.hidden = charted || leads === 'no';
+        card.querySelector('.lead-rows').hidden = offering;
+        // A read that stopped short says nothing about coverage, so those rows
+        // are not in that list at all — the app leaves them out rather than
+        // qualifying them.
+        card
+          .querySelectorAll('.coverage-row')
+          .forEach((row) => (row.hidden = uncounted));
+        const action = card.querySelector('.lead-scan');
+        action.hidden = !offering && !uncounted;
+        action.textContent = offering
+          ? 'Scan the population'
+          : 'Count coverage across the population';
+        card.querySelector('.sub').textContent = offering
+          ? '12.406 Application Component objects is more than is read without being asked. One read covers every attribute at once, and the rows say so where it has to stop short of the whole population.'
+          : uncounted
+            ? 'Across 44 attributes of the first 4.000 objects read. Coverage is left out: this read stopped short, and a share of what it reached is not a share of the whole. Every figure here is that read’s.'
+            : 'Across 44 attributes of 1.191 Application Component objects. Each row opens the chart behind it.';
+        // The app hides the row until there is a screen behind it, and an
+        // offer counts as one — so `?leads=no`, which is the state before
+        // either, is the one state without it. It reads as selected only while
+        // that screen is what is on show.
+        const link = section.querySelector('.leads-link');
+        link.hidden = leads === 'no';
+        link.classList.toggle('on', !charted && !offering);
+        // Only one row in the panel is the one on screen.
+        if (!charted) section.querySelector('.attr-list .attr.on').classList.remove('on');
+        section.querySelector('.placeholder').hidden = charted || !card.hidden;
         return section;
       }
 
