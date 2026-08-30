@@ -117,8 +117,13 @@ export function parseEdit(context: EditContext, raw: string): Parsed {
         : { ok: false, message: 'Pick one of the values this attribute allows.' };
     }
     case 'toggle': {
-      if (text === 'true') return { ok: true, value: true };
-      if (text === 'false') return { ok: true, value: false };
+      // A control emits `true`/`false`, and a person types Yes or No — which is
+      // what the message below tells them to do, so it has to be taken. A
+      // message naming an input the parser then refuses is worse than no
+      // message.
+      const said = text.toLowerCase();
+      if (said === 'true' || said === 'yes') return { ok: true, value: true };
+      if (said === 'false' || said === 'no') return { ok: true, value: false };
       return { ok: false, message: 'A yes-or-no attribute takes Yes, No, or nothing at all.' };
     }
     case 'number': {

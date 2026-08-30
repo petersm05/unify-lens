@@ -136,9 +136,18 @@ describe('booleans', () => {
     expect(parsed({ kind: 'boolean' }, 'false')).toBe(false);
   });
 
+  // The message tells a reader the field takes Yes or No, so the parser has to
+  // take them. A message naming an input that is then refused is worse than no
+  // message at all.
+  it('takes the words its own message names, in any case', () => {
+    expect(parsed({ kind: 'boolean' }, 'Yes')).toBe(true);
+    expect(parsed({ kind: 'boolean' }, 'no')).toBe(false);
+    expect(parsed({ kind: 'boolean' }, 'TRUE')).toBe(true);
+  });
+
   it('refuses anything else, rather than reading it as false', () => {
-    expect(rejection({ kind: 'boolean' }, 'no')).toContain('Yes, No');
     expect(rejection({ kind: 'boolean' }, '0')).toContain('Yes, No');
+    expect(rejection({ kind: 'boolean' }, 'maybe')).toContain('Yes, No');
   });
 });
 

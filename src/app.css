@@ -2662,10 +2662,17 @@ ul.facts {
   font-variant-numeric: tabular-nums;
   text-align: right;
   overflow-wrap: anywhere;
-  /* A `text` attribute's value is a paragraph, and a row is not where anyone
-     reads one — seven right-aligned lines at value weight is a wall where a
-     value should be. Two lines and then an ellipsis; the whole of it is one
-     tap away, and `title` carries it for a pointer. */
+}
+
+/* A `text` attribute's value is a paragraph, and a row is not where anyone
+   reads one — seven right-aligned lines at value weight is a wall where a
+   value should be. Two lines and then an ellipsis, with `title` carrying the
+   rest for a pointer.
+
+   On that kind alone. A blanket clamp reached a long vendor name, an enum
+   label and the Record block's own list of labels, each of which wrapped
+   perfectly well before and had nothing to tap for what was cut off. */
+.f-value.clamped {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -2688,13 +2695,6 @@ ul.facts {
   font-size: 14px;
   font-weight: 500;
   font-variant-numeric: normal;
-  /* Including the clamp above. A set of labels or a source and its external id
-     are meant to be read in full, and there is nothing here to tap to see the
-     rest of one. */
-  display: block;
-  -webkit-line-clamp: none;
-  line-clamp: none;
-  overflow: visible;
 }
 
 /* Charting is its own control in a fixed final column, at the same horizontal

@@ -1,6 +1,6 @@
 import type { AttributeKind } from './attributes';
 import type { Sample, Value } from './sample-store';
-import { formatCount, percent } from '../format';
+import { formatCount } from '../format';
 
 /**
  * Where one object's value sits among its peers.
@@ -66,14 +66,21 @@ export interface PeerInput {
   readonly truncated: boolean;
 }
 
-/** What a sample holds for one attribute: the values, and how many lack one. */
+/**
+ * What a sample holds for one attribute: the values, and how many lack one.
+ *
+ * An empty string counts as no value, which is the rule `object-detail`'s
+ * `render` already applies to the row itself. `SampleStore` keeps one, so
+ * without this the sheet could print "Not set" on a row and "412 of 412 have
+ * one" underneath it.
+ */
 export function valuesOf(sample: Sample, key: string): { values: Value[]; missing: number } {
   const values: Value[] = [];
   let missing = 0;
 
   for (const object of sample.objects) {
     const value = object.values.get(key);
-    if (value === undefined) missing += 1;
+    if (value === undefined || value === '') missing += 1;
     else values.push(value);
   }
 
@@ -134,8 +141,7 @@ export function peersFor(input: PeerInput): Peers | null {
       const among = input.truncated ? 'those read' : formatCount(ranked.length);
       // "later than", not "older than 1 - at". The caption has to be the same
       // number the mark draws, or a row says 78% under a bar filled to 22%.
-      const verb = input.kind === 'date' ? 'later' : 'higher';
-      return { mark: { shape: 'position', at }, caption: `${verb} than ${percent(at)} of ${among}` };
+      return { mark: { shape: 'position', at }, caption: rankPhrase(at, input.kind, among) };
     }
 
     case 'enum': {
@@ -175,6 +181,23 @@ export function peersFor(input: PeerInput): Peers | null {
     // No `reference` case: the guard above has already taken it out of the
     // union, and TypeScript rejects a branch for a kind that cannot reach here.
   }
+}
+
+/**
+ * A rank as a sentence, carrying one comparator rather than two.
+ *
+ * `percent()` guards its own ends with `<1%` and `>99%`, which is right for a
+ * figure standing alone and reads as two comparators inside "higher than >99%
+ * of 412". So the ends are said in words here, and nothing in between needs
+ * guarding: with a population of any size, a rank that rounds to 0 or 100 has
+ * already been caught by one of them.
+ */
+function rankPhrase(at: number, kind: AttributeKind, among: string): string {
+  const verb = kind === 'date' ? 'later' : 'higher';
+  if (at === 0) return `${kind === 'date' ? 'the earliest' : 'the lowest'} of ${among}`;
+  if (at < 0.005) return `${verb} than a few of ${among}`;
+  if (at >= 0.995) return `${verb} than all but a few of ${among}`;
+  return `${verb} than ${Math.round(at * 100)}% of ${among}`;
 }
 
 /**

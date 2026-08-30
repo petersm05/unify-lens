@@ -129,10 +129,12 @@ function rowFor(choice: AttributeChoice, value: AttributeValue | undefined): Att
     kind: choice.kind,
     display: value?.display ?? null,
     value: value?.value ?? null,
-    // The currency belongs to the definition, so it is known for an attribute
+    // The definition's currency first, because it is known for an attribute
     // the object has no value for — which is what lets an unset money row
-    // still carry the right symbol.
-    ...(choice.currency ? { currency: choice.currency } : {}),
+    // still carry the right symbol. The value's own is the fallback: where the
+    // definition carries none at runtime, dropping it would turn €1.240.000
+    // into an unsymbolled figure under a generic ¤.
+    ...currencyOf(choice.currency ?? value?.currency),
     ...(value?.numeric !== undefined ? { numeric: value.numeric } : {}),
     ...(choice.enumValues ? { order: choice.enumValues.map((entry) => entry.name) } : {}),
   };
@@ -149,6 +151,11 @@ function unlistedRow(value: AttributeValue): AttributeRow {
     ...(value.currency ? { currency: value.currency } : {}),
     ...(value.numeric !== undefined ? { numeric: value.numeric } : {}),
   };
+}
+
+/** An optional property that `exactOptionalPropertyTypes` will accept. */
+function currencyOf(currency: string | undefined): { currency?: string } {
+  return currency ? { currency } : {};
 }
 
 /** `categoryId` + the definition's **id** — the way a filter or a write says it. */

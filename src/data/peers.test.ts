@@ -58,6 +58,17 @@ describe('valuesOf', () => {
     expect(missing).toBe(2);
   });
 
+  // `object-detail`'s `render` treats an empty string as no value and the row
+  // prints "Not set"; `SampleStore` keeps one. Without the same rule here the
+  // sheet could say "412 of 412 have one" under a row reading Not set.
+  it('counts an empty string as no value, the way the row does', () => {
+    const sample = sampleOf('cat::Vendor', ['Northwind', '', 'Contoso']);
+    expect(valuesOf(sample, 'cat::Vendor')).toEqual({
+      values: ['Northwind', 'Contoso'],
+      missing: 1,
+    });
+  });
+
   it('counts every object as missing when the key is not the one held', () => {
     const sample = sampleOf('cat::Annual cost', [10, 20]);
     expect(valuesOf(sample, 'cat::Something else')).toEqual({ values: [], missing: 2 });
@@ -80,8 +91,33 @@ describe('numeric attributes', () => {
       const result = peers({ kind: 'real', values, own });
       const mark = result?.mark;
       if (mark?.shape !== 'position') throw new Error('expected a position mark');
-      expect(result?.caption).toContain(`${Math.round(mark.at * 100)}%`);
+
+      const figure = /(\d+)%/.exec(result?.caption ?? '');
+      if (figure) {
+        expect(Number(figure[1])).toBe(Math.round(mark.at * 100));
+      } else {
+        // The ends are worded instead of given a figure, and only the ends.
+        expect(mark.at === 0 || mark.at < 0.005 || mark.at >= 0.995).toBe(true);
+      }
     }
+  });
+
+  // `percent()` guards its own ends, which reads as two comparators inside
+  // "higher than >99% of 412". The ends are said in words instead.
+  it('words the ends rather than composing two comparators', () => {
+    const captions = [
+      peers({ kind: 'real', values, own: 100 })?.caption,
+      peers({ kind: 'date', values: [new Date(2020, 0, 1), new Date(2021, 0, 1)], own: new Date(2020, 0, 1) })?.caption,
+    ];
+    expect(captions).toEqual(['the lowest of 5', 'the earliest of 2']);
+
+    const many = Array.from({ length: 400 }, (_, index) => index);
+    expect(peers({ kind: 'real', values: many, own: 399 })?.caption).toBe(
+      'higher than all but a few of 400',
+    );
+    expect(peers({ kind: 'real', values: many, own: 1 })?.caption).toBe(
+      'higher than a few of 400',
+    );
   });
 
   it('treats the three numeric kinds alike', () => {

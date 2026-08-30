@@ -243,9 +243,13 @@ export function mountDetailSheet(
 
     const shown = text('span', row.display === null ? 'Not set' : valueText(row));
     shown.className = row.display === null ? 'f-value unset' : 'f-value';
-    // The row clamps a paragraph to two lines, so the rest of it has to be
-    // reachable somehow until the editor can open on it.
-    if (row.kind === 'text' && row.display !== null) shown.title = row.display;
+
+    // Only a paragraph is clamped, and only a clamped value needs a way to
+    // read the rest of it. Everything else wraps.
+    if (row.kind === 'text' && row.display !== null) {
+      shown.classList.add('clamped');
+      shown.title = row.display;
+    }
 
     element.append(attributeIcon(row.kind, row.currency), name, shown);
 

@@ -119,6 +119,17 @@ describe('rowsFor', () => {
     expect(cost?.display).toBeNull();
   });
 
+  // Where the definition carries no currency at runtime, the value's own is
+  // all there is — and dropping it turns €1.240.000 into a bare figure under a
+  // generic ¤.
+  it('falls back to the currency the value carries', () => {
+    const withoutCurrency = SCHEMA.map((entry) =>
+      entry.definitionId === 'def-cost' ? { ...entry, currency: undefined } : entry,
+    ) as AttributeChoice[];
+    const cost = rowsFor(DETAIL, withoutCurrency)[0]?.rows.find((row) => row.name === 'Annual cost');
+    expect(cost?.currency).toBe('EUR');
+  });
+
   it('leaves the typed value on the row for an editor to open on', () => {
     const cost = rowsFor(DETAIL, SCHEMA)[0]?.rows.find((row) => row.name === 'Annual cost');
     expect(cost?.value).toBe(1240000);
