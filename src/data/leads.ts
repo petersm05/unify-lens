@@ -55,6 +55,7 @@ const OUTLIER_VALUES = 8;
 /** How many attributes a category needs before "the whole section" holds. */
 const CATEGORY_MEMBERS = 3;
 
+
 /**
  * How many leads of one kind are shown at once.
  *
@@ -161,8 +162,27 @@ export function scanForLeads(sample: Sample, choices: readonly AttributeChoice[]
   }
 
   const found: Lead[] = [];
-  /** Sparse leads by category, for the rollup — every member has to be sparse. */
-  const byCategory = new Map<string, { members: number; sparse: Lead[]; covered: number[] }>();
+  /**
+   * Per category: how many attributes it defines, how many of those were
+   * examined, and the sparse rows among them. The rollup needs all three —
+   * `defines` is counted over every attribute rather than over the examined
+   * ones, because a claim about a whole category is a claim about the ones
+   * this cannot read as well.
+   */
+  const byCategory = new Map<
+    string,
+    { defines: number; examined: number; sparse: Lead[]; covered: number[] }
+  >();
+  for (const choice of choices) {
+    const bucket = byCategory.get(choice.categoryId) ?? {
+      defines: 0,
+      examined: 0,
+      sparse: [],
+      covered: [],
+    };
+    bucket.defines += 1;
+    byCategory.set(choice.categoryId, bucket);
+  }
 
   for (const choice of examined) {
     const key = `${choice.categoryId}::${choice.name}`;
@@ -173,10 +193,10 @@ export function scanForLeads(sample: Sample, choices: readonly AttributeChoice[]
     }
 
     const share = values.length / total;
-    const bucket = byCategory.get(choice.categoryId) ?? { members: 0, sparse: [], covered: [] };
-    bucket.members += 1;
+    // Present for every choice: the loop above filed one per category.
+    const bucket = byCategory.get(choice.categoryId)!;
+    bucket.examined += 1;
     bucket.covered.push(share);
-    byCategory.set(choice.categoryId, bucket);
 
     // One lead per attribute, in this order. An attribute nobody fills in is
     // not also a story about which of the few values dominates: reporting both
@@ -288,13 +308,26 @@ function valueLead(choice: AttributeChoice, values: readonly Value[]): Lead | nu
  */
 function rollUpCategories(
   leads: readonly Lead[],
-  categories: ReadonlyMap<string, { members: number; sparse: Lead[]; covered: number[] }>,
+  categories: ReadonlyMap<
+    string,
+    { defines: number; examined: number; sparse: Lead[]; covered: number[] }
+  >,
 ): Lead[] {
   const rolled: Lead[] = [];
   const replaced = new Set<string>();
 
   for (const [categoryId, bucket] of categories) {
-    if (bucket.members < CATEGORY_MEMBERS || bucket.sparse.length !== bucket.members) continue;
+    // Every attribute the category defines, examined and sparse. An
+    // attribute this cannot read — a reference, a boolean — is not evidence
+    // of anything, so a category holding one is left as its own rows rather
+    // than spoken for on the strength of the rest.
+    if (
+      bucket.defines < CATEGORY_MEMBERS ||
+      bucket.examined !== bucket.defines ||
+      bucket.sparse.length !== bucket.defines
+    ) {
+      continue;
+    }
 
     // The least sparse member: the highest magnitude is the emptiest.
     const best = bucket.sparse.reduce((a, b) => (b.magnitude < a.magnitude ? b : a));
@@ -306,13 +339,13 @@ function rollUpCategories(
       kind: 'empty',
       word: WORDS.empty,
       title: best.choice.categoryName,
-      note: `${formatCount(bucket.members)} attributes`,
+      note: `${formatCount(bucket.defines)} attributes`,
       headline: 'every one is sparse',
       detail: `best covered is ${best.choice.name}, at ${percent(bestShare)}`,
       choice: best.choice,
       // Averaged over the members, so a category of eight empty attributes
       // ranks above one of three that are merely thin.
-      magnitude: bucket.sparse.reduce((sum, lead) => sum + lead.magnitude, 0) / bucket.members,
+      magnitude: bucket.sparse.reduce((sum, lead) => sum + lead.magnitude, 0) / bucket.defines,
     });
   }
 

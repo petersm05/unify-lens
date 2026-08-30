@@ -267,6 +267,39 @@ describe('scanForLeads', () => {
     expect(kinds(scanForLeads(sample, members).leads)).toEqual(['sparse', 'sparse']);
   });
 
+  it('will not speak for a category holding an attribute it cannot read', () => {
+    const members = ['Contract value', 'Annual cost', 'Licence count'].map((name, index) =>
+      attribute({
+        categoryId: 'financials',
+        categoryName: 'Financials',
+        definitionId: `def-${index}`,
+        name,
+        kind: 'integer',
+      }),
+    );
+    // A reference is not examined, so nothing here knows whether it is filled
+    // in — and "every one is sparse" would be a claim about it too.
+    const owner = attribute({
+      categoryId: 'financials',
+      categoryName: 'Financials',
+      definitionId: 'def-owner',
+      name: 'Cost owner',
+      kind: 'reference',
+    });
+
+    const sample = population(100, (index) =>
+      members.flatMap((member): Array<[AttributeChoice, Value]> =>
+        index < 10 ? [[member, 10]] : [],
+      ),
+    );
+
+    expect(kinds(scanForLeads(sample, [...members, owner]).leads)).toEqual([
+      'sparse',
+      'sparse',
+      'sparse',
+    ]);
+  });
+
   it('will not call two attributes a whole section of the metamodel', () => {
     const members = ['Contract value', 'Annual cost'].map((name, index) =>
       attribute({

@@ -361,6 +361,20 @@ export function mountAttributeInsight(
    */
   let leadRun = 0;
   /**
+   * The type `choices` holds the attributes of, or null while that is unsettled.
+   *
+   * A scan is one type's attributes against that type's population, and the two
+   * halves arrive separately — so this is what says they agree. `select.onChange`
+   * sets the shared filter *before* loading the schema, so every subscriber is
+   * called with the new type on screen and the previous one's `choices` in hand,
+   * and `prune` calls them again from inside the load. Both used to start a scan
+   * of one type's objects through another type's schema.
+   *
+   * Set last in `loadAttributes` and only on the path that has something to
+   * chart, so `schemaType === type` also means `choices` is not empty.
+   */
+  let schemaType: ObjectType | null = null;
+  /**
    * Rows put away, per type, for as long as the view is mounted.
    *
    * Not stored anywhere. A dismissal is "not this, now" against a ranking of a
@@ -550,6 +564,7 @@ export function mountAttributeInsight(
 
   async function loadAttributes(): Promise<void> {
     const mine = ++generation;
+    schemaType = null;
     insight.hidden = true;
     leadsCard.hidden = true;
     leadsLink.hidden = true;
@@ -598,13 +613,19 @@ export function mountAttributeInsight(
       return;
     }
 
+
     say('Pick an attribute to chart it.', true);
+
+    // The schema and the type on screen now agree, which is what a scan needs
+    // and what every other caller of it is waiting for. After `prune` above,
+    // so its own notification is refused rather than starting a second one.
+    schemaType = type;
 
     // The type is settled and the population read takes seconds, so it starts
     // now rather than when an attribute is tapped — the moment when someone is
     // actually waiting. Nothing is guessed here: this is the type they chose.
     // What it reads also answers the opening screen.
-    void beginLeads(type).catch(fail);
+    void beginLeads().catch(fail);
 
     // Grouped by category with a sticky heading: the category was previously
     // repeated on all forty-odd rows, which is a lot of ink to say the same
@@ -631,6 +652,10 @@ export function mountAttributeInsight(
             item.setAttribute('role', 'listitem');
             item.disabled = !isPlottable(choice);
             item.title = `${choice.name} · ${choice.kind}`;
+            // What `markRail` matches on. Two attributes can share a name —
+            // and one name can be a prefix of another, which is how "Cost"
+            // used to light up "Cost centre" beside it.
+            item.dataset['key'] = keyOf(choice);
 
             const name = document.createElement('span');
             name.className = 'a-name';
@@ -640,9 +665,8 @@ export function mountAttributeInsight(
 
             if (!item.disabled) {
               item.addEventListener('click', () => {
-                attrList.querySelectorAll('.attr').forEach((other) => other.classList.remove('on'));
-                item.classList.add('on');
                 primary = choice;
+                markRail();
                 secondary = null;
                 mark = null;
                 // The list has done its job; where they take turns the chart
@@ -1634,7 +1658,10 @@ export function mountAttributeInsight(
    * it, the honest offer is a button: a screen that takes twelve seconds to
    * tell you what to look at is worse than one that admits it has not looked.
    */
-  async function beginLeads(forType: ObjectType): Promise<void> {
+  async function beginLeads(): Promise<void> {
+    if (!scannable()) return;
+
+    const forType = type;
     const run = ++leadRun;
     const scope = scopeFor(filters.get());
 
@@ -1709,8 +1736,23 @@ export function mountAttributeInsight(
    */
   function restartLeads(): void {
     dropScan();
+    // Only dimmed where something is going to replace it. A schema load in
+    // flight takes the card down itself, and dimming it on the way would be a
+    // card left grey with nothing coming.
+    if (!scannable()) return;
     leadsCard.classList.add('busy');
-    void beginLeads(type).catch(fail);
+    void beginLeads().catch(fail);
+  }
+
+  /**
+   * Whether a scan would describe what is on screen.
+   *
+   * The whole precondition: a load in progress leaves `schemaType` null and
+   * starts the scan itself when it has both halves, so nothing else has to
+   * know when that is.
+   */
+  function scannable(): boolean {
+    return schemaType === type;
   }
 
   /**
@@ -1782,6 +1824,13 @@ export function mountAttributeInsight(
   /** Holds on to a scan, and shows it where nothing has been charted yet. */
   function present(result: Scan, run: number): void {
     if (run !== leadRun) return;
+    // Nothing was read, so there is nothing to say — including on the cached
+    // path, where a population that is empty under the current filter arrives
+    // here without the count that would have caught it.
+    if (result.sampled === 0) {
+      clearLeads(run);
+      return;
+    }
     scan = result;
     leadsLink.hidden = false;
     // A chart is already up — from a link, from a record, or because the read
@@ -1942,10 +1991,17 @@ export function mountAttributeInsight(
     return put;
   }
 
-  /** Marks the rail row for whatever is charted, and clears every other. */
+  /**
+   * Marks the rail row for whatever is charted, and clears every other.
+   *
+   * By the key the row was built with, not by its text: a row was matched with
+   * `textContent.includes(name)`, so charting "Cost" also marked "Cost centre",
+   * and `applyRail` then opened the panel focused on whichever came first.
+   */
   function markRail(): void {
-    attrList.querySelectorAll('.attr').forEach((item) => {
-      item.classList.toggle('on', item.textContent?.includes(primary?.name ?? '\u0000') === true);
+    const key = primary ? keyOf(primary) : null;
+    attrList.querySelectorAll<HTMLElement>('.attr').forEach((item) => {
+      item.classList.toggle('on', key !== null && item.dataset['key'] === key);
     });
   }
 
