@@ -2765,7 +2765,11 @@ ul.facts {
 }
 
 @media (min-width: 700px) and (min-height: 600px) {
-  .fact {
+  /* Only where there is a line to space away from. A sheet opened with no
+     population to draw from has no `.peer` at all, and would otherwise get the
+     gap anyway — three pixels taller per row than the same sheet on a phone,
+     for a track that is not there. */
+  .fact:has(.peer) {
     row-gap: 3px;
   }
 

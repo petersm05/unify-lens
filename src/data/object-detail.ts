@@ -138,7 +138,10 @@ export async function fetchDetail(kg: Kg, id: UUID): Promise<Detail | null> {
 function typedValue(attribute: { type: string; value?: unknown }): EditValue {
   const value = attribute.value;
   if (value === null || value === undefined || value === '') return null;
-  if (value instanceof Date) return value;
+  // An invalid `Date` is a value the read produced and not one an editor can
+  // hold: every getter on it answers NaN. The sheet still prints whatever
+  // `render` makes of it, which is what the row is for.
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
 
   // The enum's `String` is inside the primitive guard, not ahead of it. An
   // enum arriving as an object — a shape the public types do not rule out —

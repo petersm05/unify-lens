@@ -325,6 +325,15 @@ describe('numbers', () => {
     expect(parsed({ kind: 'integer' }, '12,345')).toBe(12345);
   });
 
+  // No grouped figure is written `0,500`, so the group reading must not accept
+  // one — otherwise a whole-number field turns 0.500 into five hundred.
+  it('refuses a grouping whose first group leads with a zero', () => {
+    expect(rejection({ kind: 'integer' }, '0.500')).toContain('whole numbers');
+    expect(rejection({ kind: 'integer' }, '0,500')).toContain('whole numbers');
+    expect(rejection({ kind: 'integer' }, '00.100')).toContain('whole numbers');
+    expect(rejection(real, '0 500')).toContain('not a number');
+  });
+
   it('still refuses a real typed into a whole-number attribute', () => {
     // Not groupable — a first group of four digits is not a group — so it
     // falls through to the decimal reading and is refused for the right
@@ -394,6 +403,14 @@ describe('dates', () => {
     expect([date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds()]).toEqual(
       [0, 0, 0, 0],
     );
+  });
+
+  // Every getter on an invalid Date answers NaN, so without a guard the field
+  // opens on "0NaN-NaN-NaN" — which nothing parses and nobody can correct
+  // except by retyping the whole thing.
+  it('opens an empty field on a date that is not one', () => {
+    expect(dateToInputValue(new Date(Number.NaN))).toBe('');
+    expect(seedFor(new Date(Number.NaN))).toBe('');
   });
 
   it('refuses a day that does not exist', () => {

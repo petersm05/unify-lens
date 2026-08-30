@@ -254,6 +254,11 @@ export function isUnchanged(before: EditValue, after: EditValue): boolean {
  * would see a date move by a day just by opening the editor and saving.
  */
 export function dateToInputValue(value: Date): string {
+  // An invalid `Date` is not a day, and every getter on one answers NaN — so
+  // without this the field opens on "0NaN-NaN-NaN", which nothing can parse
+  // and nobody can correct except by retyping the whole thing.
+  if (Number.isNaN(value.getTime())) return '';
+
   const pad = (part: number): string => String(part).padStart(2, '0');
   return `${String(value.getFullYear()).padStart(4, '0')}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 }
@@ -396,7 +401,11 @@ function unspace(input: string): string | null {
     // The first group is one to three digits and carries the sign; the last
     // may carry the fraction; the rest are three digits and nothing else.
     const shape =
-      index === 0 ? /^[+-]?\d{1,3}$/ : index === last ? /^\d{3}([.,]\d+)?$/ : /^\d{3}$/;
+      index === 0
+        ? /^[+-]?[1-9]\d{0,2}$/
+        : index === last
+          ? /^\d{3}([.,]\d+)?$/
+          : /^\d{3}$/;
     if (!shape.test(part)) return null;
   }
   return parts.join('');
@@ -442,14 +451,23 @@ function separatorsIn(
   return { decimalMark: null, groupMark: null };
 }
 
-/** `1,240,000` → `1240000`, or `null` where the groups are not groups. */
+/**
+ * `1,240,000` → `1240000`, or `null` where the groups are not groups.
+ *
+ * The first group is one to three digits and cannot begin with a zero — no
+ * grouped figure is written `0,500`. Without that, `0.500` in a whole-number
+ * field grouped to 500 rather than being refused as the 0.5 it plainly is.
+ */
 function ungroup(whole: string, mark: string): string | null {
   const groups = whole.split(mark);
   const wellFormed = groups.every((group, index) =>
-    index === 0 ? group.length > 0 && group.length <= 3 : group.length === 3,
+    index === 0 ? FIRST_GROUP.test(group) : /^\d{3}$/.test(group),
   );
   return wellFormed ? groups.join('') : null;
 }
+
+/** One to three digits, no leading zero — what a grouped figure starts with. */
+const FIRST_GROUP = /^[1-9]\d{0,2}$/;
 
 function occurrences(body: string, mark: string): number {
   let count = 0;
