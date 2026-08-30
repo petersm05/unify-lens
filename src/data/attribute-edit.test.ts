@@ -270,6 +270,10 @@ describe('numbers', () => {
     ['1,500', 1.5],
     ['9,999', 9.999],
     ['1.500', 1.5],
+    // The far end of the same range: everything under a million groups with a
+    // single separator, so all of it reads as a fraction.
+    ['123,456', 123.456],
+    ['999,999', 999.999],
     ['1,234,567', 1234567],
     ['1.234.567', 1234567],
     ['12.345.678.901', 12345678901],

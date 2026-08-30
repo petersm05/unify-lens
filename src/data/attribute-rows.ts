@@ -1,5 +1,5 @@
 import type { AttributeChoice, AttributeKind } from './attributes';
-import type { EditValue } from './attribute-edit';
+import { enumIdFor, type EditValue } from './attribute-edit';
 import type { AttributeValue, Detail } from './object-detail';
 
 /**
@@ -22,6 +22,16 @@ export interface AttributeRow {
   readonly kind: AttributeKind;
   /** What the sheet prints, or `null` where the object has no value. */
   readonly display: string | null;
+  /**
+   * The value as its own type, and for an enum always the **id**.
+   *
+   * A read hands an enum back as either its id or its label, and the two
+   * travel to different places: the id is what a write carries, the label is
+   * what `display` prints and what a sampled population is keyed by. Resolving
+   * it here means the ambiguity is settled once, at the edge, rather than
+   * followed around — and it is why comparing this value before and after an
+   * edit can be a plain comparison.
+   */
   readonly value: EditValue;
   readonly currency?: string;
   readonly numeric?: number;
@@ -128,7 +138,7 @@ function rowFor(choice: AttributeChoice, value: AttributeValue | undefined): Att
     name: choice.name,
     kind: choice.kind,
     display: value?.display ?? null,
-    value: value?.value ?? null,
+    value: enumValue(choice, value?.value ?? null),
     // The value's own currency first: it is the one the amount beside it was
     // recorded in, and where the two disagree the amount must not be printed
     // under the other one's symbol. The definition's is the fallback, and it is
@@ -138,6 +148,18 @@ function rowFor(choice: AttributeChoice, value: AttributeValue | undefined): Att
     ...(value?.numeric !== undefined ? { numeric: value.numeric } : {}),
     ...(choice.enumValues ? { order: choice.enumValues.map((entry) => entry.name) } : {}),
   };
+}
+
+/**
+ * An enum's value as its id, where the schema can say which id it is.
+ *
+ * Anything else passes through: a value that resolves to nothing is a label
+ * the metamodel no longer lists or an id it never had, and carrying it
+ * unchanged keeps the row showing what the object holds.
+ */
+function enumValue(choice: AttributeChoice, value: EditValue): EditValue {
+  if (choice.kind !== 'enum' || typeof value !== 'string') return value;
+  return enumIdFor(choice.enumValues ?? [], value) ?? value;
 }
 
 function unlistedRow(value: AttributeValue): AttributeRow {

@@ -2619,7 +2619,10 @@ ul.facts {
     '.    peer peer  .';
   align-items: center;
   column-gap: 10px;
-  row-gap: 3px;
+  /* Set with the peer line, not here. The second track is declared either way,
+     so a gap left on would space the row against an empty track and make every
+     phone row 3px taller than the one it replaced. */
+  row-gap: 0;
   width: 100%;
   min-height: 40px;
   padding: 4px 8px;
@@ -2762,6 +2765,10 @@ ul.facts {
 }
 
 @media (min-width: 700px) and (min-height: 600px) {
+  .fact {
+    row-gap: 3px;
+  }
+
   .peer {
     grid-area: peer;
     display: flex;

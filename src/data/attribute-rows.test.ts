@@ -155,6 +155,51 @@ describe('rowsFor', () => {
     expect(cost?.currency).toBe('USD');
   });
 
+  // The read hands an enum back as either its id or its label. Settling it
+  // here means everything downstream compares like with like — without it, a
+  // field opened on a label and parsed to an id reads as a change, and saving
+  // an untouched enum issues a write.
+  it('resolves an enum to its id, whichever form the read gave', () => {
+    const application = rowsFor(DETAIL, SCHEMA)[0];
+    expect(application?.rows[0]?.value).toBe('v2');
+
+    const byLabel = detailOf([
+      {
+        category: 'Application',
+        values: [
+          {
+            categoryId: 'cat-app',
+            definitionId: 'def-crit',
+            name: 'Business criticality',
+            kind: 'enum',
+            display: 'Mission critical',
+            value: 'Mission critical',
+          },
+        ],
+      },
+    ]);
+    expect(rowsFor(byLabel, SCHEMA)[0]?.rows[0]?.value).toBe('v2');
+  });
+
+  it('carries an enum value the metamodel no longer lists through unchanged', () => {
+    const retired = detailOf([
+      {
+        category: 'Application',
+        values: [
+          {
+            categoryId: 'cat-app',
+            definitionId: 'def-crit',
+            name: 'Business criticality',
+            kind: 'enum',
+            display: 'Decommissioned',
+            value: 'Decommissioned',
+          },
+        ],
+      },
+    ]);
+    expect(rowsFor(retired, SCHEMA)[0]?.rows[0]?.value).toBe('Decommissioned');
+  });
+
   it('leaves the typed value on the row for an editor to open on', () => {
     const cost = rowsFor(DETAIL, SCHEMA)[0]?.rows.find((row) => row.name === 'Annual cost');
     expect(cost?.value).toBe(1240000);

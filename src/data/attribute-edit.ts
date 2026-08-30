@@ -300,13 +300,20 @@ export function parseDateInput(raw: string): Date | null {
  * number like `1,240,000` — which a position rule could not, and which is the
  * form this app prints anything over a million in.
  *
- * A figure between a thousand and ten thousand has only one separator when it
- * is grouped, so `formatCount(1500)` prints `1,500` and this reads it as one
- * and a half. That is the cost of the paragraph below, and it is a real one:
- * a figure copied off the screen in that range and typed back changes by three
- * orders of magnitude. What makes it the better half of the trade is that it
- * takes a person typing, in a field showing them what they typed, where the
- * alternative went wrong on its own.
+ * **Anything under a million has one separator when it is grouped**, so
+ * `formatCount(1500)` prints `1,500` and `formatCount(123456)` prints
+ * `123,456`, and this reads both as fractions. That is the cost of the
+ * paragraph below and it is not a small one: a figure copied off this app's own
+ * screen anywhere in that range and typed back changes by three orders of
+ * magnitude, without an error.
+ *
+ * It is still the better half of the trade, because it takes a person typing,
+ * in a field that shows them what they typed, where the alternative went wrong
+ * on a value nobody had touched. But it is a judgement about which silent
+ * failure is worse rather than a fix for either, and it belongs to whoever
+ * owns the product. The two ways out both live in the editor rather than here:
+ * a `number` field, which most browsers will not let a group separator into,
+ * and showing the parsed figure back before it is saved.
  *
  * **One separator on its own is a decimal point**, always. `1,500` is one and
  * a half, not fifteen hundred. That is the half of this that is a judgement,
