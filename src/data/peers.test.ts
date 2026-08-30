@@ -95,6 +95,16 @@ describe('numeric attributes', () => {
     ]);
   });
 
+  // The bar is drawn from the rank and the caption names the denominator, so
+  // the two have to be the same population. Ranking over the objects that have
+  // a value and then naming the size of the whole one puts a bar filled to 50%
+  // beside a sentence about ten objects, nine of which were never in it.
+  it('names the population it actually ranked against, not the whole sample', () => {
+    const result = peers({ kind: 'money', values: [100, 200], missing: 8, own: 200 });
+    expect(result?.mark).toEqual({ shape: 'position', at: 0.5 });
+    expect(result?.caption).toBe('higher than 50% of 2');
+  });
+
   it('says nothing when the population holds no numbers to rank against', () => {
     expect(peers({ kind: 'real', values: ['a', 'b'], own: 3, missing: 0 })).toBeNull();
   });
@@ -111,6 +121,11 @@ describe('dates', () => {
   it('ranks by the moment, and phrases it in the direction the mark fills', () => {
     const result = peers({ kind: 'date', values, own: new Date(2018, 0, 1) });
     expect(result?.mark).toEqual({ shape: 'position', at: 0.25 });
+    expect(result?.caption).toBe('later than 25% of 4');
+  });
+
+  it('counts only the objects that have a date, as the numbers do', () => {
+    const result = peers({ kind: 'date', values, missing: 6, own: new Date(2018, 0, 1) });
     expect(result?.caption).toBe('later than 25% of 4');
   });
 

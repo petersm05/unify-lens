@@ -104,22 +104,25 @@ export function peersFor(input: PeerInput): Peers | null {
   switch (input.kind) {
     case 'integer':
     case 'real':
-    case 'money': {
-      const own = asNumber(input.own);
-      if (own === null) return null;
-      const at = rankAmong(numbersIn(input.values), own);
-      if (at === null) return null;
-      return { mark: { shape: 'position', at }, caption: `higher than ${percent(at)} of ${of}` };
-    }
-
+    case 'money':
     case 'date': {
       const own = asNumber(input.own);
       if (own === null) return null;
-      const at = rankAmong(numbersIn(input.values), own);
+
+      // Ranked against the objects that *have* a value, and the caption names
+      // that same count. An object cannot be higher than an absent number, so
+      // ranking over the whole population and then printing the population's
+      // size would put two different denominators on one row — the bar drawn
+      // from one and the sentence naming the other.
+      const ranked = numbersIn(input.values);
+      const at = rankAmong(ranked, own);
       if (at === null) return null;
+
+      const among = input.truncated ? 'those read' : formatCount(ranked.length);
       // "later than", not "older than 1 - at". The caption has to be the same
       // number the mark draws, or a row says 78% under a bar filled to 22%.
-      return { mark: { shape: 'position', at }, caption: `later than ${percent(at)} of ${of}` };
+      const verb = input.kind === 'date' ? 'later' : 'higher';
+      return { mark: { shape: 'position', at }, caption: `${verb} than ${percent(at)} of ${among}` };
     }
 
     case 'enum': {

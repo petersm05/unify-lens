@@ -158,6 +158,16 @@ describe('numbers', () => {
     expect(parsed(real, '1,240,000.50')).toBe(1240000.5);
   });
 
+  // The form this app's own `formatCount` and `formatMoneyExact` print. A rule
+  // that reads the *last* separator as the decimal point rejects every one of
+  // these, so a figure copied off the screen could not be typed back.
+  it('reads a grouped whole number, in either notation', () => {
+    expect(parsed(real, '1,240,000')).toBe(1240000);
+    expect(parsed(real, '1.240.000')).toBe(1240000);
+    expect(parsed(real, '1,234,567')).toBe(1234567);
+    expect(parsed(real, '12.345.678.901')).toBe(12345678901);
+  });
+
   it('reads an ungrouped figure with a decimal part', () => {
     expect(parsed(real, '1240000.5')).toBe(1240000.5);
     expect(parsed(real, '1240000,5')).toBe(1240000.5);

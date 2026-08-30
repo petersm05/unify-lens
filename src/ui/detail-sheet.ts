@@ -15,14 +15,6 @@ import { formatCount, formatMoneyExact } from '../format';
 /** Kinds the attribute view knows how to draw. */
 const CHARTABLE = new Set(['enum', 'boolean', 'integer', 'real', 'money', 'date', 'string', 'text']);
 
-/**
- * `bars.ts` ramps an ordered scale only this far and then stops, so the peer
- * segments stop with it. Past six steps the ramp runs out of contrast, and one
- * enum value drawn terracotta here and accent-coloured in its own chart would
- * be worse than no ramp at all.
- */
-const RAMP_STEPS = 6;
-
 export interface DetailSheet {
   open(id: UUID): void;
   destroy(): void;
@@ -113,11 +105,14 @@ export function mountDetailSheet(
     const type = detail.type as ObjectType;
 
     // The schema is what turns the count of unset attributes back into rows.
-    // It comes off this device where it has been read before, so the sheet
-    // waits for it rather than painting once without the empty rows and again
-    // with them. Where it cannot be had, the sheet still lists what the object
-    // carries — one less thing shown, rather than nothing.
-    const choices = await attributesForCached(session.kg, type, session.stamp).catch(() => []);
+    // Usually it comes off this device, and the sheet waits for it rather than
+    // painting once without the empty rows and again with them. Tracked all the
+    // same: a type nobody has opened before has nothing cached, and then this
+    // is a real request — an untracked one would leave the sheet on "Loading…"
+    // with the progress bar saying nothing is happening.
+    const choices = await busy.track(
+      attributesForCached(session.kg, type, session.stamp).catch(() => []),
+    );
     if (mine !== generation) return;
 
     current = detail;
@@ -316,10 +311,18 @@ export function mountDetailSheet(
 
       for (let index = 0; index < mark.total; index += 1) {
         const step = document.createElement('i');
-        if (index === mark.index) {
-          step.style.background =
-            mark.total <= RAMP_STEPS ? `var(--ord-${index})` : 'var(--series-1)';
-        }
+        // The accent, like every other mark on this line, rather than the
+        // ordinal ramp. The ramp is for colouring a whole ordered scale, and
+        // this colours one segment of one — which is the "this object" role the
+        // accent already has here.
+        //
+        // It also cannot drift. Matching the chart's ramp would mean mirroring
+        // two things in other modules: `bars.ts` ramps on the *bin* count, and
+        // `enumDistribution` appends a "Not set" bin, so a six-value enum with
+        // one unset object gives seven bins and a flat chart — beside ramped
+        // segments here. A mirrored rule is one edit away from being wrong, and
+        // this file has no way to notice.
+        if (index === mark.index) step.style.background = 'var(--series-1)';
         steps.append(step);
       }
       return steps;

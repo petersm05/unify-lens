@@ -6,8 +6,9 @@ import type { AttributeKind } from './attributes';
  * Deliberately free of the SDK, and of the DOM: every rule here is arithmetic
  * or string handling, which is the part worth testing and the part a mistake in
  * is expensive — a misread separator does not fail, it saves the wrong number.
- * The write itself lives in `attribute-writer.ts`, the way `view-writer.ts`
- * holds the only other call that changes anything.
+ * The write that will carry these values belongs in a module of its own, the
+ * way `view-writer.ts` holds the only call this app makes that changes
+ * anything; nothing here reaches the SDK, and nothing here should.
  */
 
 /** The control an attribute kind is edited with. */
@@ -217,16 +218,26 @@ export function parseDateInput(raw: string): Date | null {
  * A number typed by a person, in whichever notation their keyboard produces.
  *
  * `input[type="number"]` normalises this in most browsers and not in all of
- * them, and a pasted figure arrives in whatever notation it was copied from.
- * The rule: **the last separator is the decimal one**, and every separator
- * before it has to be a group of three. That reads `1.240.000,50` and
- * `1,240,000.50` as the same number and rejects `1.24.000`.
+ * them, and a pasted figure arrives in whatever notation it was copied from —
+ * including this app's own, which groups.
  *
- * One separator on its own is genuinely ambiguous — `1,500` is fifteen hundred
+ * The rule turns on repetition rather than on position. **A decimal separator
+ * occurs at most once**, so a mark that appears twice is a group separator
+ * whatever else is going on, and the other mark is the decimal point. That
+ * reads `1.240.000,50` and `1,234,567.89` alike, and — the case a position
+ * rule gets wrong — reads a grouped whole number like `1,240,000`, which is
+ * exactly the form `formatCount` prints and so exactly what someone copies out
+ * of this app and types back into it.
+ *
+ * One separator on its own is genuinely ambiguous: `1,500` is fifteen hundred
  * to one reader and one and a half to another. It is taken as a group when it
  * is followed by exactly three digits and the part before it does not start
- * with a zero: `1,500` is 1500, `0,750` is 0.75. Anyone meaning one and a half
- * types `1,5`, which has no second reading.
+ * with a zero, so `1,500` is 1500 and `0,750` is 0.75. Anyone meaning one and
+ * a half types `1,5`, which has no second reading.
+ *
+ * Groups are then checked: every one after the first is three digits, and the
+ * decimal point comes after all of them. `1.24.000` is refused rather than
+ * guessed at.
  */
 function toNumber(input: string): number | null {
   // Several locales group with a non-breaking or narrow no-break space, so a
@@ -239,35 +250,76 @@ function toNumber(input: string): number | null {
   const sign = text.startsWith('-') ? -1 : 1;
   const body = text.replace(/^[+-]/, '');
 
-  const last = Math.max(body.lastIndexOf(','), body.lastIndexOf('.'));
-  if (last === -1) return sign * Number(body);
+  const marks = separatorsIn(body);
+  if (marks === null) return null;
+  const { decimalMark, groupMark } = marks;
 
-  const decimalMark = body[last]!;
-  const groupMark = decimalMark === ',' ? '.' : ',';
-  const whole = body.slice(0, last);
-  const fraction = body.slice(last + 1);
-
-  const lone = !whole.includes(',') && !whole.includes('.');
-  if (lone && fraction.length === 3 && !whole.startsWith('0')) {
-    return sign * Number(whole + fraction);
+  // Groups come before the decimal point, or they are not groups.
+  if (
+    decimalMark !== null &&
+    groupMark !== null &&
+    body.lastIndexOf(groupMark) > body.indexOf(decimalMark)
+  ) {
+    return null;
   }
 
-  // Anything of the other mark left in the whole part means two decimal
-  // separators in one figure.
-  if (whole.includes(decimalMark)) return null;
+  const point = decimalMark === null ? body.length : body.indexOf(decimalMark);
+  const fraction = body.slice(point + 1);
+  if (decimalMark !== null && !/^\d+$/.test(fraction)) return null;
 
-  const groups = whole.split(groupMark);
-  if (groups.length > 1) {
-    const wellFormed = groups.every((group, index) =>
-      index === 0 ? group.length > 0 && group.length <= 3 : group.length === 3,
-    );
-    if (!wellFormed) return null;
-  }
+  const whole = groupMark === null ? body.slice(0, point) : ungroup(body.slice(0, point), groupMark);
+  if (whole === null || !/^\d*$/.test(whole)) return null;
 
   // A bare `.5` has an empty whole part, which is a number even though it is
   // not a digit.
-  const digits = groups.join('') || '0';
-  if (!/^\d+$/.test(digits) || !/^\d+$/.test(fraction)) return null;
+  return sign * Number(`${whole || '0'}.${decimalMark === null ? '0' : fraction}`);
+}
 
-  return sign * Number(`${digits}.${fraction}`);
+/** Which mark groups and which one separates the fraction, if either does. */
+function separatorsIn(
+  body: string,
+): { decimalMark: string | null; groupMark: string | null } | null {
+  const commas = occurrences(body, ',');
+  const dots = occurrences(body, '.');
+
+  // Two marks that both repeat cannot both be groups and cannot be a decimal
+  // point, so this is not a figure in any notation.
+  if (commas > 1 && dots > 1) return null;
+
+  if (commas > 1) return { groupMark: ',', decimalMark: dots === 1 ? '.' : null };
+  if (dots > 1) return { groupMark: '.', decimalMark: commas === 1 ? ',' : null };
+
+  if (commas === 1 && dots === 1) {
+    const decimalMark = body.lastIndexOf(',') > body.lastIndexOf('.') ? ',' : '.';
+    return { decimalMark, groupMark: decimalMark === ',' ? '.' : ',' };
+  }
+
+  if (commas === 1 || dots === 1) {
+    const mark = commas === 1 ? ',' : '.';
+    const at = body.indexOf(mark);
+    const whole = body.slice(0, at);
+    const grouping = body.length - at - 1 === 3 && whole.length > 0 && !whole.startsWith('0');
+    return grouping
+      ? { groupMark: mark, decimalMark: null }
+      : { groupMark: null, decimalMark: mark };
+  }
+
+  return { decimalMark: null, groupMark: null };
+}
+
+/** `1,240,000` → `1240000`, or `null` where the groups are not groups. */
+function ungroup(whole: string, mark: string): string | null {
+  const groups = whole.split(mark);
+  const wellFormed = groups.every((group, index) =>
+    index === 0 ? group.length > 0 && group.length <= 3 : group.length === 3,
+  );
+  return wellFormed ? groups.join('') : null;
+}
+
+function occurrences(body: string, mark: string): number {
+  let count = 0;
+  for (const character of body) {
+    if (character === mark) count += 1;
+  }
+  return count;
 }

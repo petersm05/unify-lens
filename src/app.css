@@ -2276,12 +2276,6 @@ nav.tabs button {
   color: var(--text-secondary);
 }
 
-.sheet-note {
-  margin: 14px 0 0;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
 .sheet-section {
   margin-top: 22px;
 }

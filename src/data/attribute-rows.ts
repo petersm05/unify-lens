@@ -39,9 +39,13 @@ export interface AttributeRowGroup {
 /**
  * The object's values merged onto its type's schema.
  *
- * The schema is the spine, so the categories and the attributes inside them
- * come out in the metamodel's own order rather than in whichever order the
- * object's payload happened to carry — the same order the attribute rail uses.
+ * The schema is the spine, so the rows come out in the order `attributesFor`
+ * returns — sorted by category name and then by attribute name — rather than
+ * in whichever order the object's payload happened to carry. That is the order
+ * the attribute rail already groups by, so the sheet and the rail agree.
+ *
+ * Not the metamodel's declaration order: only `enumValues` keeps that, and it
+ * is the one place the order is a documented contract.
  */
 export function rowsFor(
   detail: Detail,
