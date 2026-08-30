@@ -108,10 +108,8 @@ export function peersFor(input: PeerInput): Peers | null {
 
   if (input.own === null) {
     // An object with no value cannot be ranked, so the peer fact is the gap
-    // itself. Where the sample says nothing is missing while this object is,
-    // the two disagree — the object was past the point the read stopped — and
-    // the honest answer is to say nothing rather than to print "0 of 412".
-    if (input.missing === 0) return null;
+    // itself — and it is one of the objects in it.
+    if (counted(input.missing) === null) return null;
     // "have none" rather than "are also unset". This object is itself in the
     // population and is itself unset, so it is one of the objects counted —
     // and "also" says the opposite, that the figure is the others.
@@ -146,9 +144,11 @@ export function peersFor(input: PeerInput): Peers | null {
 
     case 'enum': {
       const own = String(input.own);
+      const matching = counted(countMatching(input.values, own));
+      if (matching === null) return null;
+
       const order = input.order ?? [];
       const index = order.indexOf(own);
-      const matching = countMatching(input.values, own);
       const caption = `${formatCount(matching)} of ${of} share it`;
 
       // A value the metamodel does not list — a stale sample, or a label that
@@ -162,7 +162,9 @@ export function peersFor(input: PeerInput): Peers | null {
 
     case 'boolean': {
       const own = input.own === true;
-      const matching = input.values.filter((value) => value === own).length;
+      const matching = counted(input.values.filter((value) => value === own).length);
+      if (matching === null) return null;
+
       return {
         mark: { shape: 'share', share: matching / size },
         caption: `${formatCount(matching)} of ${of} ${own ? 'are' : 'are not'}`,
@@ -170,13 +172,17 @@ export function peersFor(input: PeerInput): Peers | null {
     }
 
     case 'string':
-    case 'text':
+    case 'text': {
       // "Higher than 78%" means nothing for a vendor name. What is worth
       // knowing about free text is how many objects carry any at all.
+      const matching = counted(input.values.length);
+      if (matching === null) return null;
+
       return {
-        mark: { shape: 'share', share: input.values.length / size },
-        caption: `${formatCount(input.values.length)} of ${of} have one`,
+        mark: { shape: 'share', share: matching / size },
+        caption: `${formatCount(matching)} of ${of} have one`,
       };
+    }
 
     default:
       // No `reference` case above: the guard at the top has already taken it
@@ -202,6 +208,25 @@ function rankPhrase(at: number, kind: AttributeKind, among: string): string {
   if (at < 0.005) return `${verb} than a few of ${among}`;
   if (at >= 0.995) return `${verb} than all but a few of ${among}`;
   return `${verb} than ${Math.round(at * 100)}% of ${among}`;
+}
+
+/**
+ * A count that has to include this object, or `null` where it does not.
+ *
+ * The population and the row can disagree. The object may sit past the point a
+ * truncated read stopped at, or the cached sample may be older than the object
+ * itself — `SampleStore` only drops entries when something clears it. Either
+ * way the count comes back as zero, and "0 of 412 share it" under a row showing
+ * that very value is a contradiction on screen.
+ *
+ * Saying nothing is the answer in both readings: if the object really is
+ * outside the sample the figure is not about it, and if the sample is stale the
+ * figure is wrong. A rank does not need this — it is a comparison rather than a
+ * tally, and stays meaningful whether or not the object is one of the values
+ * being compared against.
+ */
+function counted(matching: number): number | null {
+  return matching > 0 ? matching : null;
 }
 
 /**

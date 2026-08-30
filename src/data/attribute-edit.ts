@@ -195,9 +195,17 @@ const PLAIN = new Intl.NumberFormat('en-US', {
  * mutation to everything downstream — it moves `updatedAt`, lands in the audit
  * log, and comes back over the realtime feed to invalidate every cached sample
  * for the type.
+ *
+ * Dates are compared by the day they name, not by the instant. A `date`
+ * attribute is shown as a day and edited as a day, so a stored value carrying a
+ * time of day cannot survive the field it is edited in — comparing instants
+ * would call that a change and issue a write whose only effect is to move the
+ * value to midnight.
  */
 export function isUnchanged(before: EditValue, after: EditValue): boolean {
-  if (before instanceof Date && after instanceof Date) return before.getTime() === after.getTime();
+  if (before instanceof Date && after instanceof Date) {
+    return dateToInputValue(before) === dateToInputValue(after);
+  }
   if (before instanceof Date || after instanceof Date) return false;
   return before === after;
 }
@@ -280,11 +288,8 @@ export function parseDateInput(raw: string): Date | null {
  * at.
  */
 function toNumber(input: string): number | null {
-  // Several locales group with a non-breaking or narrow no-break space, so a
-  // figure copied out of this app's own formatting comes back carrying one.
-  // `\s` covers both — U+00A0 and U+202F are in its class — which is why this
-  // is not a hand-written list of the space characters Intl happens to use.
-  const text = input.replace(/\s/g, '');
+  const text = unspace(input);
+  if (text === null) return null;
   if (!/^[+-]?[\d.,]*\d$/.test(text)) return null;
 
   const sign = text.startsWith('-') ? -1 : 1;
@@ -319,6 +324,33 @@ function toNumber(input: string): number | null {
   // reads as "not a number" rather than reaching the integer check and being
   // refused for not being whole.
   return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Space grouping, closed up — or `null` where the spaces do not group.
+ *
+ * Several locales group with a space, and a figure copied out of this app's own
+ * formatting comes back carrying one. `\s` covers the non-breaking and narrow
+ * no-break spaces Intl uses, so this is not a hand-written list of them.
+ *
+ * They are checked rather than simply deleted. A space is a group separator,
+ * and grouping by space has to hold the way grouping by anything else does:
+ * `1 24 000` is refused for the same reason `1.24.000` is, where stripping
+ * every space first would have read it as 124000.
+ */
+function unspace(input: string): string | null {
+  const parts = input.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0] ?? '';
+
+  const last = parts.length - 1;
+  for (const [index, part] of parts.entries()) {
+    // The first group is one to three digits and carries the sign; the last
+    // may carry the fraction; the rest are three digits and nothing else.
+    const shape =
+      index === 0 ? /^[+-]?\d{1,3}$/ : index === last ? /^\d{3}([.,]\d+)?$/ : /^\d{3}$/;
+    if (!shape.test(part)) return null;
+  }
+  return parts.join('');
 }
 
 /** Which mark groups and which one separates the fraction, if either does. */

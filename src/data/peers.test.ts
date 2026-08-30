@@ -190,9 +190,10 @@ describe('enumerations', () => {
   });
 
   it('keeps a value the metamodel does not list as a share rather than a segment', () => {
-    const result = peers({ kind: 'enum', values, own: 'Decommissioned', order });
-    expect(result?.mark).toEqual({ shape: 'share', share: 0 });
-    expect(result?.caption).toBe('0 of 5 share it');
+    const held = [...values, 'Decommissioned'];
+    const result = peers({ kind: 'enum', values: held, own: 'Decommissioned', order });
+    expect(result?.mark).toEqual({ shape: 'share', share: 1 / 6 });
+    expect(result?.caption).toBe('1 of 6 share it');
   });
 
   // Twenty segments in a 104px track are three pixels each, which is a texture
@@ -269,6 +270,26 @@ describe('an unset attribute', () => {
   // row reading "Not set" is a contradiction on screen.
   it('says nothing rather than contradicting the row above it', () => {
     expect(peers({ kind: 'money', values: [1, 2], missing: 0, own: null })).toBeNull();
+  });
+});
+
+// The population and the row can disagree: the object may sit past where a
+// truncated read stopped, or the cached sample may be older than the object.
+// A tally of nothing under a row showing a value is a contradiction on screen,
+// so the line stays away — the same answer the unset branch already gave.
+describe('a population that does not contain this object', () => {
+  it('says nothing rather than tallying it at zero', () => {
+    const away = { values: ['Someone else'] as Value[], missing: 0, truncated: true };
+    expect(peers({ kind: 'enum', own: 'Mission critical', order: ['Mission critical'], ...away })).toBeNull();
+    expect(peers({ kind: 'boolean', own: true, values: [false, false], missing: 0, truncated: true })).toBeNull();
+    expect(peers({ kind: 'string', own: 'Northwind', values: [], missing: 4, truncated: true })).toBeNull();
+  });
+
+  // A rank is a comparison rather than a tally, so it stays meaningful whether
+  // or not the object is one of the values it is compared against.
+  it('still ranks a value against a population it is not part of', () => {
+    const result = peers({ kind: 'money', values: [1, 2, 3, 4], own: 99, truncated: true });
+    expect(result?.mark).toEqual({ shape: 'position', at: 1 });
   });
 });
 

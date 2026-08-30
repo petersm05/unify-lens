@@ -188,6 +188,15 @@ describe('numbers', () => {
     expect(parsed(real, '1 240 000')).toBe(1240000);
   });
 
+  // A space is a group separator, so grouping by space has to hold the way
+  // grouping by anything else does. Deleting every space first would read
+  // `1 24 000` as 124000 while `1.24.000` was refused.
+  it('holds a space grouping to the same shape as any other', () => {
+    expect(rejection(real, '1 24 000')).toContain('not a number');
+    expect(rejection(real, '1 5')).toContain('not a number');
+    expect(rejection(real, '1234 567')).toContain('not a number');
+  });
+
   // The judgement half of the rule: one separator is a decimal point, whatever
   // follows it. Grouping has to be unambiguous — a repeated mark, or a pair —
   // before it is read as grouping.
@@ -252,6 +261,10 @@ describe('numbers', () => {
     ['1.234.567', 1234567],
     ['12.345.678.901', 12345678901],
     ['1 234 567', 1234567],
+    ['1 24 000', 'refused'],
+    ['1 5', 'refused'],
+    ['1234 567', 'refused'],
+    ['-1 240', -1240],
     ['1,234.56', 1234.56],
     ['1.234,56', 1234.56],
     ['1,234,567.89', 1234567.89],
@@ -395,6 +408,21 @@ describe('isUnchanged', () => {
   it('compares dates by the moment they name, not by identity', () => {
     expect(isUnchanged(new Date(2019, 2, 14), new Date(2019, 2, 14))).toBe(true);
     expect(isUnchanged(new Date(2019, 2, 14), new Date(2019, 2, 15))).toBe(false);
+  });
+
+  // A `date` attribute is shown as a day and edited as a day, so a stored
+  // value carrying a time cannot survive the field. Comparing instants would
+  // call the untouched round trip a change and issue a write whose only effect
+  // is to move the value to midnight.
+  it('compares dates by the day they name, not the instant', () => {
+    expect(isUnchanged(new Date(2019, 2, 14, 9, 30), new Date(2019, 2, 14))).toBe(true);
+    expect(isUnchanged(new Date(2019, 2, 14, 23, 59), new Date(2019, 2, 15))).toBe(false);
+  });
+
+  it('calls an untouched round trip of a timed date unchanged', () => {
+    const stored = new Date(2019, 2, 14, 9, 30);
+    const back = parsed({ kind: 'date' }, seedFor(stored));
+    expect(isUnchanged(stored, back)).toBe(true);
   });
 
   it('does not confuse a date with anything else', () => {
