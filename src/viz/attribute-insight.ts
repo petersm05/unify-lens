@@ -536,16 +536,16 @@ export function mountAttributeInsight(
     }
     // A different scope is a different population, so whatever the opening
     // screen was holding is about something else now.
-    if (primary) {
-      // Dropped rather than recomputed: with a chart up nobody is looking at
-      // that screen, and re-scanning on every bar tapped would start a
-      // population read per filter — the row in the rail asks for one when
-      // there is actually someone waiting for the answer.
-      dropScan();
-      void render().catch(fail);
+    if (!primary) {
+      restartLeads();
       return;
     }
-    void beginLeads(type).catch(fail);
+    // With a chart up it is dropped rather than rescanned: nobody is looking
+    // at that screen, and rescanning on every bar tapped would start a
+    // population read per filter. The row in the rail asks for one when there
+    // is actually someone waiting for the answer.
+    dropScan();
+    void render().catch(fail);
   });
 
   async function loadAttributes(): Promise<void> {
@@ -1700,6 +1700,20 @@ export function mountAttributeInsight(
   }
 
   /**
+   * Scans again, for a population that has just become a different one.
+   *
+   * The rows stay up while it runs, dimmed and inert — the same trade the
+   * chart makes, and for the same reason: taking them down loses the reader's
+   * place, and being inert is what stops a stale row from being opened or
+   * dismissed in the meantime.
+   */
+  function restartLeads(): void {
+    dropScan();
+    leadsCard.classList.add('busy');
+    void beginLeads(type).catch(fail);
+  }
+
+  /**
    * Takes the opening screen down, where there is nothing behind it.
    *
    * A stale card is worse than none: it is a set of readings about a
@@ -1709,6 +1723,7 @@ export function mountAttributeInsight(
     if (run !== leadRun) return;
     scan = null;
     leadsCard.hidden = true;
+    leadsCard.classList.remove('busy');
     leadsLink.hidden = true;
     leadsLink.classList.remove('on');
     if (!primary) say('Pick an attribute to chart it.', true);
@@ -1729,6 +1744,7 @@ export function mountAttributeInsight(
     leadsLink.hidden = false;
     if (primary) return;
     leadsCard.hidden = false;
+    leadsCard.classList.remove('busy');
     placeholder.hidden = true;
     leadRows.replaceChildren();
     set(
@@ -1790,24 +1806,29 @@ export function mountAttributeInsight(
     insight.hidden = true;
     placeholder.hidden = true;
     leadsCard.hidden = false;
+    leadsCard.classList.remove('busy');
     leadScan.hidden = true;
     // The rail's own row for this screen reads as selected while it is the
     // screen, the way an attribute's row does.
     leadsLink.classList.add('on');
 
-    // The count of attributes and the read behind them, in one sentence: a
-    // scan of a truncated sample is a set of estimates, and every share on the
-    // rows below is derived from it.
+    // The count of attributes and the read behind them. A truncated scan is a
+    // reading of a prefix, and the caveat has to cover the whole row and not
+    // only its percentage: the counts beside it are counts within that read,
+    // and an outlier's multiple is a ratio of two figures found inside it.
     const basis = scan.truncated
-      ? `${sampledObjects(scan)}, so every share is an estimate`
+      ? sampledObjects(scan)
       : `${formatCount(scan.sampled)} ${labelFor(type)} objects`;
     const across = `${formatCount(scan.examined)} attribute${scan.examined === 1 ? '' : 's'} of ${basis}`;
+    const caveat = scan.truncated
+      ? ' Every figure on the rows is that read’s, not the whole population’s.'
+      : '';
     // An empty list has two meanings and they are not the same claim: nothing
     // was found, or everything found has been put away by the reader.
     set(
       'leads-sub',
       shown.length > 0
-        ? `Across ${across}. Each row opens the chart behind it.`
+        ? `Across ${across}. Each row opens the chart behind it.${caveat}`
         : scan.leads.length === 0
           ? `Nothing stands out across ${across}. Pick an attribute to chart it.`
           : `Everything found across ${across} has been put away. Pick an attribute to chart it.`,
@@ -1912,7 +1933,7 @@ export function mountAttributeInsight(
     // a chart drawn since may have read the population already, in which case
     // this comes back with the answer instead.
     say('Looking for what is worth a chart…');
-    void beginLeads(type).catch(fail);
+    restartLeads();
   }
 
   function dismissedFor(forType: ObjectType): Set<string> {

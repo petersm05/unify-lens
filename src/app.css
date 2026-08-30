@@ -536,8 +536,11 @@ main.pane {
   opacity: 0.6;
 }
 
-/* Separated from the attributes below it: it is a screen, not one of them. */
-.leads-link {
+/* Separated from the attributes below it: it is a screen, not one of them.
+   Qualified by the panel it sits in on purpose — `.attr` is redefined further
+   down the file, and at equal specificity the later rule takes the border and
+   the padding back off again. */
+.rail .leads-link {
   margin-bottom: 6px;
   padding-bottom: 11px;
   border-bottom: 1px solid var(--border);
@@ -1629,8 +1632,10 @@ table.data th.num {
 }
 
 /* The previous chart stays readable while the next one is computed — it is
-   dimmed and inert rather than replaced, so the reader keeps their place. */
-.insight.busy {
+   dimmed and inert rather than replaced, so the reader keeps their place. The
+   opening screen makes the same trade while it is rescanned. */
+.insight.busy,
+.leads.busy {
   opacity: 0.45;
   pointer-events: none;
   transition: opacity 140ms ease;

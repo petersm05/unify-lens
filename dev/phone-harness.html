@@ -337,10 +337,10 @@
         card.querySelector('.sub').textContent = offering
           ? '12.406 Application Component objects is more than is read without being asked. One read answers it for every attribute at once.'
           : 'Across 44 attributes of 1.191 Application Component objects. Each row opens the chart behind it.';
-        // Charted, it is the way back to this screen; with nothing scanned yet
-        // there is nothing behind it, and the app hides it.
+        // Shown in all three states: charted it is the way back to this
+        // screen, and an offer is a screen to come back to as well. The app
+        // hides it only before there is either.
         const link = section.querySelector('.leads-link');
-        link.hidden = offering;
         link.classList.toggle('on', !charted && !offering);
         // Only one row in the panel is the one on screen.
         if (!charted) section.querySelector('.attr-list .attr.on').classList.remove('on');
