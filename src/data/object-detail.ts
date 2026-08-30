@@ -1,5 +1,6 @@
 import type { UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Kg } from '../sdk/client';
+import type { EditValue } from './attribute-edit';
 
 const SELECTOR = {
   description: true,
@@ -19,6 +20,16 @@ export interface AttributeValue {
   readonly name: string;
   readonly kind: string;
   readonly display: string;
+  /**
+   * The value as its own type, for an editor to open on — `null` where there
+   * is nothing a field can hold.
+   *
+   * Not the same question as `display === null`, which asks whether the object
+   * has a value at all. A reference has one and is shown, and still has no
+   * scalar behind it; the two nulls mean different things and are decided
+   * separately for that reason.
+   */
+  readonly value: EditValue;
   readonly currency?: string;
   readonly numeric?: number;
 }
@@ -81,6 +92,7 @@ export async function fetchDetail(kg: Kg, id: UUID): Promise<Detail | null> {
         name: attribute.name,
         kind: attribute.type,
         display,
+        value: typedValue(attribute),
         ...(attribute.type === 'money' && 'currency' in attribute && attribute.currency
           ? { currency: attribute.currency as string }
           : {}),
@@ -116,6 +128,26 @@ export async function fetchDetail(kg: Kg, id: UUID): Promise<Detail | null> {
     views: (object.views ?? []).map((view) => ({ id: view.id, name: view.name ?? '(unnamed)' })),
     emptyCount,
   };
+}
+
+/**
+ * The value behind the display, where it is one an editor can hold.
+ *
+ * An enum is carried as text without deciding whether it is the id or the
+ * label: `attributeCategories` returns both a `value` and a `displayValue` and
+ * the public types do not settle which of them a given backend fills, so
+ * `enumIdFor` resolves it against the metamodel's own list instead of this
+ * guessing. A reference is a value but not a scalar, and gets `null`.
+ */
+function typedValue(attribute: { type: string; value?: unknown }): EditValue {
+  const value = attribute.value;
+  if (value === null || value === undefined || value === '') return null;
+  if (attribute.type === 'enum') return String(value);
+  if (value instanceof Date) return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
+    return value;
+  }
+  return null;
 }
 
 /** `null` for an absent value, so empty attributes can be counted not listed. */
