@@ -251,7 +251,7 @@
                 <p class="sub"></p>
               </div>
               <div class="lead-rows" role="list">
-                <div class="lead empty" role="listitem">
+                <div class="lead empty coverage-row" role="listitem">
                   <button type="button" class="lead-open">
                     <span class="lead-word">Unused</span>
                     <span class="lead-title">Financials</span>
@@ -263,7 +263,7 @@
                     <span class="icon" aria-hidden="true">✕</span>
                   </button>
                 </div>
-                <div class="lead sparse" role="listitem">
+                <div class="lead sparse coverage-row" role="listitem">
                   <button type="button" class="lead-open">
                     <span class="lead-word">Sparse</span>
                     <span class="lead-title">Business criticality</span>
@@ -275,7 +275,7 @@
                     <span class="icon" aria-hidden="true">✕</span>
                   </button>
                 </div>
-                <div class="lead sparse" role="listitem">
+                <div class="lead sparse coverage-row" role="listitem">
                   <button type="button" class="lead-open">
                     <span class="lead-word">Sparse</span>
                     <span class="lead-title">${LONG}</span>
@@ -324,26 +324,41 @@
         section.querySelector('.rail-scrim').hidden = !open || lane === 'wide';
         section.querySelector('.rail-toggle').setAttribute('aria-expanded', String(open));
         section.querySelector('.insight').hidden = !charted;
-        // Three states share the empty pane. `?charted=no` is the one the view
+        // Four states share the empty pane. `?charted=no` is the one the view
         // opens on where the population was small enough to have been read:
-        // the leads. `?leads=offer` is the same screen where it was not, and
-        // `?leads=no` is the bare line from before there was anything to say.
+        // the leads. `?leads=offer` is the same screen where it was not,
+        // `?leads=coverage` is a read that stopped short — rows, and the
+        // action under them — and `?leads=no` is the bare line from before
+        // there was anything to say.
         const leads = new URL(location.href).searchParams.get('leads') ?? 'rows';
         const offering = leads === 'offer';
+        const uncounted = leads === 'coverage';
         const card = section.querySelector('.leads');
         card.hidden = charted || leads === 'no';
         card.querySelector('.lead-rows').hidden = offering;
-        card.querySelector('.lead-scan').hidden = !offering;
+        // A read that stopped short says nothing about coverage, so those rows
+        // are not in that list at all — the app leaves them out rather than
+        // qualifying them.
+        card
+          .querySelectorAll('.coverage-row')
+          .forEach((row) => (row.hidden = uncounted));
+        const action = card.querySelector('.lead-scan');
+        action.hidden = !offering && !uncounted;
+        action.textContent = offering
+          ? 'Scan the population'
+          : 'Count coverage across the population';
         card.querySelector('.sub').textContent = offering
           ? '12.406 Application Component objects is more than is read without being asked. One read covers every attribute at once, and the rows say so where it has to stop short of the whole population.'
-          : 'Across 44 attributes of 1.191 Application Component objects. Each row opens the chart behind it.';
+          : uncounted
+            ? 'Across 44 attributes of the first 4.000 objects read. Coverage is left out: this read stopped short, and a share of what it reached is not a share of the whole. Every figure here is that read’s.'
+            : 'Across 44 attributes of 1.191 Application Component objects. Each row opens the chart behind it.';
         // The app hides the row until there is a screen behind it, and an
         // offer counts as one — so `?leads=no`, which is the state before
         // either, is the one state without it. It reads as selected only while
         // that screen is what is on show.
         const link = section.querySelector('.leads-link');
         link.hidden = leads === 'no';
-        link.classList.toggle('on', !charted && leads === 'rows');
+        link.classList.toggle('on', !charted && !offering);
         // Only one row in the panel is the one on screen.
         if (!charted) section.querySelector('.attr-list .attr.on').classList.remove('on');
         section.querySelector('.placeholder').hidden = charted || !card.hidden;

@@ -618,7 +618,6 @@ export function mountAttributeInsight(
       return;
     }
 
-
     say('Pick an attribute to chart it.', true);
 
     // The schema and the type on screen now agree, which is what a scan needs
@@ -1672,7 +1671,7 @@ export function mountAttributeInsight(
 
     const held = session.sample.peek(forType, scope);
     if (held) {
-      present(await scanned(held, forType, scope), run);
+      present(scanForLeads(held, choices), run);
       return;
     }
 
@@ -1717,31 +1716,27 @@ export function mountAttributeInsight(
     }
     if (run !== leadRun) return;
 
-    present(await scanned(sample, forType, scope), run);
+    present(scanForLeads(sample, choices), run);
   }
 
   /**
-   * One sample, scanned — with coverage the chart it opens will agree with.
+   * Coverage for every attribute a scan reads, counted server-side.
    *
-   * A complete sample is the population, so the scan reads coverage straight
-   * off it. A truncated one is a prefix, and `coverage()` behind the chart
-   * asks the server in exactly that case: a row saying "Sparse — 12% covered"
-   * would open a gauge saying "Well covered — 85%", and the row would be the
-   * wrong one. So the counts are fetched for the attributes the scan reads —
-   * two per attribute, no items, batched into one request — and the rows are
-   * then of the same population as the gauge.
+   * Only ever on a path someone asked for. A complete sample already holds
+   * coverage exactly, and where it fell short the scan leaves coverage out
+   * rather than reading a prefix as a population — so this is what buys the
+   * coverage rows back, and it is not cheap enough to spend unasked: two
+   * counts per attribute, forty-odd attributes, and `batchMaxRequests` is 16,
+   * so it is several round trips rather than the one a batch suggests. No
+   * items are fetched by any of them.
    *
-   * Best effort, because it is a caveat and not the answer: if the counts do
-   * not come back the scan is still worth showing, and `exactCoverage` is what
-   * the card's sentence reads to say which population the rows are about.
+   * Best effort: without the counts the scan still has its value readings to
+   * show, and `exactCoverage` is what says which of the two it is.
    */
-  async function scanned(
-    sample: Sample,
+  async function coverageCounts(
     forType: ObjectType,
     scope: AttributeFilter<MetaModel> | undefined,
-  ): Promise<Scan> {
-    if (!sample.truncated) return scanForLeads(sample, choices);
-
+  ): Promise<ReadonlyMap<string, Coverage> | undefined> {
     try {
       const counted = await Promise.all(
         scannedAttributes(choices).map(
@@ -1752,9 +1747,9 @@ export function mountAttributeInsight(
             ] as const,
         ),
       );
-      return scanForLeads(sample, choices, new Map(counted));
+      return new Map(counted);
     } catch {
-      return scanForLeads(sample, choices);
+      return undefined;
     }
   }
 
@@ -1783,8 +1778,21 @@ export function mountAttributeInsight(
     // flight takes the card down itself, and dimming it on the way would be a
     // card left grey with nothing coming.
     if (!scannable()) return;
-    leadsCard.classList.add('busy');
+    leadsBusy(true);
     void beginLeads().catch(fail);
+  }
+
+  /**
+   * Dims the opening screen while the next scan runs, and takes it out of
+   * reach — or puts it back.
+   *
+   * `pointer-events: none` is only half of out of reach: the rows are buttons,
+   * and a keyboard gets to them regardless, which is a stale row opened or
+   * dismissed while the list that replaces it is being computed.
+   */
+  function leadsBusy(working: boolean): void {
+    leadsCard.classList.toggle('busy', working);
+    leadsCard.inert = working;
   }
 
   /**
@@ -1808,7 +1816,7 @@ export function mountAttributeInsight(
     if (run !== leadRun) return;
     scan = null;
     leadsCard.hidden = true;
-    leadsCard.classList.remove('busy');
+    leadsBusy(false);
     leadsLink.hidden = true;
     leadsLink.classList.remove('on');
     if (!primary) say('Pick an attribute to chart it.', true);
@@ -1829,7 +1837,7 @@ export function mountAttributeInsight(
     leadsLink.hidden = false;
     if (primary) return;
     leadsCard.hidden = false;
-    leadsCard.classList.remove('busy');
+    leadsBusy(false);
     placeholder.hidden = true;
     leadRows.replaceChildren();
     set(
@@ -1853,15 +1861,27 @@ export function mountAttributeInsight(
     // before the read rather than after it, since the read is the expensive
     // half and a superseded one is thrown away either way.
     if (run !== leadRun) return;
+    const label = leadScan.textContent ?? '';
     leadScan.disabled = true;
     leadScan.textContent = 'Reading…';
     try {
       const scope = scopeFor(filters.get());
       const sample = await busy.track(session.sample.get(forType, scope));
       if (run !== leadRun) return;
-      present(await busy.track(scanned(sample, forType, scope)), run);
+
+      // Only where the read fell short: a complete one is the population, and
+      // the scan takes coverage straight off it.
+      const counts = sample.truncated
+        ? await busy.track(coverageCounts(forType, scope))
+        : undefined;
+      if (run !== leadRun) return;
+      present(scanForLeads(sample, choices, counts), run);
     } finally {
+      // Back to what it said. Where this landed, the screen it drew replaces
+      // the button anyway; where it did not, an enabled button reading
+      // "Reading…" that does nothing is worse than either outcome.
       leadScan.disabled = false;
+      leadScan.textContent = label;
     }
   }
 
@@ -1896,6 +1916,8 @@ export function mountAttributeInsight(
     if (!scan) return;
     const shown = shortlist(scan.leads, dismissedFor(type));
     const putAway = shown.length === 0 && scan.leads.length > 0;
+    /** The scan left coverage out, and asking for it is a round trip away. */
+    const uncounted = scan.truncated && !scan.exactCoverage;
 
     insight.hidden = true;
 
@@ -1911,13 +1933,13 @@ export function mountAttributeInsight(
       ? ''
       : scan.exactCoverage
         ? ' Coverage is counted across the whole population; every other figure is that read’s.'
-        : ' Every figure on the rows is that read’s, not the whole population’s.';
+        : ' Coverage is left out: this read stopped short, and a share of what it reached is not a share of the whole. Every figure here is that read’s.';
     // An empty list has two meanings and they are not the same claim: nothing
     // was found, or everything found has been put away by the reader. The
     // first is the empty pane's own line, which is also the control that opens
     // the attribute list — a card telling someone to pick an attribute while
     // hiding the button that does it is a dead end on a phone.
-    if (shown.length === 0 && !putAway) {
+    if (shown.length === 0 && !putAway && !uncounted) {
       say(`Nothing stands out across ${across}. Pick an attribute to chart it.`, true);
       leadsLink.classList.remove('on');
       return;
@@ -1925,7 +1947,7 @@ export function mountAttributeInsight(
 
     placeholder.hidden = true;
     leadsCard.hidden = false;
-    leadsCard.classList.remove('busy');
+    leadsBusy(false);
     // The rail's own row for this screen reads as selected while it is the
     // screen, the way an attribute's row does.
     leadsLink.classList.add('on');
@@ -1934,16 +1956,25 @@ export function mountAttributeInsight(
       'leads-sub',
       putAway
         ? `Everything found across ${across} has been put away.`
-        : `Across ${across}. Each row opens the chart behind it.${caveat}`,
+        : shown.length === 0
+          ? `Nothing stands out across ${across}.${caveat}`
+          : `Across ${across}. Each row opens the chart behind it.${caveat}`,
     );
 
     leadRows.replaceChildren(...shown.map(leadRow));
 
-    // Dismissing every row would otherwise be a one-way door: the ranking is
-    // still there, and nothing else brings it back.
-    leadScan.hidden = !putAway;
-    if (putAway) {
-      leadScan.disabled = false;
+    // One action, and which one it is has an order: counting coverage changes
+    // what the list contains, so it comes first, and bringing rows back is
+    // still there afterwards if they are still all put away. Dismissing the
+    // last row would otherwise be a one-way door — the ranking is still there,
+    // and nothing else reaches it.
+    leadScan.hidden = !(uncounted || putAway);
+    leadScan.disabled = false;
+    if (uncounted) {
+      const run = leadRun;
+      leadScan.textContent = 'Count coverage across the population';
+      leadScan.onclick = () => void runScan(type, run).catch(fail);
+    } else if (putAway) {
       leadScan.textContent = 'Bring back the rows I put away';
       leadScan.onclick = () => {
         dismissedFor(type).clear();

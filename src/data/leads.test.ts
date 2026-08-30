@@ -395,12 +395,29 @@ describe('scanForLeads', () => {
     expect(digits(scan.leads[0]!.detail)).toBe(`${8406}${12406}`);
   });
 
-  it('says when a coverage reading is only the prefix it read', () => {
+  it('says nothing about coverage it cannot stand behind', () => {
     const criticality = attribute();
     const sample = population(4000, (index) => (index < 100 ? [[criticality, 'Production']] : []), true);
 
-    expect(scanForLeads(sample, [criticality]).exactCoverage).toBe(false);
-    expect(scanForLeads(sample, [criticality], new Map()).exactCoverage).toBe(true);
+    // 100 of the 4.000 read carry a value, which on a complete sample would
+    // be the strongest lead on the screen. The chart behind it would count the
+    // whole population and disagree, so there is no row and no claim.
+    const scan = scanForLeads(sample, [criticality]);
+
+    expect(scan.exactCoverage).toBe(false);
+    expect(scan.leads).toEqual([]);
+    // A map that is missing this attribute is not counts for it.
+    expect(scanForLeads(sample, [criticality], new Map()).exactCoverage).toBe(false);
+    expect(scanForLeads(sample, [criticality], new Map()).leads).toEqual([]);
+  });
+
+  it('still reads the values of a sample it cannot judge coverage from', () => {
+    const lifecycle = attribute({ definitionId: 'def-lc', name: 'Lifecycle' });
+    // What was read is what a distribution chart would draw from too, so a
+    // dominant value is the same claim on the row and on the chart.
+    const sample = population(4000, (index) => [[lifecycle, index < 3800 ? 'Production' : 'Retired']], true);
+
+    expect(kinds(scanForLeads(sample, [lifecycle]).leads)).toEqual(['concentrated']);
   });
 
   it('scans the attributes it says it scans', () => {

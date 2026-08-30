@@ -200,7 +200,12 @@ export function scanForLeads(
 ): Scan {
   const total = sample.objects.length;
   const examined = scannedAttributes(choices);
-  const exactCoverage = !sample.truncated || counts !== undefined;
+  // Every examined attribute, not merely "some counts were passed": a map
+  // missing one attribute would have that one's prefix share sitting in a list
+  // labelled as the whole population's.
+  const exactCoverage =
+    !sample.truncated ||
+    (counts !== undefined && examined.every((choice) => counts.has(conditionName(choice))));
 
   if (total === 0) {
     return {
@@ -259,7 +264,15 @@ export function scanForLeads(
     // not also a story about which of the few values dominates: reporting both
     // would put the same attribute on the screen twice, and the second row
     // would be describing a handful of objects.
-    const lead = coverageLead(choice, withValue, population) ?? valueLead(choice, values);
+    //
+    // No coverage reading at all where this attribute has no count and the
+    // sample stopped short. Saying nothing is the only honest option left: the
+    // gauge behind the row would count the whole population and disagree, and
+    // a caveat under a row that says "Sparse" does not unsay the word.
+    const judged = counted !== undefined || !sample.truncated;
+    const lead =
+      (judged ? coverageLead(choice, withValue, population) : null) ??
+      valueLead(choice, values, values.length / total);
     if (!lead) continue;
 
     found.push(lead);
@@ -293,9 +306,22 @@ function coverageLead(choice: AttributeChoice, withValue: number, total: number)
   };
 }
 
-/** The reading that comes from the values themselves, once there are enough. */
-function valueLead(choice: AttributeChoice, values: readonly Value[]): Lead | null {
-  if (values.length === 0) return null;
+/**
+ * The reading that comes from the values themselves, once there are enough.
+ *
+ * @param seen - the share of the objects read that carried a value. A value
+ *   story about an attribute most of them leave empty is the wrong story: with
+ *   coverage judged, the coverage row is the one that fires and this is never
+ *   reached; without it — a truncated read with no counts — nothing would stop
+ *   "100% are Production" describing the hundred objects out of four thousand
+ *   that have a value, so the same bar is applied here.
+ */
+function valueLead(
+  choice: AttributeChoice,
+  values: readonly Value[],
+  seen: number,
+): Lead | null {
+  if (values.length === 0 || seen < SPARSE) return null;
 
   if (choice.kind === 'enum' || choice.kind === 'string' || choice.kind === 'text') {
     const tally = new Map<string, number>();

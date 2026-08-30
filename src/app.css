@@ -518,9 +518,12 @@ main.pane {
   }
 }
 
-/* The offer, where the population is too large to have been read already. */
+/* The card's one action — an offer to read, or the way back to rows that were
+   put away. Set off from whatever is above it, which is a sentence in one case
+   and the last row in the other. */
 .lead-scan {
   appearance: none;
+  margin-top: 8px;
   border: 0;
   font: inherit;
   font-size: 15px;
