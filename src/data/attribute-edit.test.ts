@@ -358,7 +358,12 @@ describe('dates', () => {
     process.env['TZ'] = 'America/New_York';
   });
   afterAll(() => {
-    process.env['TZ'] = zone;
+    // Deleted rather than assigned when there was none. Node coerces an
+    // assigned `undefined` to the string "undefined", which is not a zone, so
+    // it falls back to UTC — and every block after this one would then run in
+    // the environment this one exists to escape.
+    if (zone === undefined) delete process.env['TZ'];
+    else process.env['TZ'] = zone;
   });
 
   it('is running somewhere the two implementations differ', () => {
@@ -487,6 +492,13 @@ describe('seedFor', () => {
 });
 
 describe('isUnchanged', () => {
+  // Placed here because this block asserts about dates and runs after the one
+  // that moves the clock. A zone left as the literal "undefined" reads as UTC,
+  // which is exactly the silence the block above was written to avoid.
+  it('runs after the clock has been put back', () => {
+    expect(process.env['TZ']).not.toBe('undefined');
+  });
+
   it('compares dates by the moment they name, not by identity', () => {
     expect(isUnchanged(new Date(2019, 2, 14), new Date(2019, 2, 14))).toBe(true);
     expect(isUnchanged(new Date(2019, 2, 14), new Date(2019, 2, 15))).toBe(false);
