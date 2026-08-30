@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Sample, Value } from './sample-store';
-import { peersFor, provenanceOf, rankAmong, valuesOf, type PeerInput } from './peers';
+import { countBelow, peersFor, provenanceOf, valuesOf, type PeerInput } from './peers';
 
 /** A sample whose objects carry exactly the values given, under one key. */
 function sampleOf(
@@ -25,28 +25,29 @@ function peers(input: Partial<PeerInput> & Pick<PeerInput, 'kind'>): ReturnType<
   return peersFor({ values: [], missing: 0, own: null, truncated: false, ...input });
 }
 
-describe('rankAmong', () => {
-  it('is the share strictly below', () => {
-    expect(rankAmong([1, 2, 3, 4], 3)).toBe(0.5);
+describe('countBelow', () => {
+  it('counts the values strictly below', () => {
+    expect(countBelow([1, 2, 3, 4], 3)).toBe(2);
   });
 
   it('does not count ties', () => {
-    // Four values, three of them 5. Only the 1 is below, so a 5 is above a
-    // quarter of the population — not three quarters of it.
-    expect(rankAmong([1, 5, 5, 5], 5)).toBe(0.25);
+    // Four values, three of them 5. Only the 1 is below, so a 5 is above one
+    // of the population — not three of it.
+    expect(countBelow([1, 5, 5, 5], 5)).toBe(1);
   });
 
   it('puts the smallest value above none of the population', () => {
-    expect(rankAmong([1, 2, 3, 4], 1)).toBe(0);
+    expect(countBelow([1, 2, 3, 4], 1)).toBe(0);
   });
 
-  it('counts the object itself in the denominator, not the numerator', () => {
-    // The largest of four is above the other three: 0.75, never 1.
-    expect(rankAmong([1, 2, 3, 4], 4)).toBe(0.75);
+  // Which is why no phrasing built on "all" can be exact: the largest of four
+  // is above three of them, never four.
+  it('never counts the object itself, so the maximum is one short of the total', () => {
+    expect(countBelow([1, 2, 3, 4], 4)).toBe(3);
   });
 
   it('answers nothing for an empty population', () => {
-    expect(rankAmong([], 3)).toBeNull();
+    expect(countBelow([], 3)).toBeNull();
   });
 });
 
@@ -81,51 +82,40 @@ describe('numeric attributes', () => {
   it('ranks the value and says so in the same number the mark draws', () => {
     const result = peers({ kind: 'money', values, own: 400 });
     expect(result?.mark).toEqual({ shape: 'position', at: 0.6 });
-    expect(result?.caption).toBe('higher than 60% of 5');
+    expect(result?.caption).toBe('higher than 3 of 5');
   });
 
   // The caption and the mark are two renderings of one figure. A row that says
   // 78% under a bar filled to 22% is worse than a row with no bar.
+  // The caption's count over the total it names is the fraction the bar is
+  // filled to. There is no wording anywhere on this line that is not that.
   it('never lets the caption and the mark disagree', () => {
     for (const own of values) {
       const result = peers({ kind: 'real', values, own });
       const mark = result?.mark;
       if (mark?.shape !== 'position') throw new Error('expected a position mark');
 
-      const figure = /(\d+)%/.exec(result?.caption ?? '');
-      if (figure) {
-        expect(Number(figure[1])).toBe(Math.round(mark.at * 100));
-      } else {
-        // The ends are worded instead of given a figure, and only the ends.
-        expect(mark.at === 0 || mark.at < 0.005 || mark.at >= 0.995).toBe(true);
-      }
+      const figures = /than (?:(\d+)|none) of (\d+)/.exec(result?.caption ?? '');
+      if (!figures) throw new Error(`unreadable caption: ${result?.caption ?? ''}`);
+      expect(Number(figures[1] ?? 0) / Number(figures[2])).toBe(mark.at);
     }
   });
 
-  // `percent()` guards its own ends, which reads as two comparators inside
-  // "higher than >99% of 412". The ends are said in words instead.
-  it('words the ends rather than composing two comparators', () => {
-    const captions = [
-      peers({ kind: 'real', values, own: 100 })?.caption,
-      peers({ kind: 'date', values: [new Date(2020, 0, 1), new Date(2021, 0, 1)], own: new Date(2020, 0, 1) })?.caption,
-    ];
-    expect(captions).toEqual(['higher than none of 5', 'later than none of 2']);
-
+  // Every wording built on "all" or "the lowest" was subtly false somewhere: a
+  // tied minimum is not the lowest, and the strict maximum of 412 is above 411
+  // rather than all of them. A count is exact at both ends and under ties.
+  it('is exact at both ends, and under ties', () => {
     const many = Array.from({ length: 400 }, (_, index) => index);
-    expect(peers({ kind: 'real', values: many, own: 399 })?.caption).toBe(
-      'higher than all but a few of 400',
-    );
-    expect(peers({ kind: 'real', values: many, own: 1 })?.caption).toBe(
-      'higher than a few of 400',
-    );
-  });
+    expect(peers({ kind: 'real', values: many, own: 399 })?.caption).toBe('higher than 399 of 400');
+    expect(peers({ kind: 'real', values: many, own: 0 })?.caption).toBe('higher than none of 400');
+    expect(peers({ kind: 'real', values: many, own: 1 })?.caption).toBe('higher than 1 of 400');
 
-  // `rankAmong` does not count ties, so a rank of zero is shared by every
-  // object holding the minimum. "The lowest of 7" would be claimed by five of
-  // them at once; "higher than none" is true for all five.
-  it('does not call one of several equal minimums the lowest', () => {
-    const result = peers({ kind: 'integer', values: [0, 0, 0, 0, 0, 5, 9], own: 0 });
-    expect(result?.caption).toBe('higher than none of 7');
+    const tied = peers({ kind: 'integer', values: [0, 0, 0, 0, 0, 5, 9], own: 0 });
+    expect(tied?.caption).toBe('higher than none of 7');
+
+    const earliest = new Date(2020, 0, 1);
+    const dates = [earliest, new Date(2021, 0, 1)];
+    expect(peers({ kind: 'date', values: dates, own: earliest })?.caption).toBe('later than none of 2');
   });
 
   it('treats the three numeric kinds alike', () => {
@@ -146,7 +136,7 @@ describe('numeric attributes', () => {
   it('names the population it actually ranked against, not the whole sample', () => {
     const result = peers({ kind: 'money', values: [100, 200], missing: 8, own: 200 });
     expect(result?.mark).toEqual({ shape: 'position', at: 0.5 });
-    expect(result?.caption).toBe('higher than 50% of 2');
+    expect(result?.caption).toBe('higher than 1 of 2');
   });
 
   it('says nothing when the population holds no numbers to rank against', () => {
@@ -165,19 +155,19 @@ describe('dates', () => {
   it('ranks by the moment, and phrases it in the direction the mark fills', () => {
     const result = peers({ kind: 'date', values, own: new Date(2018, 0, 1) });
     expect(result?.mark).toEqual({ shape: 'position', at: 0.25 });
-    expect(result?.caption).toBe('later than 25% of 4');
+    expect(result?.caption).toBe('later than 1 of 4');
   });
 
   it('counts only the objects that have a date, as the numbers do', () => {
     const result = peers({ kind: 'date', values, missing: 6, own: new Date(2018, 0, 1) });
-    expect(result?.caption).toBe('later than 25% of 4');
+    expect(result?.caption).toBe('later than 1 of 4');
   });
 
   it('does not invert the figure between the words and the bar', () => {
     const result = peers({ kind: 'date', values, own: new Date(2024, 0, 1) });
     const mark = result?.mark;
     if (mark?.shape !== 'position') throw new Error('expected a position mark');
-    expect(result?.caption).toBe(`later than ${Math.round(mark.at * 100)}% of 4`);
+    expect(result?.caption).toBe(`later than ${mark.at * 4} of 4`);
   });
 });
 
@@ -308,7 +298,7 @@ describe('a population that does not contain this object', () => {
     expect(result?.mark).toEqual({ shape: 'position', at: 1 });
     // And says so: "all but a few" under a track filled to the end is the same
     // mismatch the bottom end has its own phrase for.
-    expect(result?.caption).toBe('higher than all of 4');
+    expect(result?.caption).toBe('higher than 4 of 4');
   });
 });
 
@@ -363,7 +353,7 @@ describe('a truncated read', () => {
   // otherwise promise four thousand.
   it('names what a rank was actually taken over, read whole or not', () => {
     const partial = peers({ kind: 'money', values: [100, 200], missing: 3998, own: 200, truncated: true });
-    expect(partial?.caption).toBe('higher than 50% of 2');
+    expect(partial?.caption).toBe('higher than 1 of 2');
   });
 });
 

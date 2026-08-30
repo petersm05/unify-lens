@@ -10,10 +10,15 @@ import { formatCount } from '../format';
  * is wrong is a claim about someone's estate — so the rank and the shares are
  * testable without a session.
  *
- * Every mark answers the same question: **what share of the population matches
- * this object**. That is what makes the enum, boolean, free-text and unset rows
- * one idea rather than four, and it is why the caption and the mark can never
- * disagree — they are two renderings of one number.
+ * A `position` mark and a `share` mark are two renderings of one number: the
+ * bar is the figure the caption states, and a test holds them to it.
+ *
+ * A `steps` mark is the exception, and deliberately. Its segments say *which*
+ * of the enumeration's values this object holds, in the metamodel's order,
+ * while the caption says how many objects share it — two facts, neither
+ * derived from the other. They sit together because that is the pair worth
+ * knowing about an enum, and the value itself is printed above them, which is
+ * what stops the lit segment reading as a quantity.
  */
 
 /**
@@ -133,8 +138,9 @@ export function peersFor(input: PeerInput): Peers | null {
       // size would put two different denominators on one row — the bar drawn
       // from one and the sentence naming the other.
       const ranked = numbersIn(input.values);
-      const at = rankAmong(ranked, own);
-      if (at === null) return null;
+      const below = countBelow(ranked, own);
+      if (below === null) return null;
+      const at = below / ranked.length;
 
       // Named as a count whether the read was complete or not — unlike the
       // tallies below, which take `of`. "Of those read" means the whole sample
@@ -144,7 +150,7 @@ export function peersFor(input: PeerInput): Peers | null {
       // either way; that the read was partial is what the foot line is for.
       return {
         mark: { shape: 'position', at },
-        caption: rankPhrase(at, input.kind, formatCount(ranked.length)),
+        caption: rankPhrase(below, input.kind, formatCount(ranked.length)),
       };
     }
 
@@ -206,31 +212,26 @@ export function peersFor(input: PeerInput): Peers | null {
 }
 
 /**
- * A rank as a sentence, carrying one comparator rather than two.
+ * A rank as a sentence: how many it is above, out of how many there are.
  *
- * `percent()` guards its own ends with `<1%` and `>99%`, which is right for a
- * figure standing alone and reads as two comparators inside "higher than >99%
- * of 412". So the ends are said in words here, and nothing in between needs
- * guarding: with a population of any size, a rank that rounds to 0 or 100 has
- * already been caught by one of them.
+ * A count rather than a percentage, which went through several wordings before
+ * settling here. A percentage cannot say the ends without a second comparator
+ * inside the sentence — `percent()` guards them with `<1%` and `>99%`, and
+ * "higher than >99% of 412" reads as two — and wording the ends by hand kept
+ * being subtly false: "the lowest" was claimed by every object sharing the
+ * minimum, and "all but a few" by the strict maximum of any population over
+ * two hundred, because a value is never above itself and `411/412` is not one.
  *
- * Every phrase stays true under ties, which `rankAmong` does not count.
+ * A count has none of that. It is exact at both ends and in the middle, true
+ * under ties, and the same figure the bar is drawn from — `below` over the
+ * count named, which is the fill. Only zero gets a word, because "higher than
+ * 0 of 412" is a sentence nobody writes.
  */
-function rankPhrase(at: number, kind: AttributeKind, among: string): string {
+function rankPhrase(below: number, kind: AttributeKind, among: string): string {
   const verb = kind === 'date' ? 'later' : 'higher';
-  // "Than none", not "the lowest": ties are not counted below, so a rank of
-  // zero is shared by every object holding the minimum, and on an attribute
-  // where half the estate is zero that would be a great many sheets each
-  // claiming to be the one.
-  if (at === 0) return `${verb} than none of ${among}`;
-  if (at < 0.005) return `${verb} than a few of ${among}`;
-  // Exactly one means strictly above every value there is, which happens where
-  // the object is not among them — a read that stopped short of it, or a
-  // sample older than the object. "All but a few" under a track filled to the
-  // end is the same mismatch the other end was given its own phrase for.
-  if (at === 1) return `${verb} than all of ${among}`;
-  if (at >= 0.995) return `${verb} than all but a few of ${among}`;
-  return `${verb} than ${Math.round(at * 100)}% of ${among}`;
+  return below === 0
+    ? `${verb} than none of ${among}`
+    : `${verb} than ${formatCount(below)} of ${among}`;
 }
 
 /**
@@ -253,25 +254,28 @@ function counted(matching: number): number | null {
 }
 
 /**
- * The share of a population a value is above, from 0 to 1.
+ * How many of a population a value is above.
  *
- * A rank, not a bin: the values strictly below it, divided by how many there
- * are. No bucketing and no interpolation, and ties are not counted — so the
- * smallest value in a population is above none of it, and a value shared by
- * everyone is above none of it either.
+ * A rank, not a bin: the values strictly below it. No bucketing and no
+ * interpolation, and ties are not counted — so the smallest value in a
+ * population is above none of it, and a value shared by everyone is above none
+ * of it either.
  *
- * The object itself is in the population, and is not below itself, so it
- * counts in the denominator and not in the numerator. That is what makes
- * "higher than 78% of 412" a statement about the other 412 rather than 411.
+ * The object itself is in the population and is not below itself, so it counts
+ * in the total and not in this. That is why the maximum of four hundred and
+ * twelve objects is above four hundred and eleven of them rather than all of
+ * them, and why no phrasing built on "all" can be exact.
+ *
+ * `null` for an empty population, which has no rank rather than a rank of zero.
  */
-export function rankAmong(values: readonly number[], own: number): number | null {
+export function countBelow(values: readonly number[], own: number): number | null {
   if (values.length === 0) return null;
 
   let below = 0;
   for (const value of values) {
     if (value < own) below += 1;
   }
-  return below / values.length;
+  return below;
 }
 
 /**
