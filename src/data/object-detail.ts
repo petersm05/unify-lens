@@ -57,8 +57,6 @@ export interface Detail {
   readonly groups: readonly AttributeGroup[];
   readonly related: readonly RelatedGroup[];
   readonly views: ReadonlyArray<{ id: UUID; name: string }>;
-  /** Attributes the type defines but this object has no value for. */
-  readonly emptyCount: number;
 }
 
 /**
@@ -76,16 +74,15 @@ export async function fetchDetail(kg: Kg, id: UUID): Promise<Detail | null> {
   const object = option.val;
 
   const groups: AttributeGroup[] = [];
-  let emptyCount = 0;
 
   for (const category of object.attributeCategories) {
     const values: AttributeValue[] = [];
     for (const attribute of category.attributes) {
+      // Absent values are left out rather than counted: the sheet lists the
+      // attributes an object has no value for from the type's schema, which
+      // knows their names as well as their number.
       const display = render(attribute);
-      if (display === null) {
-        emptyCount += 1;
-        continue;
-      }
+      if (display === null) continue;
       values.push({
         categoryId: category.id,
         definitionId: attribute.id,
@@ -126,7 +123,6 @@ export async function fetchDetail(kg: Kg, id: UUID): Promise<Detail | null> {
     groups,
     related,
     views: (object.views ?? []).map((view) => ({ id: view.id, name: view.name ?? '(unnamed)' })),
-    emptyCount,
   };
 }
 
