@@ -1,4 +1,10 @@
-import { isPlottable, quantiles, type AttributeChoice } from './attributes';
+import {
+  conditionName,
+  isPlottable,
+  quantiles,
+  type AttributeChoice,
+  type Coverage,
+} from './attributes';
 import type { Sample, Value } from './sample-store';
 import { formatCompact, formatCount, formatMoney } from '../format';
 
@@ -93,8 +99,17 @@ export interface Scan {
   readonly leads: readonly Lead[];
   /** How many objects the leads were read from. */
   readonly sampled: number;
-  /** Set when the sample stopped short, so every share here is an estimate. */
+  /** Set when the sample stopped short, so the value readings are estimates. */
   readonly truncated: boolean;
+  /**
+   * Whether the coverage readings are of the whole population.
+   *
+   * True where the sample ran to the end, and where counts were supplied for a
+   * sample that did not. False only when a truncated sample was scanned with
+   * no counts beside it, which is a coverage figure the chart will disagree
+   * with — see `scanForLeads`.
+   */
+  readonly exactCoverage: boolean;
   /** How many attributes were examined. */
   readonly examined: number;
 }
@@ -143,22 +158,58 @@ function categoricalLabel(value: Value): string | null {
 }
 
 /**
- * Reads every attribute of one sampled population.
+ * The attributes a scan reads, which is not all of them.
  *
- * Every lead is a claim about the objects that were *read*: on a truncated
- * sample the shares are estimates from its prefix, which is why `truncated`
- * travels out with them rather than being decided here.
+ * Exported because a caller fetching coverage counts has to ask about exactly
+ * these: a second, separately written filter is how the two lists come to
+ * disagree.
  */
-export function scanForLeads(sample: Sample, choices: readonly AttributeChoice[]): Scan {
-  const total = sample.objects.length;
+export function scannedAttributes(
+  choices: readonly AttributeChoice[],
+): readonly AttributeChoice[] {
   // Booleans are examined by nothing here on purpose: `enumDistribution` counts
   // them through `enumValues`, which a boolean definition does not have, so the
   // chart a row would open reports every object as "Not set" (#61). A lead is a
   // route into a chart, and that one contradicts whatever the row said.
-  const examined = choices.filter((choice) => isPlottable(choice) && choice.kind !== 'boolean');
+  return choices.filter((choice) => isPlottable(choice) && choice.kind !== 'boolean');
+}
+
+/**
+ * Reads every attribute of one sampled population.
+ *
+ * Every value reading is a claim about the objects that were *read*: on a
+ * truncated sample they are estimates from its prefix, which is why
+ * `truncated` travels out with them rather than being decided here.
+ *
+ * Coverage is the exception, and it has to be. The chart a coverage row opens
+ * takes its gauge from server-side counts whenever the sample fell short, so a
+ * share read off the prefix can put "Sparse — 12% covered" on a row and "Well
+ * covered — 85%" on the screen it opens: a prefix is not a random sample, and
+ * whether an attribute is filled in is exactly the sort of thing that varies
+ * with the order objects come back in. So where the sample is truncated the
+ * caller passes the counts — `counts`, keyed by `conditionName` — and the rows
+ * are then of the same population as the gauge. Without them the coverage
+ * readings are the prefix's, and `exactCoverage` says so.
+ *
+ * @param counts - exact coverage per attribute, keyed by `conditionName`.
+ */
+export function scanForLeads(
+  sample: Sample,
+  choices: readonly AttributeChoice[],
+  counts?: ReadonlyMap<string, Coverage>,
+): Scan {
+  const total = sample.objects.length;
+  const examined = scannedAttributes(choices);
+  const exactCoverage = !sample.truncated || counts !== undefined;
 
   if (total === 0) {
-    return { leads: [], sampled: 0, truncated: sample.truncated, examined: examined.length };
+    return {
+      leads: [],
+      sampled: 0,
+      truncated: sample.truncated,
+      exactCoverage,
+      examined: examined.length,
+    };
   }
 
   const found: Lead[] = [];
@@ -192,17 +243,23 @@ export function scanForLeads(sample: Sample, choices: readonly AttributeChoice[]
       if (value !== undefined) values.push(value);
     }
 
-    const share = values.length / total;
+    // The counted population where counts were given, the read one otherwise —
+    // and the pair travels together, since a count of objects with a value is
+    // only a coverage figure beside the population it was counted against.
+    const counted = counts?.get(conditionName(choice));
+    const withValue = counted?.withValue ?? values.length;
+    const population = counted ? counted.withValue + counted.notSet : total;
+
     // Present for every choice: the loop above filed one per category.
     const bucket = byCategory.get(choice.categoryId)!;
     bucket.examined += 1;
-    bucket.covered.push(share);
+    bucket.covered.push(population === 0 ? 0 : withValue / population);
 
     // One lead per attribute, in this order. An attribute nobody fills in is
     // not also a story about which of the few values dominates: reporting both
     // would put the same attribute on the screen twice, and the second row
     // would be describing a handful of objects.
-    const lead = coverageLead(choice, values.length, total) ?? valueLead(choice, values);
+    const lead = coverageLead(choice, withValue, population) ?? valueLead(choice, values);
     if (!lead) continue;
 
     found.push(lead);
@@ -213,11 +270,13 @@ export function scanForLeads(sample: Sample, choices: readonly AttributeChoice[]
     leads: rank(rollUpCategories(found, byCategory)),
     sampled: total,
     truncated: sample.truncated,
+    exactCoverage,
     examined: examined.length,
   };
 }
 
 function coverageLead(choice: AttributeChoice, withValue: number, total: number): Lead | null {
+  if (total === 0) return null;
   const share = withValue / total;
   if (share >= SPARSE) return null;
 

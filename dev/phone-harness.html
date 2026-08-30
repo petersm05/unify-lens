@@ -337,11 +337,13 @@
         card.querySelector('.sub').textContent = offering
           ? '12.406 Application Component objects is more than is read without being asked. One read covers every attribute at once, and the rows say so where it has to stop short of the whole population.'
           : 'Across 44 attributes of 1.191 Application Component objects. Each row opens the chart behind it.';
-        // Shown in all three states: charted it is the way back to this
-        // screen, and an offer is a screen to come back to as well. The app
-        // hides it only before there is either.
+        // The app hides the row until there is a screen behind it, and an
+        // offer counts as one — so `?leads=no`, which is the state before
+        // either, is the one state without it. It reads as selected only while
+        // that screen is what is on show.
         const link = section.querySelector('.leads-link');
-        link.classList.toggle('on', !charted && !offering);
+        link.hidden = leads === 'no';
+        link.classList.toggle('on', !charted && leads === 'rows');
         // Only one row in the panel is the one on screen.
         if (!charted) section.querySelector('.attr-list .attr.on').classList.remove('on');
         section.querySelector('.placeholder').hidden = charted || !card.hidden;

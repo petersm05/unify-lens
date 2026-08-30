@@ -1,7 +1,8 @@
-import type { ObjectType, UUID } from '@bizzdesign/sdk-bundle/browser';
+import type { AttributeFilter, MetaModel, ObjectType, UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Session } from '../sdk/client';
 import { labelFor, objectTypesFor } from '../sdk/metamodel';
 import {
+  conditionName,
   coverage,
   crossTab,
   type Grain,
@@ -25,7 +26,7 @@ import {
   type Bin,
   type RankedObject,
 } from '../data/attributes';
-import { scanForLeads, shortlist, type Lead, type Scan } from '../data/leads';
+import { scanForLeads, scannedAttributes, shortlist, type Lead, type Scan } from '../data/leads';
 import type { Sample } from '../data/sample-store';
 import { attributesForCached } from '../data/schema-cache';
 import { compatible, levelOf, marksFor, type Mark } from '../data/chart-spec';
@@ -311,6 +312,10 @@ export function mountAttributeInsight(
     placeholder.hidden = false;
     placeholder.textContent = message;
     placeholder.disabled = !canPick;
+    // The line and the opening screen are two answers to an empty pane, so
+    // saying one takes the other down. Structural rather than remembered at
+    // each call: a scan landing after a restore had already put both up.
+    leadsCard.hidden = true;
   }
   const plot = q('.plot', 'plot');
   const donutHost = q('.donut', 'donut');
@@ -1667,7 +1672,7 @@ export function mountAttributeInsight(
 
     const held = session.sample.peek(forType, scope);
     if (held) {
-      present(scanForLeads(held, choices), run);
+      present(await scanned(held, forType, scope), run);
       return;
     }
 
@@ -1712,7 +1717,45 @@ export function mountAttributeInsight(
     }
     if (run !== leadRun) return;
 
-    present(scanForLeads(sample, choices), run);
+    present(await scanned(sample, forType, scope), run);
+  }
+
+  /**
+   * One sample, scanned — with coverage the chart it opens will agree with.
+   *
+   * A complete sample is the population, so the scan reads coverage straight
+   * off it. A truncated one is a prefix, and `coverage()` behind the chart
+   * asks the server in exactly that case: a row saying "Sparse — 12% covered"
+   * would open a gauge saying "Well covered — 85%", and the row would be the
+   * wrong one. So the counts are fetched for the attributes the scan reads —
+   * two per attribute, no items, batched into one request — and the rows are
+   * then of the same population as the gauge.
+   *
+   * Best effort, because it is a caveat and not the answer: if the counts do
+   * not come back the scan is still worth showing, and `exactCoverage` is what
+   * the card's sentence reads to say which population the rows are about.
+   */
+  async function scanned(
+    sample: Sample,
+    forType: ObjectType,
+    scope: AttributeFilter<MetaModel> | undefined,
+  ): Promise<Scan> {
+    if (!sample.truncated) return scanForLeads(sample, choices);
+
+    try {
+      const counted = await Promise.all(
+        scannedAttributes(choices).map(
+          async (choice) =>
+            [
+              conditionName(choice),
+              await coverage(session.kg, session.sample, forType, choice, scope),
+            ] as const,
+        ),
+      );
+      return scanForLeads(sample, choices, new Map(counted));
+    } catch {
+      return scanForLeads(sample, choices);
+    }
   }
 
   /**
@@ -1813,9 +1856,10 @@ export function mountAttributeInsight(
     leadScan.disabled = true;
     leadScan.textContent = 'Reading…';
     try {
-      const sample = await busy.track(session.sample.get(forType, scopeFor(filters.get())));
+      const scope = scopeFor(filters.get());
+      const sample = await busy.track(session.sample.get(forType, scope));
       if (run !== leadRun) return;
-      present(scanForLeads(sample, choices), run);
+      present(await busy.track(scanned(sample, forType, scope)), run);
     } finally {
       leadScan.disabled = false;
     }
@@ -1851,15 +1895,9 @@ export function mountAttributeInsight(
   function renderLeads(): void {
     if (!scan) return;
     const shown = shortlist(scan.leads, dismissedFor(type));
+    const putAway = shown.length === 0 && scan.leads.length > 0;
 
     insight.hidden = true;
-    placeholder.hidden = true;
-    leadsCard.hidden = false;
-    leadsCard.classList.remove('busy');
-    leadScan.hidden = true;
-    // The rail's own row for this screen reads as selected while it is the
-    // screen, the way an attribute's row does.
-    leadsLink.classList.add('on');
 
     // The count of attributes and the read behind them. A truncated scan is a
     // reading of a prefix, and the caveat has to cover the whole row and not
@@ -1869,21 +1907,49 @@ export function mountAttributeInsight(
       ? sampledObjects(scan)
       : `${formatCount(scan.sampled)} ${labelFor(type)} objects`;
     const across = `${formatCount(scan.examined)} attribute${scan.examined === 1 ? '' : 's'} of ${basis}`;
-    const caveat = scan.truncated
-      ? ' Every figure on the rows is that read’s, not the whole population’s.'
-      : '';
+    const caveat = !scan.truncated
+      ? ''
+      : scan.exactCoverage
+        ? ' Coverage is counted across the whole population; every other figure is that read’s.'
+        : ' Every figure on the rows is that read’s, not the whole population’s.';
     // An empty list has two meanings and they are not the same claim: nothing
-    // was found, or everything found has been put away by the reader.
+    // was found, or everything found has been put away by the reader. The
+    // first is the empty pane's own line, which is also the control that opens
+    // the attribute list — a card telling someone to pick an attribute while
+    // hiding the button that does it is a dead end on a phone.
+    if (shown.length === 0 && !putAway) {
+      say(`Nothing stands out across ${across}. Pick an attribute to chart it.`, true);
+      leadsLink.classList.remove('on');
+      return;
+    }
+
+    placeholder.hidden = true;
+    leadsCard.hidden = false;
+    leadsCard.classList.remove('busy');
+    // The rail's own row for this screen reads as selected while it is the
+    // screen, the way an attribute's row does.
+    leadsLink.classList.add('on');
+
     set(
       'leads-sub',
-      shown.length > 0
-        ? `Across ${across}. Each row opens the chart behind it.${caveat}`
-        : scan.leads.length === 0
-          ? `Nothing stands out across ${across}. Pick an attribute to chart it.`
-          : `Everything found across ${across} has been put away. Pick an attribute to chart it.`,
+      putAway
+        ? `Everything found across ${across} has been put away.`
+        : `Across ${across}. Each row opens the chart behind it.${caveat}`,
     );
 
     leadRows.replaceChildren(...shown.map(leadRow));
+
+    // Dismissing every row would otherwise be a one-way door: the ranking is
+    // still there, and nothing else brings it back.
+    leadScan.hidden = !putAway;
+    if (putAway) {
+      leadScan.disabled = false;
+      leadScan.textContent = 'Bring back the rows I put away';
+      leadScan.onclick = () => {
+        dismissedFor(type).clear();
+        renderLeads();
+      };
+    }
   }
 
   /**

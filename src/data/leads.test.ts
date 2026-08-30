@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AttributeChoice } from './attributes';
 import type { Sample, SampledObject, Value } from './sample-store';
-import { PER_KIND, percent, scanForLeads, shortlist, type Lead } from './leads';
+import { PER_KIND, percent, scanForLeads, scannedAttributes, shortlist, type Lead } from './leads';
 
 /**
  * These build a population by hand rather than through `SampleStore`, which
@@ -378,6 +378,37 @@ describe('scanForLeads', () => {
     const reference = attribute({ definitionId: 'def-ref', name: 'Owner', kind: 'reference' });
 
     expect(scanForLeads(covered(reference, 100, 5), [reference]).examined).toBe(0);
+  });
+
+  it('takes coverage from the counts where it is given them', () => {
+    const criticality = attribute();
+    // The prefix that was read carries a value on every object; the whole
+    // population does not, and the gauge the row opens counts the whole
+    // population. Without the counts this row would not exist at all.
+    const sample = population(4000, () => [[criticality, 'Production']], true);
+    const counts = new Map([['general.def-1', { withValue: 4000, notSet: 8406 }]]);
+
+    const scan = scanForLeads(sample, [criticality], counts);
+
+    expect(scan.exactCoverage).toBe(true);
+    expect(scan.leads[0]).toMatchObject({ kind: 'sparse', headline: '32% covered' });
+    expect(digits(scan.leads[0]!.detail)).toBe(`${8406}${12406}`);
+  });
+
+  it('says when a coverage reading is only the prefix it read', () => {
+    const criticality = attribute();
+    const sample = population(4000, (index) => (index < 100 ? [[criticality, 'Production']] : []), true);
+
+    expect(scanForLeads(sample, [criticality]).exactCoverage).toBe(false);
+    expect(scanForLeads(sample, [criticality], new Map()).exactCoverage).toBe(true);
+  });
+
+  it('scans the attributes it says it scans', () => {
+    const flag = attribute({ definitionId: 'def-flag', kind: 'boolean' });
+    const owner = attribute({ definitionId: 'def-ref', kind: 'reference' });
+    const criticality = attribute();
+
+    expect(scannedAttributes([flag, owner, criticality])).toEqual([criticality]);
   });
 
   it('carries the read it was taken from, so a caveat can be stated', () => {
