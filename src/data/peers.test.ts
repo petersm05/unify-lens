@@ -214,9 +214,18 @@ describe('an unset attribute', () => {
     for (const kind of ['money', 'enum', 'boolean', 'date', 'string'] as const) {
       expect(peers({ kind, values: [], missing: 3, own: null })).toEqual({
         mark: { shape: 'share', share: 1 },
-        caption: '3 of 3 are also unset',
+        caption: '3 of 3 have none',
       });
     }
+  });
+
+  // This object is in the population and is itself one of the objects with no
+  // value, so it is inside the figure. "Also" would say the opposite — that
+  // the count is of the others — and be one out every time.
+  it('does not describe a count it is part of as the others', () => {
+    const caption = peers({ kind: 'money', values: [1], missing: 3, own: null })?.caption ?? '';
+    expect(caption).toBe('3 of 4 have none');
+    expect(caption).not.toContain('also');
   });
 
   // The object is unset and the sample says nothing is: they disagree, because

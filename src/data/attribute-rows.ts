@@ -34,6 +34,17 @@ export interface AttributeRowGroup {
   readonly rows: readonly AttributeRow[];
   /** How many of `rows` the object has a value for. */
   readonly set: number;
+  /**
+   * Whether every row here came from the type's schema.
+   *
+   * Only then is `rows.length` the number of attributes the category *has*,
+   * and only then can a heading say "6 of 8 set". Where the schema did not
+   * list one of them — it was unreadable, or it has gone stale — the rows are
+   * whatever the object happens to carry, every one of them has a value, and
+   * "2 of 2 set" would be a count of what is on screen presented as a count of
+   * what exists.
+   */
+  readonly complete: boolean;
 }
 
 /**
@@ -61,14 +72,18 @@ export function rowsFor(
     }
   }
 
-  const groups = new Map<string, { category: string; rows: AttributeRow[] }>();
+  const groups = new Map<string, { category: string; rows: AttributeRow[]; complete: boolean }>();
   const covered = new Set<string>();
 
   for (const choice of choices) {
     const key = address(choice.categoryId, choice.definitionId);
     covered.add(key);
 
-    const entry = groups.get(choice.categoryId) ?? { category: choice.categoryName, rows: [] };
+    const entry = groups.get(choice.categoryId) ?? {
+      category: choice.categoryName,
+      rows: [],
+      complete: true,
+    };
     entry.rows.push(rowFor(choice, held.get(key)));
     groups.set(choice.categoryId, entry);
   }
@@ -82,7 +97,11 @@ export function rowsFor(
     const entry = groups.get(value.categoryId) ?? {
       category: categoryNames.get(value.categoryId) ?? value.categoryId,
       rows: [],
+      complete: true,
     };
+    // One row the schema did not list is enough: the category's total is now
+    // unknown, whether the rest of it came from the schema or not.
+    entry.complete = false;
     entry.rows.push(unlistedRow(value));
     groups.set(value.categoryId, entry);
   }
@@ -93,6 +112,7 @@ export function rowsFor(
       category: entry.category,
       rows: entry.rows,
       set: entry.rows.filter((row) => row.display !== null).length,
+      complete: entry.complete,
     }));
 }
 

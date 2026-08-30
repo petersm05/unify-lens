@@ -118,9 +118,7 @@ export function mountDetailSheet(
     current = detail;
     kind.textContent = labelFor(detail.type);
     name.textContent = detail.name;
-    body.replaceChildren(
-      ...render(detail, rowsFor(detail, choices), choices.length > 0, populationFor(type)),
-    );
+    body.replaceChildren(...render(detail, rowsFor(detail, choices), populationFor(type)));
   }
 
   /**
@@ -144,7 +142,6 @@ export function mountDetailSheet(
   function render(
     detail: Detail,
     groups: readonly AttributeRowGroup[],
-    schemaKnown: boolean,
     population: Sample | null,
   ): HTMLElement[] {
     const blocks: HTMLElement[] = [];
@@ -179,14 +176,14 @@ export function mountDetailSheet(
 
       const block = document.createElement('section');
       block.className = 'sheet-section';
-      // The count only where the schema answered. Without it the rows are
-      // whatever the object happens to carry, so every one of them has a value
-      // and "3 of 3 set" would be a count of what is on screen dressed up as a
-      // count of what exists.
+      // The count only where the group knows its own total — which is a
+      // question per category, not per type: a schema that lists one category
+      // and has gone stale on another can still say how much of the first is
+      // filled in.
       block.append(
         headRow(
           group.category,
-          schemaKnown
+          group.complete
             ? `${formatCount(group.set)} of ${formatCount(group.rows.length)} set`
             : undefined,
         ),

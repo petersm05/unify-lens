@@ -137,6 +137,25 @@ describe('rowsFor', () => {
   it('produces nothing for an object whose type declares no attributes', () => {
     expect(rowsFor(detailOf([]), [])).toEqual([]);
   });
+
+  // Whether a category's total is knowable is a question per category. A
+  // schema that lists Application and has never heard of Hosting can still say
+  // how much of Application is filled in — and must not say "2 of 2 set" over
+  // a Hosting category built entirely from the object's own values.
+  it('marks only the categories whose total it actually knows', () => {
+    const groups = rowsFor(DETAIL, [SCHEMA[0]!, SCHEMA[2]!]);
+    expect(groups.map((group) => [group.category, group.complete])).toEqual([
+      ['Application', false],
+    ]);
+  });
+
+  it('knows the total where every row in the category came from the schema', () => {
+    expect(rowsFor(DETAIL, SCHEMA).map((group) => group.complete)).toEqual([true, true]);
+  });
+
+  it('knows no total at all when the schema could not be read', () => {
+    expect(rowsFor(DETAIL, []).every((group) => group.complete)).toBe(false);
+  });
 });
 
 describe('sampleKeyFor', () => {

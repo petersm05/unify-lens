@@ -105,9 +105,12 @@ export function peersFor(input: PeerInput): Peers | null {
     // the two disagree — the object was past the point the read stopped — and
     // the honest answer is to say nothing rather than to print "0 of 412".
     if (input.missing === 0) return null;
+    // "have none" rather than "are also unset". This object is itself in the
+    // population and is itself unset, so it is one of the objects counted —
+    // and "also" says the opposite, that the figure is the others.
     return {
       mark: { shape: 'share', share: input.missing / size },
-      caption: `${formatCount(input.missing)} of ${of} are also unset`,
+      caption: `${formatCount(input.missing)} of ${of} have none`,
     };
   }
 

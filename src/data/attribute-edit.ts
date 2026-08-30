@@ -285,7 +285,13 @@ function toNumber(input: string): number | null {
 
   // A bare `.5` has an empty whole part, which is a number even though it is
   // not a digit.
-  return sign * Number(`${whole || '0'}.${decimalMark === null ? '0' : fraction}`);
+  const value = sign * Number(`${whole || '0'}.${decimalMark === null ? '0' : fraction}`);
+
+  // Four hundred digits parse cleanly and come out as Infinity, which is not a
+  // number anyone typed and not one any attribute can hold. Refused here so it
+  // reads as "not a number" rather than reaching the integer check and being
+  // refused for not being whole.
+  return Number.isFinite(value) ? value : null;
 }
 
 /** Which mark groups and which one separates the fraction, if either does. */

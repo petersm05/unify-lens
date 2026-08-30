@@ -222,6 +222,60 @@ describe('numbers', () => {
     expect(rejection(real, '-')).toContain('not a number');
   });
 
+  /**
+   * The whole notation matrix in one place.
+   *
+   * The named tests above say what each rule is *for*; this says what the
+   * parser does with every shape at once. Three separate reviews found three
+   * separate edge cases in this one function — a position rule that could not
+   * read a grouped integer, a group reading that refused rather than falling
+   * back, and four hundred digits arriving as Infinity — so the answer is a
+   * table that fails as a set rather than another patch per case.
+   */
+  const NOTATIONS: ReadonlyArray<readonly [string, number | 'refused']> = [
+    ['0', 0],
+    ['42', 42],
+    ['-42', -42],
+    ['+7', 7],
+    ['3.14', 3.14],
+    ['.5', 0.5],
+    [',5', 0.5],
+    ['1,000', 1000],
+    ['1.000', 1000],
+    ['12,345', 12345],
+    ['1,234,567', 1234567],
+    ['1.234.567', 1234567],
+    ['12.345.678.901', 12345678901],
+    ['1 234 567', 1234567],
+    ['1,234.56', 1234.56],
+    ['1.234,56', 1234.56],
+    ['1,234,567.89', 1234567.89],
+    ['1.234.567,89', 1234567.89],
+    ['1,5', 1.5],
+    ['1.5', 1.5],
+    ['0,750', 0.75],
+    ['0.750', 0.75],
+    ['1234.500', 1234.5],
+    ['12345,500', 12345.5],
+    ['1,2505', 1.2505],
+    ['abc', 'refused'],
+    ['12px', 'refused'],
+    ['1e6', 'refused'],
+    ['-', 'refused'],
+    ['1.24.000', 'refused'],
+    ['1,2400,000.5', 'refused'],
+    ['1.2.3', 'refused'],
+    ['1,2,3', 'refused'],
+    ['1.234,567.89', 'refused'],
+    ['1,000,00', 'refused'],
+    ['9'.repeat(400), 'refused'],
+  ];
+
+  it.each(NOTATIONS)('reads %s', (raw, expected) => {
+    const result = parseEdit(real, raw);
+    expect(result.ok ? result.value : 'refused').toBe(expected);
+  });
+
   it('holds an integer attribute to whole numbers', () => {
     expect(parsed({ kind: 'integer' }, '3180')).toBe(3180);
     expect(rejection({ kind: 'integer' }, '3180.5')).toContain('whole numbers');
