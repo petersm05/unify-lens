@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AttributeChoice } from './attributes';
 import type { Sample, SampledObject, Value } from './sample-store';
-import { PER_KIND, percent, scanForLeads, scannedAttributes, shortlist, type Lead } from './leads';
+import { PER_KIND, scanForLeads, scannedAttributes, shortlist, type Lead } from './leads';
 
 /**
  * These build a population by hand rather than through `SampleStore`, which
@@ -81,29 +81,6 @@ function covered(choice: AttributeChoice, size: number, filled: number, value?: 
 
 const kinds = (leads: readonly Lead[]): string[] => leads.map((lead) => lead.kind);
 const digits = (text: string): string => text.replace(/\D/g, '');
-
-describe('percent', () => {
-  it('rounds to whole percentages', () => {
-    expect(percent(0.1234)).toBe('12%');
-    expect(percent(0.5)).toBe('50%');
-    expect(percent(1)).toBe('100%');
-    expect(percent(0)).toBe('0%');
-  });
-
-  it('never rounds a value that exists away to nothing', () => {
-    // Five objects out of 4.000 carry a value. "0% covered" would be a
-    // falsehood the reader finds out about by opening the chart.
-    expect(percent(5 / 4000)).toBe('<1%');
-  });
-
-  it('never rounds a gap that exists up to everything', () => {
-    expect(percent(3999 / 4000)).toBe('>99%');
-    // The boundary itself: 0.995 is the first share that rounds *to* 100, so
-    // it is the first that has to be held back from saying so.
-    expect(percent(199 / 200)).toBe('>99%');
-    expect(percent(198 / 200)).toBe('99%');
-  });
-});
 
 describe('scanForLeads', () => {
   it('reports an attribute filled in for a minority of the population', () => {

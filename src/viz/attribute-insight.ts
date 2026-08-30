@@ -57,7 +57,7 @@ import { renderDonut } from './donut';
 import { renderScatter, type Quadrant } from './scatter';
 import { renderTimeline } from './timeline';
 import { renderHeatmap } from './heatmap';
-import { formatCompact, formatCount, formatMoney, sampledObjects } from './theme';
+import { formatCompact, formatCount, formatMoney, percent, sampledObjects } from './theme';
 import type { SampledRead } from './theme';
 
 /**
@@ -1595,8 +1595,11 @@ export function mountAttributeInsight(
     }
     gaugeFill.style.strokeDashoffset = `${GAUGE_ARC * (1 - filled)}`;
 
+    // The same rule the opening screen's rows print by, which is the point of
+    // it being one rule: a row reading "<1% covered" opened a gauge that
+    // rounded the same share to "0%".
     const node = container.querySelector<HTMLElement>('[data-k="cov-value"]');
-    if (node) countUp(node, filled * 100, (value) => `${Math.round(value)}%`);
+    if (node) countUp(node, filled * 100, (value) => percent(value / 100));
     set('cov-state', word);
 
     // Not the part and the whole: the card beside this one already carries
@@ -1877,11 +1880,15 @@ export function mountAttributeInsight(
       if (run !== leadRun) return;
       present(scanForLeads(sample, choices, counts), run);
     } finally {
-      // Back to what it said. Where this landed, the screen it drew replaces
-      // the button anyway; where it did not, an enabled button reading
-      // "Reading…" that does nothing is worse than either outcome.
-      leadScan.disabled = false;
-      leadScan.textContent = label;
+      // Only where nothing replaced it. A scan that landed has already drawn
+      // the screen, and that screen decides what this button says next —
+      // putting the old label back over it would name an action it no longer
+      // performs. Where the run was superseded, an enabled button reading
+      // "Reading…" that does nothing is the thing to avoid.
+      if (run !== leadRun) {
+        leadScan.disabled = false;
+        leadScan.textContent = label;
+      }
     }
   }
 

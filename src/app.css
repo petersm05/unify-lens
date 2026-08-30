@@ -670,8 +670,9 @@ main.pane {
 
 /* The viewBox is centred on the circle, so filling the box centres the figure
    in the arc without a second set of numbers to keep in step. The size is set
-   to clear the stroke at three digits — "100%" is the widest the figure ever
-   gets, and it has to sit inside the arc rather than on it. */
+   to clear the stroke at four characters — "100%" and ">99%", which `percent`
+   prints where a gap is real but rounds away — and it has to sit inside the
+   arc rather than on it. */
 .kpi .gauge-value {
   position: absolute;
   inset: 0;

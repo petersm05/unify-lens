@@ -4,6 +4,7 @@ import {
   formatCount,
   formatMoney,
   formatMoneyExact,
+  percent,
   sampledObjects,
 } from './format';
 
@@ -118,5 +119,28 @@ describe('sampledObjects', () => {
     expect(sampledObjects({ sampled: 12_500 })).toBe(
       `the first ${formatCount(12_500)} objects read`,
     );
+  });
+});
+
+describe('percent', () => {
+  it('rounds to whole percentages', () => {
+    expect(percent(0.1234)).toBe('12%');
+    expect(percent(0.5)).toBe('50%');
+    expect(percent(1)).toBe('100%');
+    expect(percent(0)).toBe('0%');
+  });
+
+  it('never rounds a value that exists away to nothing', () => {
+    // Five objects out of 4.000 carry a value. "0% covered" would be a
+    // falsehood the reader finds out about by opening the chart.
+    expect(percent(5 / 4000)).toBe('<1%');
+  });
+
+  it('never rounds a gap that exists up to everything', () => {
+    expect(percent(3999 / 4000)).toBe('>99%');
+    // The boundary itself: 0.995 is the first share that rounds *to* 100, so
+    // it is the first that has to be held back from saying so.
+    expect(percent(199 / 200)).toBe('>99%');
+    expect(percent(198 / 200)).toBe('99%');
   });
 });

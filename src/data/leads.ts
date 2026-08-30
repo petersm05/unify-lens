@@ -6,7 +6,7 @@ import {
   type Coverage,
 } from './attributes';
 import type { Sample, Value } from './sample-store';
-import { formatCompact, formatCount, formatMoney } from '../format';
+import { formatCompact, formatCount, formatMoney, percent } from '../format';
 
 /**
  * What is worth looking at in a population, read off one sample of it.
@@ -123,23 +123,6 @@ const WORDS: Readonly<Record<LeadKind, string>> = {
   concentrated: 'One value',
   outlier: 'Outlier',
 };
-
-/**
- * A share as a percentage, without rounding a real value away to nothing.
- *
- * "0% covered" on an attribute five objects carry is the one reading this
- * screen must not give: the row's whole claim is that something is missing,
- * and a reader who opens the chart and finds five bars has been told a
- * falsehood by a rounding rule.
- */
-export function percent(share: number): string {
-  if (share > 0 && share < 0.005) return '<1%';
-  // The gap is inclusive where the other is not, because rounding is: 0.995
-  // rounds *to* 100, so it is the first share that would print as a whole
-  // population, and 0.005 rounds to 1 rather than to nothing.
-  if (share < 1 && share >= 0.995) return '>99%';
-  return `${Math.round(share * 100)}%`;
-}
 
 /** Counts against a population, printed the way the coverage card prints them. */
 function of(part: number, whole: number, noun: string): string {

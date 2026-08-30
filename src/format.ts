@@ -35,6 +35,29 @@ export function sampledObjects(read: SampledRead): string {
 }
 
 /**
+ * A share as a percentage, without rounding a real value away to nothing.
+ *
+ * "0% covered" on an attribute five objects carry is the reading nothing here
+ * may give: it is the claim that something is missing, and a reader who opens
+ * the chart and finds five bars has been told a falsehood by a rounding rule.
+ * The same at the other end, where "100%" would say a gap has been closed that
+ * has not.
+ *
+ * Lives here rather than beside either of its callers because both the row
+ * that says an attribute is sparse and the gauge it opens print this number,
+ * and the two disagreeing — "<1% covered" opening a card reading "0%" — is the
+ * defect the rule exists to prevent.
+ */
+export function percent(share: number): string {
+  if (share > 0 && share < 0.005) return '<1%';
+  // The upper bound is inclusive where the lower is not, because rounding is:
+  // 0.995 rounds *to* 100, so it is the first share that would print as a
+  // whole population, while 0.005 rounds to 1 rather than to nothing.
+  if (share < 1 && share >= 0.995) return '>99%';
+  return `${Math.round(share * 100)}%`;
+}
+
+/**
  * Compact suffixes, chosen over `Intl`'s own compact notation.
  *
  * The locale form is correct but not self-consistent: Dutch CLDR renders

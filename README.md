@@ -559,8 +559,8 @@ and layout is all any of this touches.
 Open it under `npm run dev` at `/dev/phone-harness.html` in a device toolbar.
 `?view=population|attributes|network|sheet|more|settings` shows one screen;
 `?rail=on|off` picks which side of the split; `?charted=no` is the state before
-an attribute has been picked, where `?leads=rows|offer|no` picks which of that
-state's three shapes to draw; `?cols=open` drops the column picker open. It
+an attribute has been picked, where `?leads=rows|offer|coverage|no` picks which
+shape of that state to draw; `?cols=open` drops the column picker open. It
 prints its own viewport, page width and a list of anything reaching past the
 right edge — skipping the cross-tab and the object table, which are *meant* to
 scroll sideways. Checked that way at 375x667, 390x844, 430x932, both landscapes,
