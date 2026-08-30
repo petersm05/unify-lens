@@ -220,3 +220,15 @@ export function signOutIcon(): HTMLElement {
     '<path d="M9 9h6.5M13 6.5 15.5 9 13 11.5"/></svg>';
   return wrapper;
 }
+
+/** Cross glyph — putting one row away, not closing the panel it sits in. */
+export function dismissIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M5.5 5.5l7 7M12.5 5.5l-7 7"/></svg>';
+  return wrapper;
+}

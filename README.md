@@ -229,6 +229,7 @@ node scripts/make-icons.mjs
 | `src/data/chart-spec.ts` | Field types → the marks worth offering |
 | `src/data/saved.ts` | Saved analyses, on this device |
 | `src/data/sample-store.ts` | One population read, shared by every derivation |
+| `src/data/leads.ts` | What is worth looking at in a population, from one read of it |
 | `src/data/filter.ts` | The cross-filter every view reads |
 | `src/data/view-writer.ts` | Writes a graph back to Unify as a view |
 | `src/ui/detail-sheet.ts` | The record slide-over |
@@ -252,8 +253,11 @@ Three views:
 
 - **Population** — headline figures over a ranked breakdown by object type. Tap a
   type to explore it in the network.
-- **Attributes** — pick an object type and the app lists what the metamodel
-  declares for it, then charts whichever attribute you pick: an enumeration
+- **Attributes** — opens on what is worth looking at rather than on an empty
+  pane: coverage holes, a value that holds almost everything, a maximum orders
+  of magnitude above its median, each row opening the chart behind it. Pick an
+  object type and the app lists what the metamodel declares for it, and charts
+  whichever attribute you pick: an enumeration
   becomes an ordered bar chart, a numeric attribute a histogram with an exact
   server-side total, quantiles, and a ranked list of the highest-valued objects.
   Every attribute also gets a coverage meter — what fraction of the population
@@ -555,7 +559,8 @@ and layout is all any of this touches.
 Open it under `npm run dev` at `/dev/phone-harness.html` in a device toolbar.
 `?view=population|attributes|network|sheet|more|settings` shows one screen;
 `?rail=on|off` picks which side of the split; `?charted=no` is the state before
-an attribute has been picked; `?cols=open` drops the column picker open. It
+an attribute has been picked, where `?leads=rows|offer|no` picks which of that
+state's three shapes to draw; `?cols=open` drops the column picker open. It
 prints its own viewport, page width and a list of anything reaching past the
 right edge — skipping the cross-tab and the object table, which are *meant* to
 scroll sideways. Checked that way at 375x667, 390x844, 430x932, both landscapes,
