@@ -1,10 +1,6 @@
-import type { ObjectType, UUID } from '@bizzdesign/sdk-bundle/browser';
+import type { UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Session } from '../sdk/client';
 import { fetchDetail, type Detail } from '../data/object-detail';
-import { attributesForCached } from '../data/schema-cache';
-import { rowsFor, sampleKeyFor, type AttributeRow, type AttributeRowGroup } from '../data/attribute-rows';
-import { peersFor, provenanceOf, valuesOf, type PeerMark, type Peers } from '../data/peers';
-import type { Sample, Value } from '../data/sample-store';
 import { labelFor } from '../sdk/metamodel';
 import { busy } from './busy';
 import { must } from './dom';
@@ -93,11 +89,6 @@ export function mountDetailSheet(
     kind.textContent = '';
     name.textContent = 'Loading…';
     body.replaceChildren();
-    // Dropped before the reads, not after them. "Show in network" reads this,
-    // and following a relation now waits on two awaits rather than one — so a
-    // tap while the next object is loading would otherwise hand the graph the
-    // object you just left.
-    current = null;
 
     const detail = await busy.track(fetchDetail(session.kg, id));
     if (mine !== generation) return;
@@ -107,48 +98,13 @@ export function mountDetailSheet(
       return;
     }
 
-    const type = detail.type as ObjectType;
-
-    // The schema is what turns the count of unset attributes back into rows.
-    // Usually it comes off this device, and the sheet waits for it rather than
-    // painting once without the empty rows and again with them. Tracked all the
-    // same: a type nobody has opened before has nothing cached, and then this
-    // is a real request — an untracked one would leave the sheet on "Loading…"
-    // with the progress bar saying nothing is happening.
-    const choices = await busy.track(
-      attributesForCached(session.kg, type, session.stamp).catch(() => []),
-    );
-    if (mine !== generation) return;
-
     current = detail;
     kind.textContent = labelFor(detail.type);
     name.textContent = detail.name;
-    body.replaceChildren(...render(detail, rowsFor(detail, choices), populationFor(type)));
+    body.replaceChildren(...render(detail));
   }
 
-  /**
-   * The population the peer lines compare against, if one is already in hand.
-   *
-   * `peek` and not `get`: a sheet is one object, and pulling the whole estate
-   * to decorate eight rows is the wrong trade on a tablet over cellular. Where
-   * the Attributes view has already read the population — which is the usual
-   * way anyone arrives here — it is free.
-   *
-   * Deliberately the *unfiltered* sample. `SampleStore` is keyed by type and
-   * filter, so under a cross-filter the nearest sample describes the slice, and
-   * "78% of 412" would be a different 412 from the one the reader has in mind.
-   * Where only a filtered sample is cached there is no peer line, which is the
-   * same thing the sheet does when there is no sample at all.
-   */
-  function populationFor(type: ObjectType): Sample | null {
-    return session.sample.peek(type, undefined) ?? null;
-  }
-
-  function render(
-    detail: Detail,
-    groups: readonly AttributeRowGroup[],
-    population: Sample | null,
-  ): HTMLElement[] {
+  function render(detail: Detail): HTMLElement[] {
     const blocks: HTMLElement[] = [];
 
     if (detail.description) {
@@ -164,51 +120,65 @@ export function mountDetailSheet(
     if (detail.labels.length > 0) facts.push(['Labels', detail.labels.join(', ')]);
     if (facts.length > 0) blocks.push(section('Record', factList(facts)));
 
-    let drewPeers = false;
-
-    for (const group of groups) {
+    for (const group of detail.groups) {
       const list = document.createElement('ul');
       list.className = 'facts';
 
-      for (const row of group.rows) {
-        const peers = population ? peersOf(row, population) : null;
-        if (peers) drewPeers = true;
+      for (const value of group.values) {
+        const chartable = CHARTABLE.has(value.kind);
+        // The whole row is the target when there is one. An inline button after
+        // each label put a control at a different horizontal position on every
+        // row and broke the column the names read down.
+        const row = document.createElement(chartable ? 'button' : 'div');
+        row.className = chartable ? 'fact chartable' : 'fact';
+
+        if (row instanceof HTMLButtonElement) {
+          row.type = 'button';
+          row.setAttribute(
+            'aria-label',
+            `Chart ${value.name} across ${labelFor(detail.type)}`,
+          );
+          row.addEventListener('click', () => {
+            onChart(detail.type, value.categoryId, value.definitionId);
+            close();
+          });
+        }
+
+        const name = text('span', value.name);
+        name.className = 'f-name';
+
+        const shown = text(
+          'span',
+          value.numeric === undefined
+            ? value.display
+            : value.kind === 'money'
+              ? formatMoneyExact(value.numeric, value.currency)
+              : formatCount(value.numeric),
+        );
+        shown.className = 'f-value';
+
+        row.append(attributeIcon(value.kind as never, value.currency), name, shown);
+        if (chartable) {
+          const go = text('span', '↗');
+          go.className = 'f-go';
+          go.setAttribute('aria-hidden', 'true');
+          row.append(go);
+        }
 
         const item = document.createElement('li');
-        item.append(factRow(detail, row, peers));
+        item.append(row);
         list.append(item);
       }
 
-      const block = document.createElement('section');
-      block.className = 'sheet-section';
-      // The count only where the group knows its own total — which is a
-      // question per category, not per type: a schema that lists one category
-      // and has gone stale on another can still say how much of the first is
-      // filled in.
-      block.append(
-        headRow(
-          group.category,
-          group.complete
-            ? `${formatCount(group.set)} of ${formatCount(group.rows.length)} set`
-            : undefined,
-        ),
-        list,
-      );
-      blocks.push(block);
+      blocks.push(section(group.category, list));
     }
 
-    // Said once, at the foot of the attributes, because it qualifies every
-    // figure above it rather than any one of them. Where a read stopped short,
-    // every mark on the panel is a statement about a partial population.
-    //
-    // Gated on a line having been drawn rather than on there being a sample:
-    // a sheet whose every attribute is a reference has a population and no
-    // figures, and "read from all 412 objects" under nothing at all describes
-    // a panel that is not there.
-    if (population && drewPeers) {
-      const provenance = text('p', provenanceOf(population));
-      provenance.className = 'peer-note';
-      blocks.push(provenance);
+    if (detail.emptyCount > 0) {
+      blocks.push(
+        note(
+          `${formatCount(detail.emptyCount)} further attribute${detail.emptyCount === 1 ? '' : 's'} defined for this type but not set.`,
+        ),
+      );
     }
 
     for (const group of detail.related) {
@@ -239,134 +209,6 @@ export function mountDetailSheet(
     return blocks;
   }
 
-  function factRow(detail: Detail, row: AttributeRow, peers: Peers | null): HTMLElement {
-    const element = document.createElement('div');
-    element.className = 'fact';
-
-    const name = text('span', row.name);
-    name.className = 'f-name';
-
-    const shown = text('span', row.display === null ? 'Not set' : valueText(row));
-    shown.className = row.display === null ? 'f-value unset' : 'f-value';
-
-    // Only a paragraph is clamped, and only a clamped value needs a way to
-    // read the rest of it. Everything else wraps.
-    if (row.kind === 'text' && row.display !== null) {
-      shown.classList.add('clamped');
-      shown.title = row.display;
-    }
-
-    element.append(attributeIcon(row.kind, row.currency), name, shown);
-
-    // Offered on an attribute the object has no value for as well: seeing that
-    // this one is unset is the most common reason to want the chart of how
-    // many others are.
-    if (CHARTABLE.has(row.kind)) {
-      const chart = document.createElement('button');
-      chart.type = 'button';
-      chart.className = 'f-chart';
-      chart.textContent = '↗';
-      chart.setAttribute('aria-label', `Chart ${row.name} across ${labelFor(detail.type)}`);
-      chart.addEventListener('click', () => {
-        onChart(detail.type, row.categoryId, row.definitionId);
-        close();
-      });
-      element.append(chart);
-    }
-
-    if (peers) element.append(peerLine(peers));
-
-    return element;
-  }
-
-  function peersOf(row: AttributeRow, sample: Sample): Peers | null {
-    // The row prints "Not set" from `display`, so the peer line takes its idea
-    // of unset from the same place. A value the sheet shows but has no scalar
-    // behind it — a reference, or anything else a read hands back as an object
-    // — is not an empty attribute, and "31 of 412 are also unset" under a row
-    // naming something would be a plain falsehood. One test of emptiness, in
-    // the place that already had to make it.
-    if (ownValue(row) === null && row.display !== null) return null;
-
-    const { values, missing } = valuesOf(sample, sampleKeyFor(row));
-    return peersFor({
-      kind: row.kind,
-      values,
-      missing,
-      own: ownValue(row),
-      truncated: sample.truncated,
-      ...(row.order ? { order: row.order } : {}),
-    });
-  }
-
-  /**
-   * This object's value, in the terms the sample holds.
-   *
-   * An enum is compared by its display label, because that is what a read hands
-   * back and so what the sample is keyed on — the opposite of the definition id
-   * a filter or a write has to carry. Everything else is the typed value.
-   */
-  function ownValue(row: AttributeRow): Value | null {
-    return row.kind === 'enum' ? row.display : row.value;
-  }
-
-  function peerLine(peers: Peers): HTMLElement {
-    const line = document.createElement('span');
-    line.className = 'peer';
-
-    const caption = text('span', peers.caption);
-    caption.className = 'cap';
-
-    // The caption is the same figure in words, and sits beside it, so the mark
-    // is not announced a second time.
-    const mark = markElement(peers.mark);
-    mark.setAttribute('aria-hidden', 'true');
-
-    line.append(caption, mark);
-    return line;
-  }
-
-  function markElement(mark: PeerMark): HTMLElement {
-    if (mark.shape === 'steps') {
-      const steps = document.createElement('span');
-      steps.className = 'peer-steps';
-      steps.style.gridTemplateColumns = `repeat(${mark.total}, 1fr)`;
-
-      for (let index = 0; index < mark.total; index += 1) {
-        const step = document.createElement('i');
-        // The accent, like every other mark on this line, rather than the
-        // ordinal ramp: the ramp colours a whole ordered scale, and this
-        // colours one segment of one, which is the "this object" job the accent
-        // already does here. Taking the ramp would also mean reproducing when
-        // the enum chart ramps and when it does not — a rule that lives in
-        // another module, and that nothing here could notice changing.
-        if (index === mark.index) step.style.background = 'var(--series-1)';
-        steps.append(step);
-      }
-      return steps;
-    }
-
-    const track = document.createElement('span');
-    track.className = 'peer-track';
-
-    const share = clamp(mark.shape === 'share' ? mark.share : mark.at);
-    const fill = document.createElement('span');
-    fill.className = 'fill';
-    fill.style.width = `${share * 100}%`;
-    track.append(fill);
-
-    if (mark.shape === 'position') {
-      const tick = document.createElement('span');
-      tick.className = 'tick';
-      // Half the marker's width, so it is centred on the position rather than
-      // starting at it — at the ends that is the difference between the tick
-      // sitting on the track and hanging off it.
-      tick.style.left = `calc(${share * 100}% - 2px)`;
-      track.append(tick);
-    }
-    return track;
-  }
-
   return {
     open(id: UUID): void {
       void load(id).catch((error: unknown) => {
@@ -381,38 +223,10 @@ export function mountDetailSheet(
   };
 }
 
-/** The figure a row prints, formatted the way the rest of the app formats it. */
-function valueText(row: AttributeRow): string {
-  if (row.numeric === undefined) return row.display ?? '';
-  return row.kind === 'money'
-    ? formatMoneyExact(row.numeric, row.currency)
-    : formatCount(row.numeric);
-}
-
-function clamp(share: number): number {
-  return Math.min(1, Math.max(0, share));
-}
-
-/**
- * A section heading, with an optional figure ranged right against it.
- *
- * Every headed block in the sheet is built from this one, so they are all
- * ruled off the same way — the attribute categories gained a rule when they
- * gained a count beside the name, and a Record block without one would read as
- * a different kind of thing than it is.
- */
-function headRow(heading: string, note?: string): HTMLElement {
-  const head = document.createElement('div');
-  head.className = 'cat-head';
-  head.append(text('h3', heading));
-  if (note !== undefined) head.append(text('em', note));
-  return head;
-}
-
 function section(heading: string, content: HTMLElement): HTMLElement {
   const block = document.createElement('section');
   block.className = 'sheet-section';
-  block.append(headRow(heading), content);
+  block.append(text('h3', heading), content);
   return block;
 }
 
@@ -437,6 +251,12 @@ function factList(entries: ReadonlyArray<[string, string]>): HTMLElement {
 function paragraph(value: string): HTMLElement {
   const element = text('p', value);
   element.className = 'sheet-desc';
+  return element;
+}
+
+function note(value: string): HTMLElement {
+  const element = text('p', value);
+  element.className = 'sheet-note';
   return element;
 }
 

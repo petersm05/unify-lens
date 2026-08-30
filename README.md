@@ -232,9 +232,6 @@ node scripts/make-icons.mjs
 | `src/data/leads.ts` | What is worth looking at in a population, from one read of it |
 | `src/data/filter.ts` | The cross-filter every view reads |
 | `src/data/view-writer.ts` | Writes a graph back to Unify as a view |
-| `src/data/attribute-rows.ts` | The object's values merged onto its type's schema, so the sheet can list what is *not* set |
-| `src/data/peers.ts` | Where one object's value sits among its peers — the record sheet's second line |
-| `src/data/attribute-edit.ts` | Reading what someone typed into a value of the right kind — separators, dates, what counts as unchanged. The half of editing that can be tested without a session; only `enumIdFor` has a caller so far, and the editor itself is #63 |
 | `src/ui/detail-sheet.ts` | The record slide-over |
 | `src/ui/search.ts` | Relevance-ranked object search |
 | `src/viz/bars.ts` | Shared single-series bar list, legend + table view |
@@ -650,20 +647,9 @@ selection. Related objects are links: following one replaces the sheet's
 contents, so the graph can be walked without losing your place. **Show in
 network** hands the object to the graph view.
 
-Attributes the type defines but the object has no value for are rows like any
-other, reading "Not set" — the gap you arrived from a coverage chart to fill is
-the one thing a sheet that only lists values will not show you. They come from
-the type's schema, which `schema-cache.ts` already holds, and the same read is
-what lets each category heading say how much of it is filled in.
-
-Each row also carries a second line saying where this object sits among its
-peers: a rank for a number or a date, the enumeration's own values as segments
-for an enum, a share for everything else. It is drawn from the sample
-`SampleStore` already holds and never starts a read of its own, so it is absent
-rather than slow when there is nothing cached — and absent below the width and
-height an iPad has, where two-line rows would cost more than the comparison is
-worth. Where the read stopped short the captions say so, and a line at the foot
-says what was read.
+Attributes the type defines but the object has no value for are counted, not
+listed — "12 further attributes defined for this type but not set" says more
+than twelve empty rows, and keeps the coverage question visible per-object.
 
 ### Why one read serves every chart
 

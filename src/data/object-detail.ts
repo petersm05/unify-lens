@@ -1,6 +1,5 @@
 import type { UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Kg } from '../sdk/client';
-import type { EditValue } from './attribute-edit';
 
 const SELECTOR = {
   description: true,
@@ -20,16 +19,6 @@ export interface AttributeValue {
   readonly name: string;
   readonly kind: string;
   readonly display: string;
-  /**
-   * The value as its own type, for an editor to open on — `null` where there
-   * is nothing a field can hold.
-   *
-   * Not the same question as `display === null`, which asks whether the object
-   * has a value at all. A reference has one and is shown, and still has no
-   * scalar behind it; the two nulls mean different things and are decided
-   * separately for that reason.
-   */
-  readonly value: EditValue;
   readonly currency?: string;
   readonly numeric?: number;
 }
@@ -57,6 +46,8 @@ export interface Detail {
   readonly groups: readonly AttributeGroup[];
   readonly related: readonly RelatedGroup[];
   readonly views: ReadonlyArray<{ id: UUID; name: string }>;
+  /** Attributes the type defines but this object has no value for. */
+  readonly emptyCount: number;
 }
 
 /**
@@ -74,22 +65,22 @@ export async function fetchDetail(kg: Kg, id: UUID): Promise<Detail | null> {
   const object = option.val;
 
   const groups: AttributeGroup[] = [];
+  let emptyCount = 0;
 
   for (const category of object.attributeCategories) {
     const values: AttributeValue[] = [];
     for (const attribute of category.attributes) {
-      // Absent values are left out rather than counted: the sheet lists the
-      // attributes an object has no value for from the type's schema, which
-      // knows their names as well as their number.
       const display = render(attribute);
-      if (display === null) continue;
+      if (display === null) {
+        emptyCount += 1;
+        continue;
+      }
       values.push({
         categoryId: category.id,
         definitionId: attribute.id,
         name: attribute.name,
         kind: attribute.type,
         display,
-        value: typedValue(attribute),
         ...(attribute.type === 'money' && 'currency' in attribute && attribute.currency
           ? { currency: attribute.currency as string }
           : {}),
@@ -123,34 +114,8 @@ export async function fetchDetail(kg: Kg, id: UUID): Promise<Detail | null> {
     groups,
     related,
     views: (object.views ?? []).map((view) => ({ id: view.id, name: view.name ?? '(unnamed)' })),
+    emptyCount,
   };
-}
-
-/**
- * The value behind the display, where it is one an editor can hold.
- *
- * An enum is carried as text without deciding whether it is the id or the
- * label: `attributeCategories` returns both a `value` and a `displayValue` and
- * the public types do not settle which of them a given backend fills, so
- * `enumIdFor` resolves it against the metamodel's own list instead of this
- * guessing. A reference is a value but not a scalar, and gets `null`.
- */
-function typedValue(attribute: { type: string; value?: unknown }): EditValue {
-  const value = attribute.value;
-  if (value === null || value === undefined || value === '') return null;
-  // An invalid `Date` is a value the read produced and not one an editor can
-  // hold: every getter on it answers NaN. The sheet still prints whatever
-  // `render` makes of it, which is what the row is for.
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-
-  // The enum's `String` is inside the primitive guard, not ahead of it. An
-  // enum arriving as an object — a shape the public types do not rule out —
-  // would otherwise become the literal "[object Object]" and be carried around
-  // as this object's value.
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
-    return attribute.type === 'enum' ? String(value) : value;
-  }
-  return null;
 }
 
 /** `null` for an absent value, so empty attributes can be counted not listed. */
