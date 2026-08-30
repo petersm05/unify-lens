@@ -159,6 +159,22 @@ describe('enumerations', () => {
     expect(result?.caption).toBe('0 of 5 share it');
   });
 
+  // Twenty segments in a 104px track are three pixels each, which is a texture
+  // rather than a mark. Past the ceiling the row says the same thing with the
+  // share bar instead.
+  it('gives up the segments for an enumeration too long to draw', () => {
+    const long = Array.from({ length: 20 }, (_, index) => `value-${index}`);
+    const result = peers({ kind: 'enum', values: ['value-3'], own: 'value-3', order: long });
+    expect(result?.mark).toEqual({ shape: 'share', share: 1 });
+    expect(result?.caption).toBe('1 of 1 share it');
+  });
+
+  it('keeps the segments at the last length that still draws', () => {
+    const twelve = Array.from({ length: 12 }, (_, index) => `value-${index}`);
+    const result = peers({ kind: 'enum', values: ['value-3'], own: 'value-3', order: twelve });
+    expect(result?.mark).toEqual({ shape: 'steps', total: 12, index: 3 });
+  });
+
   it('falls back to a share when no order was supplied', () => {
     const result = peers({ kind: 'enum', values, own: 'Phasing out' });
     expect(result?.mark).toEqual({ shape: 'share', share: 0.2 });

@@ -185,6 +185,16 @@ describe('numbers', () => {
     expect(parsed(real, '1.500')).toBe(1500);
   });
 
+  // A lone separator before three digits is a group only where the grouping
+  // holds. A first group of four digits is not a group, so this is a decimal
+  // point — reading it as a malformed grouping and refusing the figure would
+  // reject a number nobody would think twice about typing.
+  it('falls back to a decimal point where the grouping would not hold', () => {
+    expect(parsed(real, '1234.500')).toBe(1234.5);
+    expect(parsed(real, '1234,500')).toBe(1234.5);
+    expect(parsed(real, '12345,500')).toBe(12345.5);
+  });
+
   it('takes it as a decimal point when a zero comes before it', () => {
     expect(parsed(real, '0,750')).toBe(0.75);
     expect(parsed(real, '0.750')).toBe(0.75);
@@ -287,6 +297,14 @@ describe('seedFor', () => {
   it('opens a number on its digits, with no grouping to re-parse', () => {
     expect(seedFor(1240000.5)).toBe('1240000.5');
     expect(seedFor(0)).toBe('0');
+  });
+
+  // `String(1e21)` is "1e+21", which the parser refuses — so a field opened on
+  // a value the object already holds could not be saved back unchanged.
+  it('never seeds a field with exponent notation', () => {
+    expect(seedFor(1e21)).toBe('1000000000000000000000');
+    expect(seedFor(1e-7)).toBe('0.0000001');
+    expect(parsed({ kind: 'real' }, seedFor(1e21))).toBe(1e21);
   });
 
   it('opens an unset attribute on an empty field', () => {

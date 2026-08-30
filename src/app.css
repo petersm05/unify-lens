@@ -2688,6 +2688,13 @@ ul.facts {
   font-size: 14px;
   font-weight: 500;
   font-variant-numeric: normal;
+  /* Including the clamp above. A set of labels or a source and its external id
+     are meant to be read in full, and there is nothing here to tap to see the
+     rest of one. */
+  display: block;
+  -webkit-line-clamp: none;
+  line-clamp: none;
+  overflow: visible;
 }
 
 /* Charting is its own control in a fixed final column, at the same horizontal
@@ -2804,10 +2811,9 @@ ul.facts {
   box-shadow: 0 0 0 2px var(--surface-1);
 }
 
-/* One segment per allowed value, in the metamodel's order. The filled step
-   takes the ordinal ramp rather than the accent — the same hue, and the same
-   six-value ceiling, that `bars.ts` uses for the chart of this attribute, so
-   one value is not two colours in two places. */
+/* One segment per allowed value, in the metamodel's order, with the object's
+   own filled. How many there can be, and what colour the filled one takes, are
+   decided where the mark is built. */
 .peer-steps {
   display: grid;
   grid-auto-flow: column;

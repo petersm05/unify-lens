@@ -16,6 +16,16 @@ import { formatCount, percent } from '../format';
  * disagree — they are two renderings of one number.
  */
 
+/**
+ * How many segments a 104px track can hold and still be read.
+ *
+ * Twelve segments with a 2px gap between them are 6.8px each, which is a mark;
+ * twenty are 3.3px, which is a texture. An enumeration longer than this gets
+ * the share bar instead — the same mark a value the metamodel does not list
+ * falls back to.
+ */
+const MAX_STEPS = 12;
+
 /** The mark drawn on the peer line. */
 export type PeerMark =
   /** A tick along the population's range, at `at` (0…1). */
@@ -134,7 +144,10 @@ export function peersFor(input: PeerInput): Peers | null {
 
       // A value the metamodel does not list — a stale sample, or a label that
       // did not resolve — has no segment to fill, but its share is still a fact.
-      if (index === -1) return { mark: { shape: 'share', share: matching / size }, caption };
+      // So does an enumeration with more values than the track can draw.
+      if (index === -1 || order.length > MAX_STEPS) {
+        return { mark: { shape: 'share', share: matching / size }, caption };
+      }
       return { mark: { shape: 'steps', total: order.length, index }, caption };
     }
 

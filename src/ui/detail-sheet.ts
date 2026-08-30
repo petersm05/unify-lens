@@ -162,13 +162,18 @@ export function mountDetailSheet(
     if (detail.labels.length > 0) facts.push(['Labels', detail.labels.join(', ')]);
     if (facts.length > 0) blocks.push(section('Record', factList(facts)));
 
+    let drewPeers = false;
+
     for (const group of groups) {
       const list = document.createElement('ul');
       list.className = 'facts';
 
       for (const row of group.rows) {
+        const peers = population ? peersOf(row, population) : null;
+        if (peers) drewPeers = true;
+
         const item = document.createElement('li');
-        item.append(factRow(detail, row, population));
+        item.append(factRow(detail, row, peers));
         list.append(item);
       }
 
@@ -193,7 +198,12 @@ export function mountDetailSheet(
     // Said once, at the foot of the attributes, because it qualifies every
     // figure above it rather than any one of them. Where a read stopped short,
     // every mark on the panel is a statement about a partial population.
-    if (population && groups.length > 0) {
+    //
+    // Gated on a line having been drawn rather than on there being a sample:
+    // a sheet whose every attribute is a reference has a population and no
+    // figures, and "read from all 412 objects" under nothing at all describes
+    // a panel that is not there.
+    if (population && drewPeers) {
       const provenance = text('p', provenanceOf(population));
       provenance.className = 'peer-note';
       blocks.push(provenance);
@@ -227,7 +237,7 @@ export function mountDetailSheet(
     return blocks;
   }
 
-  function factRow(detail: Detail, row: AttributeRow, population: Sample | null): HTMLElement {
+  function factRow(detail: Detail, row: AttributeRow, peers: Peers | null): HTMLElement {
     const element = document.createElement('div');
     element.className = 'fact';
 
@@ -258,13 +268,20 @@ export function mountDetailSheet(
       element.append(chart);
     }
 
-    const peers = population ? peersOf(row, population) : null;
     if (peers) element.append(peerLine(peers));
 
     return element;
   }
 
   function peersOf(row: AttributeRow, sample: Sample): Peers | null {
+    // The row prints "Not set" from `display`, so the peer line takes its idea
+    // of unset from the same place. A value the sheet shows but has no scalar
+    // behind it — a reference, or anything else a read hands back as an object
+    // — is not an empty attribute, and "31 of 412 are also unset" under a row
+    // naming something would be a plain falsehood. One test of emptiness, in
+    // the place that already had to make it.
+    if (ownValue(row) === null && row.display !== null) return null;
+
     const { values, missing } = valuesOf(sample, sampleKeyFor(row));
     return peersFor({
       kind: row.kind,
@@ -312,16 +329,11 @@ export function mountDetailSheet(
       for (let index = 0; index < mark.total; index += 1) {
         const step = document.createElement('i');
         // The accent, like every other mark on this line, rather than the
-        // ordinal ramp. The ramp is for colouring a whole ordered scale, and
-        // this colours one segment of one — which is the "this object" role the
-        // accent already has here.
-        //
-        // It also cannot drift. Matching the chart's ramp would mean mirroring
-        // two things in other modules: `bars.ts` ramps on the *bin* count, and
-        // `enumDistribution` appends a "Not set" bin, so a six-value enum with
-        // one unset object gives seven bins and a flat chart — beside ramped
-        // segments here. A mirrored rule is one edit away from being wrong, and
-        // this file has no way to notice.
+        // ordinal ramp: the ramp colours a whole ordered scale, and this
+        // colours one segment of one, which is the "this object" job the accent
+        // already does here. Taking the ramp would also mean reproducing when
+        // the enum chart ramps and when it does not — a rule that lives in
+        // another module, and that nothing here could notice changing.
         if (index === mark.index) step.style.background = 'var(--series-1)';
         steps.append(step);
       }

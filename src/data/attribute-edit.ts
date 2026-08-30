@@ -154,10 +154,23 @@ export function parseEdit(context: EditContext, raw: string): Parsed {
 export function seedFor(value: EditValue): string {
   if (value === null) return '';
   if (value instanceof Date) return dateToInputValue(value);
-  if (typeof value === 'number') return String(value);
+  if (typeof value === 'number') return PLAIN.format(value);
   if (typeof value === 'boolean') return String(value);
   return value;
 }
+
+/**
+ * Digits, never exponent notation.
+ *
+ * `String(1e21)` is `"1e+21"`, which `parseEdit` refuses — so opening a field
+ * on a value the object already holds and saving it unchanged would fail. A
+ * fixed locale because the field holds a number rather than a formatted one,
+ * and `toNumber` reads a dot decimal in any locale.
+ */
+const PLAIN = new Intl.NumberFormat('en-US', {
+  useGrouping: false,
+  maximumFractionDigits: 20,
+});
 
 /**
  * Whether a save would change anything.
@@ -298,7 +311,18 @@ function separatorsIn(
     const mark = commas === 1 ? ',' : '.';
     const at = body.indexOf(mark);
     const whole = body.slice(0, at);
-    const grouping = body.length - at - 1 === 3 && whole.length > 0 && !whole.startsWith('0');
+
+    // The group reading only wins where it produces a grouping that holds:
+    // `1,500` is fifteen hundred, but `1234.500` cannot be grouped — a first
+    // group of four digits is not a group — so it is 1234.5 rather than a
+    // rejection. The leading zero is its own tie-break: `0,750` groups
+    // perfectly well and is still nothing but three quarters.
+    const grouping =
+      body.length - at - 1 === 3 &&
+      whole.length > 0 &&
+      !whole.startsWith('0') &&
+      ungroup(body, mark) !== null;
+
     return grouping
       ? { groupMark: mark, decimalMark: null }
       : { groupMark: null, decimalMark: mark };
