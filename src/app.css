@@ -176,26 +176,31 @@
    iOS then shows that white past the app: behind the home indicator, and while
    the viewport rubber-bands. The page needs its own copy of the ground colour,
    declared where `html` and `body` can actually see it. */
-/* The ground matches the plane, not the app's own surface.
+/* The ground matches whatever now sits at the bottom of the app.
    #app is anchored to the top and sized to the viewport, so any moment the
-   visible area is taller than it — a toolbar retracting, an overscroll, the
-   keyboard leaving — opens a gap at the *bottom*, directly under the scrolling
-   plane. Painting that gap in the lighter surface colour is what made it read
-   as a band; in the plane's own colour there is nothing to see. */
+   visible area is taller than it — an overscroll, the keyboard leaving, a
+   standalone window resolving its insets — opens a gap at the *bottom*. A gap
+   in a colour the bottom of the app is not reads as a band.
+
+   It used to be the plane, because the scrolling plane was the bottom-most
+   thing. The toolbar is now, and on the network lens so is the canvas, which
+   takes #app's own surface — so on every screen the answer is `--surface-1`.
+   The `theme-color` meta in index.html already carried these two values, which
+   is a fair sign of which of the two was the odd one out. */
 :root {
-  --page: #f2e9d8;
+  --page: #faf5ea;
   --page-ink: #2c2118;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --page: #191310;
+    --page: #241c16;
     --page-ink: #f6ede0;
   }
 }
 
 :root[data-theme='dark'] {
-  --page: #191310;
+  --page: #241c16;
   --page-ink: #f6ede0;
 }
 
@@ -394,10 +399,14 @@ header.navbar {
 
 /* ── toolbar: the verbs, in thumb reach ────────────────────────────── */
 
+/* Spread, not pushed apart. `space-between` is right for a bar whose ends mean
+   something; this one holds two or three peers, and on the population screen —
+   where there is no chart to configure — it threw the two that were left into
+   opposite corners with a hole between them. */
 nav.toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: space-evenly;
   gap: 8px;
   padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
   background: var(--surface-1);
@@ -422,6 +431,8 @@ nav.toolbar[hidden] {
   font: inherit;
   font-size: 15px;
   font-weight: 520;
+  /* A toolbar that wraps to two lines is worse than one that drops its words. */
+  white-space: nowrap;
 }
 
 .tool:hover:not(:disabled) {
@@ -571,6 +582,20 @@ main.pane {
 
 /* The verbs are still needed over a canvas — a graph is the view most worth
    sharing — but they float on it rather than standing on it. */
+/* Whether the words fit is a question about what is in the bar, not about how
+   wide the phone is: two verbs have room for their names on any phone, and
+   three with a primary among them do not have room on most. So the bar says
+   which case it is in, and only the crowded one gives up its words. */
+@media (max-width: 560px) {
+  nav.toolbar.crowded .tool:not(.primary) .tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
 nav.toolbar.floating {
   position: absolute;
   left: 50%;
@@ -4626,18 +4651,6 @@ ul.facts {
 
   .tool {
     padding: 0 9px;
-  }
-
-  /* Three verbs and a badge on a 390pt bar come to more than it is wide. The
-     glyphs carry the two secondary actions and only the primary keeps its
-     word, rather than letting the bar overrun. */
-  .tool:not(.primary) .tool-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   .type-rail {

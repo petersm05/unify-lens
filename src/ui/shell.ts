@@ -437,6 +437,9 @@ export function mountShell(root: HTMLElement, session: Session): void {
     navSub.hidden = navSub.textContent === '';
 
     optionsButton.hidden = route.at !== 'attributes';
+    // With the primary in the bar there is no room on a phone for three sets of
+    // words; without it there is room for two.
+    toolbar.classList.toggle('crowded', !optionsButton.hidden);
     // Over the canvas the toolbar floats rather than standing on the graph —
     // hiding it outright would put Share out of reach on the one view most
     // worth sharing.
@@ -454,7 +457,12 @@ export function mountShell(root: HTMLElement, session: Session): void {
   function subtitleFor(route: Route): string {
     switch (route.at) {
       case 'population':
-        return session.label;
+        // Not the environment. Which instance you are connected to is a
+        // once-a-quarter fact, and it was being repeated under the title of
+        // the screen you spend the most time on — where a long host name also
+        // crowded the bar it sat in. It is named in More, beside signing out,
+        // which is where you would go to change it.
+        return '';
       case 'attributes':
         return labelFor(route.type);
       case 'network':
