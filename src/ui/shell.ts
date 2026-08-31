@@ -422,6 +422,12 @@ export function mountShell(root: HTMLElement, session: Session): void {
     navTitle.classList.toggle('menu', openable);
     navTitle.disabled = !openable;
     navTitle.setAttribute('aria-haspopup', openable ? 'menu' : 'false');
+    // The title is the only control for the attribute panel, so it is the
+    // thing that has to report whether the panel is showing.
+    navTitle.setAttribute(
+      'aria-expanded',
+      openable ? String(insightView?.subjectsOpen() ?? false) : 'false',
+    );
 
     const subject = openable ? insightView?.subject() : null;
     must(navTitle.querySelector<HTMLElement>('.title-text'), 'shell: title text').textContent =

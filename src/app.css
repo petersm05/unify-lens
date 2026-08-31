@@ -1094,24 +1094,17 @@ nav.toolbar.floating {
 
 .split {
   display: grid;
-  /* Named areas rather than line numbers: the toggle sits beside the chart
-     where both fit and above whichever one is showing where they do not, and
-     the areas say so without either arrangement counting tracks. */
+  /* Named areas rather than line numbers: the panel sits beside the chart where
+     both fit and over it where they do not, and the areas say so without either
+     arrangement counting tracks. */
   grid-template-columns: minmax(230px, 288px) 1fr;
-  grid-template-rows: auto 1fr;
-  grid-template-areas:
-    'rail bar'
-    'rail detail';
+  grid-template-areas: 'rail detail';
   height: 100%;
   min-height: 0;
 }
 
 .rail {
   grid-area: rail;
-}
-
-.rail-bar {
-  grid-area: bar;
 }
 
 .detail {
@@ -1136,9 +1129,7 @@ nav.toolbar.floating {
    and its place in the tab order, none of which survive being unmounted. */
 .split.lane-narrow {
   grid-template-columns: 1fr;
-  grid-template-areas:
-    'bar'
-    'panel';
+  grid-template-areas: 'panel';
 }
 
 .split.lane-narrow > .rail,
@@ -1182,13 +1173,6 @@ nav.toolbar.floating {
   from {
     opacity: 0;
   }
-}
-
-.rail-bar {
-  display: flex;
-  align-items: center;
-  padding: 14px var(--gutter) 0;
-  background: var(--plane);
 }
 
 .rail {
@@ -2753,37 +2737,6 @@ tr.pickable:hover td {
   white-space: nowrap;
 }
 
-/* `.col-picker summary` matches this too: they are the same kind of control,
-   and the pressed state below is the one both need. */
-.rail-toggle {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 42px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--surface-1);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 520;
-}
-
-.rail-toggle:hover {
-  background: var(--surface-2);
-}
-
-.rail-toggle[aria-expanded='true'] {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-
-.rail-toggle .icon {
-  color: var(--text-secondary);
-}
-
 .menu-panel {
   position: absolute;
   right: 0;
@@ -3043,11 +2996,20 @@ ul.facts {
   }
 }
 
-/* Matches .rail-toggle, so the panel and column controls read as one set. */
+/* The last control of this shape, now that the attribute panel is opened from
+   the nav-bar title instead of a button of its own. */
 .col-picker summary {
+  display: flex;
+  align-items: center;
   gap: 9px;
+  min-height: 42px;
   padding: 0 14px;
   border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
   font-weight: 520;
 }
 

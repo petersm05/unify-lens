@@ -45,7 +45,7 @@
           <span class="icon" aria-hidden="true">‹</span><span class="back-label">Population</span>
         </button>
         <div class="nav-heading">
-          <button type="button" class="nav-title menu" aria-haspopup="menu">
+          <button type="button" class="nav-title menu" aria-haspopup="menu" aria-expanded="false">
             <span class="title-text">Annual Cost (EUR)</span>
             <span class="icon icon-down" aria-hidden="true">⌄</span>
           </button>
@@ -198,13 +198,6 @@
             </div>
           </aside>
 
-          <div class="rail-bar">
-            <button type="button" class="rail-toggle" aria-expanded="true">
-              <span class="icon" aria-hidden="true"></span>
-              <span class="rail-label">Attributes</span>
-            </button>
-          </div>
-
           <div class="rail-scrim" hidden></div>
 
           <div class="detail">
@@ -352,7 +345,11 @@
         section.querySelector('.objects-host').append(objectTable());
         section.querySelector('.rail').hidden = !open;
         section.querySelector('.rail-scrim').hidden = !open || lane === 'wide';
-        section.querySelector('.rail-toggle').setAttribute('aria-expanded', String(open));
+        // The panel's disclosure is the nav-bar title, which is shell markup
+        // above this view rather than part of the template.
+        document
+          .querySelector('.nav-title')
+          .setAttribute('aria-expanded', String(open));
         section.querySelector('.insight').hidden = !charted;
         // Four states share the empty pane. `?charted=no` is the one the view
         // opens on where the population was small enough to have been read:

@@ -39,7 +39,6 @@ import {
   dismissIcon,
   filterIcon,
   ideaIcon,
-  sidebarIcon,
 } from '../ui/icons';
 import {
   closesOnPick,
@@ -93,6 +92,8 @@ export interface AttributeInsight {
   subject(): string | null;
   /** Shows or hides the attribute panel, which the nav-bar title opens. */
   openSubjects(): void;
+  /** Whether the panel is showing, for the title's `aria-expanded`. */
+  subjectsOpen(): boolean;
   /** Raises the chart options, which the toolbar opens. */
   openOptions(): void;
   /** What is on screen, as keys rather than object references. */
@@ -134,15 +135,6 @@ export function mountAttributeInsight(
 
         <div class="attr-list" role="list" aria-label="Attributes"></div>
       </aside>
-
-      <!-- Outside both scrolling panels on purpose. A chart page is long, so a
-           toggle inside it scrolls out of reach; and where the two take turns,
-           the one that is hidden cannot offer the way back to the other. -->
-      <div class="rail-bar">
-        <button type="button" class="rail-toggle" aria-expanded="true">
-          <span class="rail-label">Attributes</span>
-        </button>
-      </div>
 
       <!-- Only where the panel covers the chart. Tapping beside it puts it
            away, which is what covering something is expected to allow. -->
@@ -287,9 +279,7 @@ export function mountAttributeInsight(
   const attrList = q('.attr-list', 'list');
   const split = q('.split', 'split');
   const rail = q('.rail', 'rail');
-  const railToggle = q<HTMLButtonElement>('.rail-toggle', 'rail toggle');
   const railScrim = q('.rail-scrim', 'rail scrim');
-  railToggle.prepend(sidebarIcon());
   const insight = q('.insight', 'insight');
   const placeholder = q<HTMLButtonElement>('.placeholder', 'placeholder');
   const leadsCard = q('.leads', 'leads card');
@@ -424,7 +414,6 @@ export function mountAttributeInsight(
     split.classList.toggle('rail-on', open);
     split.classList.toggle('rail-off', !open);
 
-    railToggle.setAttribute('aria-expanded', String(open));
     rail.hidden = !open;
     // Only where the panel is over the chart is there anything to dim.
     railScrim.hidden = !open || lane === 'wide';
@@ -438,9 +427,9 @@ export function mountAttributeInsight(
         rail.querySelector<HTMLElement>('.attr:not(:disabled):not([hidden])') ??
         rail
       ).focus();
-    } else {
-      railToggle.focus();
     }
+    // Nothing to hand focus back to on close: the control is the nav-bar title,
+    // which is what was clicked, so it already has it.
   }
 
   /** Opens or closes the panel, remembering the choice where it is kept. */
@@ -452,13 +441,12 @@ export function mountAttributeInsight(
       narrowOpen = open;
     }
     applyRail(true);
+    // The title is the disclosure, and it lives in the bar above this view.
+    onStateChange();
   }
 
   placeholder.addEventListener('click', () => setRail(true));
   leadsLink.addEventListener('click', () => showLeads());
-  railToggle.addEventListener('click', () =>
-    setRail(!(lane === 'wide' ? wideOpen : narrowOpen)),
-  );
   railScrim.addEventListener('click', () => setRail(false));
 
   /**
@@ -481,6 +469,9 @@ export function mountAttributeInsight(
     // keep the panel open, and closed where it would be covering the chart.
     narrowOpen = false;
     applyRail();
+    // Each arrangement has its own resting state, so changing arrangement
+    // changes whether the panel is showing — and the title above says so.
+    onStateChange();
   });
 
   applyRail();
@@ -2423,6 +2414,10 @@ export function mountAttributeInsight(
     // handling and scrim all live in one place, and the bar above only asks.
     openSubjects(): void {
       setRail(!(lane === 'wide' ? wideOpen : narrowOpen));
+    },
+
+    subjectsOpen(): boolean {
+      return lane === 'wide' ? wideOpen : narrowOpen;
     },
 
     openOptions(): void {
