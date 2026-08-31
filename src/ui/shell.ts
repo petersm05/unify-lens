@@ -16,6 +16,7 @@ import { FilterStore } from '../data/filter';
 import { mountAttributeInsight, type AttributeInsight } from '../viz/attribute-insight';
 import { mountEgoNetwork, type EgoNetwork } from '../viz/ego-network';
 import { mountTypeBars, type TypeBars } from '../viz/type-bars';
+import { mountTypeSidebar, type TypeSidebar } from './type-sidebar';
 import { labelFor, objectTypesFor } from '../sdk/metamodel';
 import { must } from './dom';
 import { busy } from './busy';
@@ -53,7 +54,10 @@ export function mountShell(root: HTMLElement, session: Session): void {
     </header>
     <p class="notice" hidden></p>
     <div class="progress" role="status" aria-live="polite"><span></span></div>
-    <main class="pane"></main>
+    <div class="shell-body">
+      <aside class="type-rail" hidden></aside>
+      <main class="pane"></main>
+    </div>
     <nav class="toolbar" aria-label="Actions">
       <button type="button" class="tool" data-act="filter">
         <span class="tool-label">Filter</span><span class="tool-count" hidden></span>
@@ -68,6 +72,7 @@ export function mountShell(root: HTMLElement, session: Session): void {
   `;
 
   const pane = must(root.querySelector<HTMLElement>('main.pane'), 'shell: pane');
+  const typeRail = must(root.querySelector<HTMLElement>('.type-rail'), 'shell: type rail');
   const navBack = must(root.querySelector<HTMLButtonElement>('.nav-back'), 'shell: back');
   const navTitle = must(root.querySelector<HTMLButtonElement>('.nav-title'), 'shell: title');
   const navSub = must(root.querySelector<HTMLElement>('.nav-sub'), 'shell: subtitle');
@@ -291,6 +296,51 @@ export function mountShell(root: HTMLElement, session: Session): void {
   /** Set when the record sheet asks for an attribute to be charted. */
   let pendingChart: { objectType: string; categoryId: string; definitionId: string } | null = null;
   let insightView: AttributeInsight | null = null;
+  let typeSidebar: TypeSidebar | null = null;
+
+  /**
+   * Wide enough to show the level above the current one as a column.
+   *
+   * Below it the trail collapses and Back is how you get there; above it both
+   * levels are on screen, so Back would offer to reveal something already
+   * visible.
+   */
+  const wide = globalThis.matchMedia('(min-width: 900px)');
+  wide.addEventListener('change', () => {
+    renderColumns();
+    renderChrome();
+  });
+
+  /**
+   * Shows or hides the population column for the current route.
+   *
+   * Only the attribute screen has a level above it worth a column: the
+   * population is the root and has none, and the network lens is a canvas that
+   * gives its space to the graph.
+   */
+  function renderColumns(): void {
+    const show = wide.matches && routes.current.at === 'attributes';
+    typeRail.hidden = !show;
+
+    if (!show) {
+      typeSidebar?.destroy();
+      typeSidebar = null;
+      return;
+    }
+
+    const type = routes.current.at === 'attributes' ? routes.current.type : undefined;
+    if (typeSidebar) {
+      typeSidebar.setCurrent(type);
+      return;
+    }
+
+    typeSidebar = mountTypeSidebar(typeRail, session, type, (picked) => {
+      // Sideways, not deeper: the column is showing the level this screen was
+      // reached from, so choosing another entry swaps this screen for its
+      // sibling rather than stacking a second one on top.
+      routes.replace({ at: 'attributes', type: picked });
+    });
+  }
 
   const sheet = mountDetailSheet(
     session,
@@ -335,7 +385,9 @@ export function mountShell(root: HTMLElement, session: Session): void {
     const route = routes.current;
     const parent = routes.parent;
 
-    navBack.hidden = parent === undefined;
+    // A back button that reveals something already on screen is a control that
+    // appears to do nothing.
+    navBack.hidden = parent === undefined || !typeRail.hidden;
     if (parent) {
       const label = labelOf(parent);
       must(navBack.querySelector<HTMLElement>('.back-label'), 'shell: back label').textContent =
@@ -358,9 +410,10 @@ export function mountShell(root: HTMLElement, session: Session): void {
     navSub.hidden = navSub.textContent === '';
 
     optionsButton.hidden = route.at !== 'attributes';
-    // The network lens carries its own controls over the canvas, so the shell
-    // toolbar would be a second place to look for the same things.
-    toolbar.hidden = route.at === 'network';
+    // Over the canvas the toolbar floats rather than standing on the graph —
+    // hiding it outright would put Share out of reach on the one view most
+    // worth sharing.
+    toolbar.classList.toggle('floating', route.at === 'network');
 
     const count = filters.get().attributes.length;
     filterCount.hidden = count === 0;
@@ -409,6 +462,10 @@ export function mountShell(root: HTMLElement, session: Session): void {
     filterBar.remove();
     pane.replaceChildren();
     pane.dataset['at'] = route.at;
+    // The shell paints differently for the canvas lens — the bar floats over
+    // it rather than standing on it — and that is a decision about the whole
+    // shell, not about the pane.
+    root.dataset['at'] = route.at;
 
     switch (route.at) {
       case 'population': {
@@ -456,6 +513,7 @@ export function mountShell(root: HTMLElement, session: Session): void {
 
     if (view?.filterHost) view.filterHost.prepend(filterBar);
     settling = false;
+    renderColumns();
     renderChrome();
   }
 

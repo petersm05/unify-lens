@@ -181,6 +181,7 @@ body {
 }
 
 #app {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100dvh;
@@ -413,11 +414,155 @@ nav.toolbar[hidden] {
   display: none;
 }
 
+/* The trail, laid flat. Below the breakpoint there is only ever one column and
+   this is a plain row of one. */
+.shell-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
 main.pane {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   position: relative;
+}
+
+.type-rail {
+  flex: 0 0 232px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 10px calc(20px + env(safe-area-inset-bottom));
+  background: var(--surface-1);
+  border-right: 1px solid var(--border);
+}
+
+.type-rail[hidden] {
+  display: none;
+}
+
+.type-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+
+.type-item:hover {
+  background: var(--surface-2);
+}
+
+.type-item[aria-current='true'] {
+  background: var(--series-1);
+  color: var(--on-accent);
+  font-weight: 580;
+}
+
+.t-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.t-count {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.type-item[aria-current='true'] .t-count {
+  color: var(--on-accent);
+  opacity: 0.72;
+}
+
+/* ── the network lens owns the whole display ───────────────────────────
+   A graph is the one view here with almost no controls and an unbounded
+   appetite for space, so it gets the canvas treatment: nothing sits above it,
+   and the bar that would have is laid over it in glass instead. */
+
+#app[data-at='network'] header.navbar {
+  position: absolute;
+  top: env(safe-area-inset-top);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--surface-1) 76%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+}
+
+/* The verbs are still needed over a canvas — a graph is the view most worth
+   sharing — but they float on it rather than standing on it. */
+nav.toolbar.floating {
+  position: absolute;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 25;
+  width: auto;
+  gap: 2px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-1) 84%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: var(--shadow-1);
+}
+
+/* The legend would sit under the floating bar. */
+#app[data-at='network'] .legend {
+  bottom: calc(72px + env(safe-area-inset-bottom));
+}
+
+#app[data-at='network'] .notice,
+#app[data-at='network'] .progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(env(safe-area-inset-top) + 48px);
+  z-index: 29;
+}
+
+/* Clear of the bar floating above them. */
+#app[data-at='network'] .finder,
+#app[data-at='network'] .hud {
+  top: 56px;
+}
+
+.graph-chips {
+  position: absolute;
+  left: 26px;
+  right: 26px;
+  top: 108px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.graph-chips .filter-bar {
+  pointer-events: auto;
+  margin: 0;
+  width: fit-content;
+  max-width: 100%;
+  background: color-mix(in srgb, var(--surface-1) 86%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-1);
 }
 
 /* ── chart surface ─────────────────────────────────────────────────── */
@@ -663,7 +808,7 @@ main.pane {
     border-right: 0;
     border-top: 1px solid var(--border);
     border-radius: 18px 18px 0 0;
-    padding: 0 14px calc(14px + env(safe-area-inset-bottom));
+    padding: 0 14px calc(22px + env(safe-area-inset-bottom));
     box-shadow: var(--shadow-2);
     transform: translateY(101%);
     visibility: hidden;
@@ -3272,6 +3417,16 @@ ul.facts {
 
   .nav-title {
     font-size: 16px;
+  }
+
+  /* At this width the label ellipsises to "Applicati…", which is worse than
+     no label: the subtitle under the title already names the screen above. */
+  .nav-back .back-label {
+    display: none;
+  }
+
+  .nav-back {
+    padding: 0 4px;
   }
 
   .tool {

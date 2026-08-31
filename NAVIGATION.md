@@ -26,33 +26,55 @@ question" and then jumps to Attributes. That is a push, described as a tab.
 
 ## Sub-tasks
 
-- [ ] **NAV-1 — Route model.** A `Route` union and a `RouteStack` with
+- [x] **NAV-1 — Route model.** A `Route` union and a `RouteStack` with
       push/pop/replace/subscribe, in `src/data/route.ts`. Replaces the
       `ViewId` + `show()` pair in `shell.ts`.
-- [ ] **NAV-2 — Analysis carries a path.** `Analysis` gains optional `path`;
+- [x] **NAV-2 — Analysis carries a path.** `Analysis` gains optional `path`;
       `decode` maps a legacy `view` onto a stack so existing shared links keep
       working, and `encode` keeps writing `view` for older cached builds.
-- [ ] **NAV-3 — Shell rewrite.** Nav bar (back · title · overflow) and bottom
+- [x] **NAV-3 — Shell rewrite.** Nav bar (back · title · overflow) and bottom
       toolbar replace `header.bar` + `nav.tabs`. Route drives the title, the
       back label and which view is mounted.
-- [ ] **NAV-4 — Attribute picker becomes the title.** `attribute-insight`
+- [x] **NAV-4 — Attribute picker becomes the title.** `attribute-insight`
       exposes its attribute list; the shell raises it from the nav-bar title.
       The rail's object-type select goes away — the type is the route.
-- [ ] **NAV-5 — Chart options move to the toolbar.** The existing
+- [x] **NAV-5 — Chart options move to the toolbar.** The existing
       `.menu-panel` is raised from the toolbar rather than from the card head;
       `.menu-btn` in the chart card is removed.
-- [ ] **NAV-6 — Filter leaves the shell.** Chips render inside the scrolling
+- [x] **NAV-6 — Filter leaves the shell.** Chips render inside the scrolling
       pane; the toolbar gets a Filter button with a count badge.
-- [ ] **NAV-7 — Split view ≥820px.** Stack depth maps to columns:
-      types | attributes | detail. Back button hides when its level is visible.
-- [ ] **NAV-8 — Canvas network lens.** Ego network mounts full-bleed with no
-      nav bar; floating inspector, lens bar and (wide only) palette. Detented
-      bottom sheet on the phone.
-- [ ] **NAV-9 — Wire the pushes.** Population's `onSelectType`, the detail
-      sheet's *Show in network*, and *Chart this attribute* all become route
-      pushes rather than tab switches.
-- [ ] **NAV-10 — CSS.** Remove `nav.tabs` and the shell filter bar; add nav
-      bar, toolbar, split columns and canvas/floating-panel styles.
+- [x] **NAV-7 — Split view ≥900px.** The population becomes a column beside
+      the attribute screen (`type-sidebar.ts`), picking a type *replaces* rather
+      than pushes, and the back button hides when its level is already visible.
+- [x] **NAV-8 — Canvas network lens.** The graph runs edge to edge with the
+      nav bar laid over it in glass; chips, HUD, legend and the toolbar all
+      float on the canvas rather than standing on it.
+- [x] **NAV-9 — Wire the pushes.** Population's `onSelectType`, the detail
+      sheet's *Show in network* and *Chart this attribute* are route pushes.
+- [x] **NAV-10 — CSS.** `nav.tabs`, `header.bar`, `.menu-btn` and `.share-btn`
+      are gone; nav bar, toolbar, split columns, raised rail and the canvas
+      overlays are in.
+
+## What was built differently from the study
+
+- The network keeps the ego view's existing floating HUD, finder and legend
+  rather than gaining a detented bottom sheet. They were already floating over
+  a full-bleed canvas — the change that mattered was getting the shell's bars
+  off the top and out of the way.
+- The toolbar is not hidden on the network lens, it floats: hiding it would
+  have put Share out of reach on the view most worth sharing.
+- The split breakpoint is 900px rather than 820px. `.split` inside the
+  attribute view already turns at 820px, and stacking a second column at the
+  same width left three columns in 820 points.
+
+## Not verified end to end
+
+The dev server sits behind Cognito, so the running app was not driven through
+a real session. Types compile, the production build is clean, and the shell
+chrome was checked in the browser at 375 × 812 and 1180 × 820 against a static
+harness — nav bar, raised rail, split columns and the canvas overlay. The
+data-driven paths (counts in the new population column, restoring a legacy
+`?a=` link) still want a pass against a live environment.
 
 ## Notes
 
