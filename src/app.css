@@ -204,6 +204,18 @@
   --page-ink: #f6ede0;
 }
 
+/* The safe areas, read once and used through these.
+   iOS reports real values and Chromium reports zero, which made every bug that
+   lives in this arithmetic invisible everywhere it could be looked at — twice
+   now. Behind a variable, `dev/phone-harness.html` and the console can stand a
+   device's numbers in and the layout answers honestly. */
+:root {
+  --safe-top: env(safe-area-inset-top);
+  --safe-right: env(safe-area-inset-right);
+  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-left: env(safe-area-inset-left);
+}
+
 html,
 body {
   margin: 0;
@@ -235,7 +247,7 @@ body {
      stopping short of the screen. The inset belongs inside whatever scrolls, so
      the background reaches the edge and only the content clears the home
      indicator. */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
 }
 
 .boot,
@@ -408,7 +420,7 @@ nav.toolbar {
   align-items: center;
   justify-content: space-evenly;
   gap: 8px;
-  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
+  padding: 6px 14px calc(6px + var(--safe-bottom));
   background: var(--surface-1);
   border-top: 1px solid var(--border);
 }
@@ -570,7 +582,7 @@ main.pane {
 
 #app[data-at='network'] header.navbar {
   position: absolute;
-  top: env(safe-area-inset-top);
+  top: var(--safe-top);
   left: 0;
   right: 0;
   z-index: 30;
@@ -599,7 +611,7 @@ main.pane {
 nav.toolbar.floating {
   position: absolute;
   left: 50%;
-  bottom: calc(16px + env(safe-area-inset-bottom));
+  bottom: calc(16px + var(--safe-bottom));
   transform: translateX(-50%);
   z-index: 25;
   width: auto;
@@ -615,7 +627,7 @@ nav.toolbar.floating {
 
 /* The legend would otherwise sit under the floating bar. */
 #app[data-at='network'] .legend {
-  bottom: calc(72px + env(safe-area-inset-bottom));
+  bottom: calc(72px + var(--safe-bottom));
 }
 
 #app[data-at='network'] .notice,
@@ -623,7 +635,7 @@ nav.toolbar.floating {
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(env(safe-area-inset-top) + 48px);
+  top: calc(var(--safe-top) + 48px);
   z-index: 29;
 }
 
@@ -1496,7 +1508,7 @@ table.data th.num {
 .legend {
   position: absolute;
   left: 26px;
-  bottom: calc(20px + env(safe-area-inset-bottom));
+  bottom: calc(20px + var(--safe-bottom));
   display: flex;
   gap: 15px;
   padding: 10px 14px;
@@ -2529,7 +2541,7 @@ main.pane > * {
   background: rgb(20 15 10 / 0.4);
   /* The sheet is the full height of the screen, so in landscape its edge is
      where the notch is. */
-  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  padding: 0 var(--safe-right) 0 var(--safe-left);
 }
 
 /* The sheet is a column that owns its own scroller.
@@ -2568,7 +2580,7 @@ main.pane > * {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: calc(22px + env(safe-area-inset-top)) var(--card-pad) 16px;
+  padding: calc(22px + var(--safe-top)) var(--card-pad) 16px;
   background: var(--surface-1);
   border-bottom: 1px solid var(--border);
 }
@@ -2685,7 +2697,7 @@ ul.plain li {
   flex: none;
   display: flex;
   gap: 10px;
-  padding: 14px var(--card-pad) calc(14px + env(safe-area-inset-bottom));
+  padding: 14px var(--card-pad) calc(14px + var(--safe-bottom));
   background: var(--surface-1);
   border-top: 1px solid var(--border);
 }
@@ -2820,7 +2832,7 @@ tr.pickable:hover td {
     max-height: 78dvh;
     overflow-y: auto;
     border-radius: 18px 18px 0 0;
-    padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+    padding: 18px 18px calc(18px + var(--safe-bottom));
     box-shadow: 0 -8px 34px rgb(0 0 0 / 0.22);
   }
 }
@@ -3788,7 +3800,7 @@ ul.facts {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(16px + env(safe-area-inset-bottom));
+  bottom: calc(16px + var(--safe-bottom));
   z-index: 70;
   display: flex;
   align-items: center;
@@ -4145,7 +4157,7 @@ ul.facts {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  top: calc(12px + env(safe-area-inset-top));
+  top: calc(12px + var(--safe-top));
   z-index: 80;
   margin: 0;
   max-width: calc(100vw - 32px);
@@ -4976,8 +4988,8 @@ ul.facts {
      it by nine pixels on each side. Filling what the backdrop offers is what
      they were reaching for. */
   .modal-backdrop {
-    padding: 16px calc(12px + env(safe-area-inset-right))
-      calc(16px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+    padding: 16px calc(12px + var(--safe-right))
+      calc(16px + var(--safe-bottom)) calc(12px + var(--safe-left));
   }
 
   .modal.report,
@@ -5007,7 +5019,7 @@ ul.facts {
   .update-bar,
   .session-notice {
     max-width: calc(
-      100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)
+      100vw - 32px - var(--safe-left) - var(--safe-right)
     );
   }
 }
