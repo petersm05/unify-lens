@@ -11,6 +11,8 @@ import { renderBarList } from './bars';
 import { formatCompact, formatCount } from './theme';
 
 export interface TypeBars {
+  /** Where the filter chips belong: the top of the column that scrolls. */
+  readonly filterHost: HTMLElement;
   destroy(): void;
 }
 
@@ -165,6 +167,8 @@ export function mountTypeBars(
   }
 
   return {
+    filterHost: must(container.querySelector<HTMLElement>('.chart'), 'type-bars: chart'),
+
     destroy(): void {
       window.clearTimeout(debounce);
       unsubscribe();

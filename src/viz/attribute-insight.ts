@@ -32,7 +32,7 @@ import { scopeExcluding, scopeFor, selectionFor, type FilterStore } from '../dat
 import { busy } from '../ui/busy';
 import { countUp } from '../ui/motion';
 import { must } from '../ui/dom';
-import { attributeIcon, controlsIcon, filterIcon } from '../ui/icons';
+import { attributeIcon, filterIcon } from '../ui/icons';
 import { createPicker, type Picker } from '../ui/picker';
 import { renderBarList, renderLegend } from './bars';
 import { mountObjectTable, type ObjectTable } from './object-table';
@@ -62,6 +62,14 @@ export interface AttributeSnapshot {
 }
 
 export interface AttributeInsight {
+  /** Where the filter chips belong: the top of the column that scrolls. */
+  readonly filterHost: HTMLElement;
+  /** The charted attribute's name — the shell puts it in the title. */
+  subject(): string | null;
+  /** Raises the attribute list, which the nav-bar title opens. */
+  openSubjects(): void;
+  /** Raises the chart options, which the toolbar opens. */
+  openOptions(): void;
   /** What is on screen, as keys rather than object references. */
   snapshot(): AttributeSnapshot;
   /** Puts a described chart back on screen; resolves once it is drawn. */
@@ -89,11 +97,11 @@ export function mountAttributeInsight(
 
   container.innerHTML = `
     <section class="split">
-      <aside class="rail">
-        <label class="field">
-          <span>Object type</span>
-          <div class="type-select"></div>
-        </label>
+      <aside class="rail" aria-label="Attributes">
+        <div class="rail-title">
+          <span>Attributes</span>
+          <button type="button" class="rail-close" aria-label="Close attribute list">✕</button>
+        </div>
         <div class="attr-list" role="list" aria-label="Attributes"></div>
       </aside>
 
@@ -119,9 +127,7 @@ export function mountAttributeInsight(
                 <p class="sub" data-k="subtitle"></p>
               </div>
               <div class="chart-menu">
-                <button type="button" class="menu-btn" aria-expanded="false" aria-haspopup="dialog">
-                  <span class="menu-current"></span>
-                </button>
+                <span class="menu-current" aria-hidden="true"></span>
                 <div class="menu-panel" hidden role="dialog" aria-label="Chart options">
                   <div class="menu-group">
                     <span class="menu-label">Chart type</span>
@@ -195,7 +201,6 @@ export function mountAttributeInsight(
   const q = <T extends HTMLElement>(selector: string, what: string): T =>
     must(container.querySelector<T>(selector), `attributes: ${what}`);
 
-  const select = mountPicker('.type-select', 'type select');
   const compare = mountPicker('.compare-select', 'compare select', 'Nothing — one measure');
   const sizeSelect = mountPicker('.size-select', 'size select', 'Uniform');
   const sizeField = q('.size-field', 'size field');
@@ -205,10 +210,10 @@ export function mountAttributeInsight(
   const grainField = q('.grain-field', 'grain field');
   const legendHost = q('.highlight-legend', 'highlight legend');
   const markBar = q('.marks', 'marks');
-  const menuButton = q<HTMLButtonElement>('.menu-btn', 'menu button');
   const menuPanel = q('.menu-panel', 'menu panel');
   const menuCurrent = q('.menu-current', 'menu label');
-  menuButton.prepend(controlsIcon());
+  const split = q('.split', 'split');
+  const railClose = q<HTMLButtonElement>('.rail-close', 'rail close');
   const rail = q('.attr-list', 'list');
   const insight = q('.insight', 'insight');
   const placeholder = q('.placeholder', 'placeholder');
@@ -225,10 +230,7 @@ export function mountAttributeInsight(
   const meterFill = q('.meter-fill', 'meter');
   const objectsHost = q('.objects-host', 'objects host');
 
-  select.setOptions(types.map((entry) => ({ value: entry, label: labelFor(entry) })));
-
   let type: ObjectType = filters.get().type ?? types[0]!;
-  select.setValue(type);
 
   let choices: AttributeChoice[] = [];
   let primary: AttributeChoice | null = null;
@@ -252,14 +254,6 @@ export function mountAttributeInsight(
    * thinking rather than responding.
    */
   let cache: { key: string; distribution: Distribution; cover: Coverage } | null = null;
-
-  select.onChange((value) => {
-    type = value as ObjectType;
-    // The filter bar's type chip has to follow the rail, or the two disagree
-    // about what population is on screen.
-    filters.setType(type);
-    void loadAttributes().catch(fail);
-  });
 
   compare.onChange((value) => {
     secondary = choices.find((choice) => keyOf(choice) === value) ?? null;
@@ -287,17 +281,29 @@ export function mountAttributeInsight(
   // ── options menu ──────────────────────────────────────────────────
   const setMenu = (open: boolean): void => {
     menuPanel.hidden = !open;
-    menuButton.setAttribute('aria-expanded', String(open));
   };
 
-  menuButton.addEventListener('click', (event) => {
-    event.stopPropagation();
-    setMenu(menuPanel.hidden);
-  });
   menuPanel.addEventListener('click', (event) => event.stopPropagation());
-  const onAway = (): void => setMenu(false);
+  railClose.addEventListener('click', () => setRail(false));
+
+  /**
+   * The attribute list, raised over the chart on a narrow screen.
+   *
+   * On a wide one it is a column that is always there, so opening it is a no-op
+   * — the class only matters where the rail had to give its space back.
+   */
+  const setRail = (open: boolean): void => {
+    split.classList.toggle('rail-open', open);
+  };
+
+  const onAway = (): void => {
+    setMenu(false);
+    setRail(false);
+  };
   const onEscape = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape') setMenu(false);
+    if (event.key !== 'Escape') return;
+    setMenu(false);
+    setRail(false);
   };
   document.addEventListener('click', onAway);
   document.addEventListener('keydown', onEscape);
@@ -307,7 +313,6 @@ export function mountAttributeInsight(
   const unsubscribe = filters.subscribe((filter) => {
     if (filter.type && filter.type !== type) {
       type = filter.type;
-      select.setValue(type);
       void loadAttributes().catch(fail);
       return;
     }
@@ -400,6 +405,9 @@ export function mountAttributeInsight(
               item.addEventListener('click', () => {
                 rail.querySelectorAll('.attr').forEach((other) => other.classList.remove('on'));
                 item.classList.add('on');
+                // On a narrow screen the rail is covering the chart it is about
+                // to change, so choosing is also finishing with it.
+                setRail(false);
                 primary = choice;
                 secondary = null;
                 mark = null;
@@ -1550,7 +1558,6 @@ export function mountAttributeInsight(
   ): Promise<void> {
     if (objectType !== type) {
       type = objectType as ObjectType;
-      select.setValue(type);
       await loadAttributes();
     }
 
@@ -1582,10 +1589,7 @@ export function mountAttributeInsight(
   }
 
   async function restoreSnapshot(snapshot: AttributeSnapshot): Promise<void> {
-    if (snapshot.type) {
-      type = snapshot.type;
-      select.setValue(type);
-    }
+    if (snapshot.type) type = snapshot.type;
 
     // Always wait for the schema, even when the type already matches: mounting
     // the view kicks off its own load, and looking an attribute up before that
@@ -1616,6 +1620,20 @@ export function mountAttributeInsight(
   }
 
   return {
+    filterHost: q('.detail', 'detail'),
+
+    subject(): string | null {
+      return primary?.name ?? null;
+    },
+
+    openSubjects(): void {
+      setRail(!split.classList.contains('rail-open'));
+    },
+
+    openOptions(): void {
+      setMenu(menuPanel.hidden);
+    },
+
     snapshot(): AttributeSnapshot {
       return {
         type,

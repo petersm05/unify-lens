@@ -136,3 +136,25 @@ export function moreIcon(): HTMLElement {
     '<circle cx="4" cy="9" r="1.5"/><circle cx="9" cy="9" r="1.5"/><circle cx="14" cy="9" r="1.5"/></svg>';
   return wrapper;
 }
+
+/** Chevron pointing back up the trail, as iOS draws it. */
+export function backIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 3.5L6 9l5.5 5.5"/></svg>';
+  return wrapper;
+}
+
+/** Small chevron marking a label as something that opens. */
+export function caretIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon caret';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7L9 11.5 13.5 7"/></svg>';
+  return wrapper;
+}

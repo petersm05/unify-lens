@@ -209,49 +209,208 @@ body {
 
 /* ── shell ─────────────────────────────────────────────────────────── */
 
-header.bar {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  padding: 16px 26px 12px;
+/* One 44pt bar carries where you are, what you came from, and the subject of
+   the screen — the three things the old header, segmented control and type chip
+   were each carrying a band of their own for. */
+header.navbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 12px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
 }
 
-header.bar h1 {
-  margin: 0;
-  font-size: 20px;
+.nav-back {
+  appearance: none;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  max-width: 100%;
+  padding: 0 8px 0 2px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--series-1);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 520;
+}
+
+.nav-back[hidden] {
+  display: none;
+}
+
+.nav-back .back-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-back:hover {
+  background: var(--surface-2);
+}
+
+.nav-heading {
+  grid-column: 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* The title is a control on the attribute screen and a label everywhere else,
+   so it is one element that gains and loses its affordances. */
+.nav-title {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 17px;
   font-weight: 640;
   letter-spacing: -0.02em;
 }
 
-/* Segmented control — reads as native on iPadOS. */
-nav.tabs {
-  display: flex;
-  gap: 2px;
-  margin: 0 22px 14px;
-  padding: 3px;
-  background: var(--surface-2);
-  border-radius: 13px;
-  align-self: flex-start;
+.nav-title .title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-nav.tabs button {
+.nav-title:disabled {
+  /* Not a disabled control — a plain title. It must not look unavailable. */
+  opacity: 1;
+  color: var(--text-primary);
+}
+
+.nav-title .caret {
+  color: var(--text-muted);
+  flex: none;
+}
+
+.nav-title:disabled .caret {
+  display: none;
+}
+
+.nav-title.menu {
+  padding: 0 6px 0 10px;
+  background: var(--surface-2);
+}
+
+.nav-title.menu:hover {
+  background: var(--surface-3);
+}
+
+.nav-sub {
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.nav-sub[hidden] {
+  display: none;
+}
+
+.nav-trailing {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── toolbar: the verbs, in thumb reach ────────────────────────────── */
+
+nav.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+}
+
+nav.toolbar[hidden] {
+  display: none;
+}
+
+.tool {
   appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 12px;
   border: 0;
+  border-radius: 11px;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--series-1);
   font: inherit;
   font-size: 15px;
-  min-height: 40px;
-  padding: 0 22px;
-  border-radius: 10px;
-  transition: background 160ms ease, color 160ms ease;
+  font-weight: 520;
 }
 
-nav.tabs button[aria-selected='true'] {
-  background: var(--surface-1);
-  color: var(--text-primary);
-  font-weight: 570;
-  box-shadow: var(--shadow-1);
+.tool:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.tool:disabled {
+  color: var(--text-muted);
+}
+
+.tool .icon {
+  flex: none;
+}
+
+.tool.primary {
+  background: var(--series-1);
+  color: var(--on-accent);
+  font-weight: 600;
+  padding: 0 16px;
+}
+
+.tool.primary:hover {
+  background: var(--hop-0);
+}
+
+.tool[hidden] {
+  display: none;
+}
+
+.tool-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ord-2);
+  color: var(--surface-1);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tool-count[hidden] {
+  display: none;
 }
 
 main.pane {
@@ -383,6 +542,39 @@ main.pane {
   min-height: 0;
 }
 
+.rail-title {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 14px 2px 8px;
+  background: var(--surface-1);
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.rail-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 15px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 10px;
+}
+
+.rail-close:hover {
+  background: var(--surface-2);
+}
+
 .rail {
   display: flex;
   flex-direction: column;
@@ -453,17 +645,54 @@ main.pane {
   padding: 2px 26px 44px;
 }
 
-/* Portrait iPad and narrower: stack the rail above the chart. */
+/* Portrait iPad and narrower: there is no room for a permanent column, so the
+   attribute list is raised over the chart from the nav-bar title instead. A
+   third of the screen spent on a list you consult once per question is a third
+   of the screen the chart never gets. */
 @media (max-width: 820px) {
   .split {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(150px, 34%) 1fr;
+    grid-template-rows: 1fr;
   }
 
   .rail {
+    position: absolute;
+    z-index: 20;
+    inset: auto 0 0 0;
+    max-height: min(72%, 560px);
     border-right: 0;
-    border-bottom: 1px solid var(--border);
-    padding-right: 26px;
+    border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    padding: 0 14px calc(14px + env(safe-area-inset-bottom));
+    box-shadow: var(--shadow-2);
+    transform: translateY(101%);
+    visibility: hidden;
+    transition: transform 240ms cubic-bezier(0.22, 0.8, 0.3, 1), visibility 240ms;
+  }
+
+  .split.rail-open .rail {
+    transform: none;
+    visibility: visible;
+  }
+
+  .rail-title {
+    display: flex;
+  }
+
+  /* The panel is anchored to a button that only exists on a wide screen, so
+     here it becomes a sheet of its own. */
+  .menu-panel {
+    position: fixed;
+    right: auto;
+    top: auto;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: min(460px, 100vw);
+    max-height: 78dvh;
+    overflow-y: auto;
+    border-radius: 18px 18px 0 0;
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
   }
 }
 
@@ -846,15 +1075,25 @@ table.data th.num {
   display: none;
 }
 
+.filters {
+  display: contents;
+}
+
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin: 0 22px 12px;
+  margin: 0 0 14px;
   padding: 9px 11px;
   background: var(--series-1-soft);
   border-radius: var(--radius);
+}
+
+/* Reached from the toolbar, which scrolls it into view — a brief ring says
+   which of several bands the button was talking about. */
+.filters.open .filter-bar {
+  box-shadow: 0 0 0 2px var(--series-1);
 }
 
 .filter-chip {
@@ -1437,12 +1676,6 @@ main.pane > * {
   animation-delay: 120ms;
 }
 
-/* The active tab's pill slides rather than snapping. */
-nav.tabs button {
-  transition: background 200ms cubic-bezier(0.22, 0.8, 0.3, 1), color 160ms ease,
-    box-shadow 200ms ease;
-}
-
 .attr,
 .chip,
 .mark,
@@ -1994,35 +2227,20 @@ tr.pickable:hover td {
   flex: none;
 }
 
-/* The button names the current chart, so the switcher is still discoverable
-   after being folded away — an icon alone would hide what you are looking at. */
-.menu-btn {
-  appearance: none;
-  display: flex;
+/* Naming the current chart is still worth a line — the control that changes it
+   moved to the toolbar, but which chart you are looking at is not obvious from
+   a bar chart that could have been three other things. */
+.menu-current {
+  display: inline-flex;
   align-items: center;
-  gap: 9px;
-  min-height: 42px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--surface-1);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 520;
-}
-
-.menu-btn:hover {
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
   background: var(--surface-2);
-}
-
-.menu-btn[aria-expanded='true'] {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-
-.menu-btn .icon {
   color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
 }
 
 .menu-panel {
@@ -2261,7 +2479,8 @@ ul.facts {
   }
 }
 
-/* Matches .menu-btn, so the two options controls are visibly the same thing. */
+/* Reads as a peer of the toolbar's own controls, so the two ways of changing
+   what is on the chart look like one set. */
 .col-picker summary {
   gap: 9px;
   padding: 0 14px;
@@ -2423,19 +2642,18 @@ ul.facts {
 
 .saved-btn {
   appearance: none;
-  /* Laid out like .share-btn so the pair reads as one set of controls. */
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 520;
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 40px;
+  padding: 0 10px;
   border-radius: 11px;
-  border: 1px solid var(--border);
-  background: var(--surface-1);
-  color: var(--text-primary);
+  border: 0;
+  background: transparent;
+  color: var(--series-1);
 }
 
 .saved-btn:hover,
@@ -3039,51 +3257,36 @@ ul.facts {
   white-space: nowrap;
 }
 
-/* Sits beside Saved in the header and reads as its peer. */
-.share-btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 520;
-  color: var(--text-primary);
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  min-height: 38px;
-  padding: 0 12px;
-}
-
-.share-btn:hover {
-  background: var(--surface-2);
-}
-
-/* Header on a narrow phone.
-   The title and the two action labels are all short, so wrapping any of them
-   costs a line and reads as a mistake rather than as reflow. They stay on one
-   line and the padding gives way instead. */
-header.bar h1,
-.share-btn,
+/* Nav bar on a narrow phone. Every label here is short, so wrapping one costs
+   a line and reads as a mistake rather than as reflow — the padding gives way
+   instead, and long names ellipsise. */
 .saved-btn {
   white-space: nowrap;
 }
 
 @media (max-width: 420px) {
-  header.bar {
-    gap: 10px;
-    padding: 14px 16px 10px;
+  header.navbar {
+    gap: 4px;
+    padding: 3px 8px;
   }
 
-  header.bar h1 {
-    font-size: 18px;
+  .nav-title {
+    font-size: 16px;
   }
 
-  .share-btn,
-  .saved-btn {
-    padding: 0 10px;
+  .tool {
+    padding: 0 9px;
+  }
+
+  /* Three verbs and a badge on a 390pt bar: the glyphs carry the two secondary
+     actions, and only the primary keeps its word. */
+  .tool:not(.primary) .tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
