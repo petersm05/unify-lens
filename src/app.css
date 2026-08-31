@@ -236,17 +236,23 @@ body {
   border-radius: 6px;
 }
 
+/* Pinned to the viewport rather than sized to `100dvh`.
+   Installed to the home screen on iOS, `100dvh` comes back short — far enough
+   short that a band of the page ground showed under the toolbar. Nothing in
+   the app can correct for that, because nothing in the app is told it
+   happened. A fixed box inset to nothing is the viewport by construction,
+   whatever any unit reports it to be.
+
+   No bottom inset here: it would reserve a band below the scrolling surface in
+   #app's own colour, which reads as the app stopping short of the screen. The
+   inset belongs inside whatever sits at the bottom, so the background reaches
+   the edge and only the content clears the home indicator. */
 #app {
-  position: relative;
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  height: 100dvh;
   background: var(--surface-1);
-  /* No bottom inset here: it would reserve a band below the scrolling surface,
-     in #app's own colour rather than the plane's, which reads as the app
-     stopping short of the screen. The inset belongs inside whatever scrolls, so
-     the background reaches the edge and only the content clears the home
-     indicator. */
   padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
 }
 
