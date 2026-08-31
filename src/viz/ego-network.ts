@@ -127,6 +127,100 @@ export function mountEgoNetwork(
   });
   resize.observe(container);
 
+
+  /**
+   * How much of the canvas the graph must stay clear of.
+   *
+   * The search field, the graph's own controls and the legend float *over* the
+   * canvas — as does the shell's bar on this view — so the middle of the canvas
+   * is not the middle of what anyone can see. Measured from the elements rather
+   * than written down: they move with the breakpoint, and a second copy of
+   * their heights here would be two numbers waiting to disagree.
+   */
+  function covered(): { top: number; bottom: number } {
+    const bounds = container.getBoundingClientRect();
+    const below = (selector: string): number => {
+      const element = container.querySelector(selector);
+      if (!element) return 0;
+      const box = element.getBoundingClientRect();
+      return box.height === 0 ? 0 : box.bottom - bounds.top;
+    };
+    const above = (selector: string): number => {
+      const element = container.querySelector(selector);
+      if (!element) return 0;
+      const box = element.getBoundingClientRect();
+      return box.height === 0 ? 0 : bounds.bottom - box.top;
+    };
+
+    return {
+      top: Math.max(below('.finder'), below('.hud'), below('.graph-chips')) + 10,
+      bottom: above('.legend') + 10,
+    };
+  }
+
+  /**
+   * Frames the whole graph in the part of the canvas nothing is covering.
+   *
+   * A force layout settles wherever it settles, and on a phone that left three
+   * nodes crammed into a corner with a label running off the edge while most of
+   * the canvas sat empty. Resetting the zoom to 1:1 — which is what Recentre
+   * used to do — does not help: the problem is not the zoom, it is that nobody
+   * had told the view where the graph actually is.
+   */
+  function fit(): void {
+    const placed = nodes.filter((node) => node.x != null && node.y != null);
+    if (placed.length === 0) return;
+
+    const xs = placed.map((node) => node.x!);
+    const ys = placed.map((node) => node.y!);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    // Room for a node's radius and the label sitting above it.
+    const pad = NODE_RADIUS + 30;
+    const area = covered();
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    const usableWidth = width - 32;
+    const usableHeight = height - area.top - area.bottom;
+    if (usableWidth <= 0 || usableHeight <= 0) return;
+
+    /*
+     * Magnified a little where the graph is small, but not to fill the screen.
+     *
+     * A two-node neighbourhood laid out at 1:1 sits in the middle of a phone
+     * with most of the canvas empty, which reads as something failing to load.
+     * Blown up to fit, the same two nodes become saucers, which reads as a
+     * different app. 1.5 lets a small graph breathe into the space without
+     * either — and labels are drawn at a constant screen size, so nothing here
+     * changes how any of it reads.
+     */
+    scale = clamp(
+      Math.min(usableWidth / (maxX - minX + pad * 2), usableHeight / (maxY - minY + pad * 2)),
+      0.35,
+      1.5,
+    );
+
+    offsetX = width / 2 - ((minX + maxX) / 2) * scale;
+    offsetY = area.top + usableHeight / 2 - ((minY + maxY) / 2) * scale;
+  }
+
+  /**
+   * Set while a fresh graph is settling, so the view is framed once the layout
+   * has stopped moving — and never afterwards, because a pan someone performed
+   * themselves is not something to undo on the next tick.
+   */
+  let fitOnSettle = false;
+
+  simulation.on('end', () => {
+    if (!fitOnSettle) return;
+    fitOnSettle = false;
+    fit();
+    draw();
+  });
+
   // ── rendering ────────────────────────────────────────────────────────
 
   function draw(): void {
@@ -199,10 +293,26 @@ export function mountEgoNetwork(
       const text = truncate(node.name, LABEL_CHARS[depth]!);
       const width = context.measureText(text).width;
       const y = node.y - NODE_RADIUS - 7 / scale;
+
+      /*
+       * Kept inside the canvas, even where that pulls it off its node.
+       *
+       * Collisions are resolved by dropping a label rather than nudging it,
+       * because a label that has drifted no longer says which node it names.
+       * An edge is the case where that reasoning inverts: half a name hanging
+       * off the side of the screen names nothing at all, and the nudge is
+       * bounded — a label only ever moves as far as the edge pushed it.
+       */
+      const margin = 8 / scale;
+      const half = width / 2 + margin;
+      const left = (0 - offsetX) / scale;
+      const right = (container.clientWidth - offsetX) / scale;
+      const x = clamp(node.x, left + half, Math.max(left + half, right - half));
+
       const box = {
-        x1: node.x - width / 2 - padding,
+        x1: x - width / 2 - padding,
         y1: y - size,
-        x2: node.x + width / 2 + padding,
+        x2: x + width / 2 + padding,
         y2: y + padding,
       };
 
@@ -213,8 +323,8 @@ export function mountEgoNetwork(
 
       placed.push(box);
       context.fillStyle = token(LABEL_INK[depth]!);
-      context.strokeText(text, node.x, y);
-      context.fillText(text, node.x, y);
+      context.strokeText(text, x, y);
+      context.fillText(text, x, y);
     }
   }
 
@@ -247,6 +357,7 @@ export function mountEgoNetwork(
     links = [];
     apply();
     await expand(nodes[0]!);
+    fitOnSettle = true;
   }
 
   /** Seeds from a specific object rather than the first of a type. */
@@ -265,6 +376,7 @@ export function mountEgoNetwork(
     links = [];
     apply();
     await expand(nodes[0]!);
+    fitOnSettle = true;
   }
 
   /**
@@ -425,9 +537,8 @@ export function mountEgoNetwork(
   });
 
   container.querySelector('[data-act="recenter"]')?.addEventListener('click', () => {
-    scale = 1;
-    offsetX = 0;
-    offsetY = 0;
+    fit();
+    draw();
     simulation.alpha(0.5).restart();
   });
 
