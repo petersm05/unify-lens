@@ -1,11 +1,15 @@
 import type { FilterStore } from '../data/filter';
-import { labelFor } from '../sdk/metamodel';
 
 /**
  * The active filter, shown as removable chips.
  *
  * A cross-filter that is invisible is a trap — every view is narrowed and
  * nothing says so. The bar only occupies space while a filter is set.
+ *
+ * The object type is not one of those chips any more. It is the screen you
+ * pushed, and the back button already names it; a chip saying the same thing
+ * would be the third control on screen describing one choice, and removing it
+ * would leave the view sitting on a type it claimed not to be filtered to.
  */
 export function mountFilterBar(container: HTMLElement, filters: FilterStore): () => void {
   const bar = document.createElement('div');
@@ -17,30 +21,30 @@ export function mountFilterBar(container: HTMLElement, filters: FilterStore): ()
   render();
 
   function render(): void {
-    const { type, attributes } = filters.get();
+    const { attributes } = filters.get();
 
-    if (!filters.isActive) {
+    if (attributes.length === 0) {
       bar.hidden = true;
       bar.replaceChildren();
       return;
     }
 
     bar.hidden = false;
-    const chips: HTMLElement[] = [];
 
-    if (type) {
-      chips.push(chip(`Type: ${labelFor(type)}`, () => filters.setType(undefined)));
-    }
     // One chip per attribute — they stack, so each is removable on its own.
-    for (const selection of attributes) {
-      chips.push(chip(selection.label, () => filters.deselect(selection.choice)));
-    }
+    const chips = attributes.map((selection) =>
+      chip(selection.label, () => filters.deselect(selection.choice)),
+    );
 
     const clear = document.createElement('button');
     clear.type = 'button';
     clear.className = 'clear-all';
     clear.textContent = 'Clear all';
-    clear.addEventListener('click', () => filters.clear());
+    // Only the attribute selections: clearing the type would strand the view on
+    // a screen whose whole subject had just been removed from under it.
+    clear.addEventListener('click', () => {
+      for (const selection of attributes) filters.deselect(selection.choice);
+    });
 
     bar.replaceChildren(...chips, clear);
   }

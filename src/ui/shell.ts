@@ -13,7 +13,11 @@ import { RouteStack, sameRoute, type Route } from '../data/route';
 import { mountSavedPanel } from './saved-panel';
 import { createSavedStore } from '../data/saved';
 import { FilterStore } from '../data/filter';
-import { mountAttributeInsight, type AttributeInsight } from '../viz/attribute-insight';
+import {
+  mountAttributeInsight,
+  type AttributeInsight,
+  type AttributeSnapshot,
+} from '../viz/attribute-insight';
 import { mountEgoNetwork, type EgoNetwork } from '../viz/ego-network';
 import { mountTypeBars, type TypeBars } from '../viz/type-bars';
 import { mountTypeSidebar, type TypeSidebar } from './type-sidebar';
@@ -299,6 +303,19 @@ export function mountShell(root: HTMLElement, session: Session): void {
   let typeSidebar: TypeSidebar | null = null;
 
   /**
+   * What each attribute screen had charted when it was left.
+   *
+   * This is the difference between a stack and a tab bar. Going deeper and
+   * coming back should return the screen you left, not a blank one — and
+   * without this, following a record into the graph and pressing Back costs
+   * you the chart you were reading, which is the whole reason you went.
+   *
+   * Keyed by route rather than held as one value, so two types explored in the
+   * same session each keep their own chart.
+   */
+  const charts = new Map<string, AttributeSnapshot>();
+
+  /**
    * Wide enough to show the level above the current one as a column.
    *
    * Below it the trail collapses and Back is how you get there; above it both
@@ -404,7 +421,7 @@ export function mountShell(root: HTMLElement, session: Session): void {
 
     const subject = openable ? insightView?.subject() : null;
     must(navTitle.querySelector<HTMLElement>('.title-text'), 'shell: title text').textContent =
-      openable ? (subject ?? 'Choose an attribute') : labelOf(route);
+      openable ? (subject ?? 'Attribute') : labelOf(route);
 
     navSub.textContent = subtitleFor(route);
     navSub.hidden = navSub.textContent === '';
@@ -431,7 +448,8 @@ export function mountShell(root: HTMLElement, session: Session): void {
       case 'attributes':
         return labelFor(route.type);
       case 'network':
-        return route.focus ? route.focus.type : '';
+        // The focus carries its raw type id; the subtitle is for a reader.
+        return route.focus ? labelFor(route.focus.type as ObjectType) : '';
     }
   }
 
@@ -442,6 +460,11 @@ export function mountShell(root: HTMLElement, session: Session): void {
    * stack alone — restoring a trail whose deepest screen is the one already
    * mounted should not tear that screen down and rebuild it.
    */
+  /** A stable identity for a route, for keying what it had on screen. */
+  function keyOf(route: Route): string {
+    return route.at === 'attributes' ? `attributes:${route.type}` : route.at;
+  }
+
   function mountCurrent(): void {
     const route = routes.current;
 
@@ -449,6 +472,12 @@ export function mountShell(root: HTMLElement, session: Session): void {
       renderChrome();
       return;
     }
+
+    // Before the outgoing view is destroyed and its state with it.
+    if (mounted?.at === 'attributes' && insightView) {
+      charts.set(keyOf(mounted), insightView.snapshot());
+    }
+
     mounted = route;
     settling = true;
 
@@ -495,7 +524,12 @@ export function mountShell(root: HTMLElement, session: Session): void {
           const { objectType, categoryId, definitionId } = pendingChart;
           pendingChart = null;
           insight.chart(objectType, categoryId, definitionId);
+          break;
         }
+        // An explicit request beats a remembered one: someone asking for a
+        // particular attribute did not ask to come back to where they were.
+        const remembered = charts.get(keyOf(route));
+        if (remembered) void insight.restore(remembered);
         break;
       }
       case 'network': {

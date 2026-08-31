@@ -36,7 +36,18 @@ export function mountTypeSidebar(
   `;
 
   const list = must(container.querySelector<HTMLElement>('.type-list'), 'type sidebar: list');
-  const types = objectTypesFor(session.metaModel);
+
+  /**
+   * By name, not by size.
+   *
+   * The population screen ranks types by count because it is answering "what is
+   * this graph made of". This column answers "take me to Applications", which
+   * is a lookup — and ranking by a number that arrives after the list is drawn
+   * would reorder the rows under whoever was already reaching for one.
+   */
+  const types = [...objectTypesFor(session.metaModel)].sort((a, b) =>
+    labelFor(a).localeCompare(labelFor(b)),
+  );
   let selected = current;
   let live = true;
 
