@@ -488,11 +488,16 @@ main.pane {
   position: relative;
 }
 
+/* No bottom inset on anything that scrolls inside the pane: the toolbar sits
+   below it and already clears the home indicator, so adding it here reserves
+   that band twice — once as empty space at the end of the scroll and again
+   under the bar. Chromium reports zero for the inset, so the doubling is
+   invisible everywhere except on the device it is for. */
 .type-rail {
   flex: 0 0 232px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0 10px calc(20px + env(safe-area-inset-bottom));
+  padding: 0 10px 20px;
   background: var(--surface-1);
   border-right: 1px solid var(--border);
 }
@@ -597,18 +602,22 @@ nav.toolbar.floating {
   z-index: 29;
 }
 
-/* Clear of the bar floating above them. */
-#app[data-at='network'] .finder,
-#app[data-at='network'] .hud {
-  top: 56px;
+/* The bar floats over the canvas, so everything the graph pins to its top edge
+   has to start below it. One offset declared where the floating is decided,
+   rather than a second copy of each overlay's position — which is how the
+   overlays ended up in two places at once. */
+#app[data-at='network'] .graph {
+  --overlay-top: 44px;
 }
 
 .graph-chips {
   position: absolute;
-  left: var(--gutter);
-  right: var(--gutter);
-  top: 108px;
+  left: 26px;
+  right: 26px;
+  top: calc(var(--overlay-top, 0px) + 74px);
   z-index: 4;
+  /* The row spans the canvas, which drives pan and pinch from raw pointer
+     events — so only the chips themselves may take a gesture. */
   pointer-events: none;
 }
 
@@ -623,31 +632,12 @@ nav.toolbar.floating {
   box-shadow: var(--shadow-1);
 }
 
-/* On a phone the graph's search field and Recentre both want the top row and
-   there is not enough of it for two: the field takes the row, and the graph's
-   own controls drop beneath it. */
-@media (max-width: 560px) {
-  #app[data-at='network'] .finder {
-    left: 14px;
-    right: 14px;
-  }
-
-  #app[data-at='network'] .hud {
-    top: 112px;
-    right: 14px;
-  }
-
-  .graph-chips {
-    left: 14px;
-    right: 44%;
-    top: 116px;
-  }
-}
 
 /* ── chart surface ─────────────────────────────────────────────────── */
 
 .chart {
-  padding: 6px var(--gutter) calc(44px + env(safe-area-inset-bottom));
+  /* See `.type-rail`: the toolbar below owns the home-indicator band. */
+  padding: 6px var(--gutter) 44px;
   height: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -1474,7 +1464,7 @@ table.data th.num {
 .finder {
   position: absolute;
   left: 26px;
-  top: 14px;
+  top: calc(var(--overlay-top, 0px) + 14px);
   z-index: 4;
 }
 
@@ -1533,7 +1523,7 @@ table.data th.num {
 .hud {
   position: absolute;
   right: 26px;
-  top: 14px;
+  top: calc(var(--overlay-top, 0px) + 14px);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2332,8 +2322,9 @@ main.pane > * {
 
 .detail {
   background: var(--plane);
-  /* Less at the top than it looks: the rail bar above supplies the rest. */
-  padding: 10px var(--gutter) calc(44px + env(safe-area-inset-bottom));
+  /* The rail bar that used to supply the rest of the top padding is gone with
+     the toggle it held, so this stands on its own now. */
+  padding: 18px var(--gutter) 44px;
 }
 
 .rail {
@@ -2432,7 +2423,7 @@ main.pane > * {
 
 .chart.on-plane {
   background: var(--plane);
-  padding: 18px var(--gutter) calc(44px + env(safe-area-inset-bottom));
+  padding: 18px var(--gutter) 44px;
 }
 
 .chart.on-plane .kpis {
@@ -2806,16 +2797,6 @@ tr.pickable:hover td {
     border-radius: 18px 18px 0 0;
     padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
     box-shadow: 0 -8px 34px rgb(0 0 0 / 0.22);
-  }
-}
-
-@media (max-width: 700px) {
-  .card-head {
-    flex-wrap: wrap;
-  }
-
-  .chart-menu {
-    margin-left: 0;
   }
 }
 
@@ -4794,15 +4775,6 @@ ul.facts {
     width: min(250px, 68vw);
   }
 
-  /* The 700px query moves the options button to the left of the wrapped card
-     head, but the panel was still anchored to its right edge — so it opened
-     off the side of the screen. */
-  .menu-panel {
-    left: 0;
-    right: auto;
-    width: min(320px, calc(100vw - 2 * var(--gutter) - 8px));
-  }
-
   /* The column template is written inline, a `1fr` per value, so the cells
      shrank until the counts were unreadable. Giving each one a touch target's
      width makes the grid wider than the card, which is what a scroller is for.
@@ -4926,18 +4898,24 @@ ul.facts {
   .finder {
     left: 12px;
     right: 12px;
-    top: 10px;
+    top: calc(var(--overlay-top, 0px) + 10px);
   }
 
   .finder .search {
     width: 100%;
   }
 
+  .graph-chips {
+    left: 12px;
+    right: 12px;
+    top: calc(var(--overlay-top, 0px) + 122px);
+  }
+
   /* Recentre and its status move to their own row underneath, across rather
      than down: stacking them would put a second column of controls down an
      edge that has no room for one. */
   .hud {
-    top: 66px;
+    top: calc(var(--overlay-top, 0px) + 66px);
     left: 12px;
     right: 12px;
     flex-direction: row;
