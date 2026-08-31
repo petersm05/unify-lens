@@ -399,10 +399,14 @@ header.navbar {
 
 /* ── toolbar: the verbs, in thumb reach ────────────────────────────── */
 
+/* Spread, not pushed apart. `space-between` is right for a bar whose ends mean
+   something; this one holds two or three peers, and on the population screen —
+   where there is no chart to configure — it threw the two that were left into
+   opposite corners with a hole between them. */
 nav.toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: space-evenly;
   gap: 8px;
   padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
   background: var(--surface-1);
@@ -427,6 +431,8 @@ nav.toolbar[hidden] {
   font: inherit;
   font-size: 15px;
   font-weight: 520;
+  /* A toolbar that wraps to two lines is worse than one that drops its words. */
+  white-space: nowrap;
 }
 
 .tool:hover:not(:disabled) {
@@ -576,6 +582,20 @@ main.pane {
 
 /* The verbs are still needed over a canvas — a graph is the view most worth
    sharing — but they float on it rather than standing on it. */
+/* Whether the words fit is a question about what is in the bar, not about how
+   wide the phone is: two verbs have room for their names on any phone, and
+   three with a primary among them do not have room on most. So the bar says
+   which case it is in, and only the crowded one gives up its words. */
+@media (max-width: 560px) {
+  nav.toolbar.crowded .tool:not(.primary) .tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
 nav.toolbar.floating {
   position: absolute;
   left: 50%;
@@ -4631,18 +4651,6 @@ ul.facts {
 
   .tool {
     padding: 0 9px;
-  }
-
-  /* Three verbs and a badge on a 390pt bar come to more than it is wide. The
-     glyphs carry the two secondary actions and only the primary keeps its
-     word, rather than letting the bar overrun. */
-  .tool:not(.primary) .tool-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   .type-rail {
