@@ -2,6 +2,7 @@ import type { ObjectType } from '@bizzdesign/sdk-bundle/browser';
 import type { AttributeKind } from './attributes';
 import type { AttributeSelection } from './filter';
 import type { Mark } from './chart-spec';
+import { parsePath, ROOT, type Route } from './route';
 
 export type ViewId = 'population' | 'attributes' | 'network';
 
@@ -18,7 +19,13 @@ export interface Analysis {
   readonly v: 1;
   /** The environment this was built against; a link into another is refused. */
   readonly env: string;
+  /**
+   * The deepest screen, kept for links written before the trail existed — and
+   * still written, so a build cached before this change can open a new link.
+   */
   readonly view: ViewId;
+  /** The whole trail, innermost last. Absent in links older than the trail. */
+  readonly path?: readonly Route[];
   readonly type?: ObjectType;
   /** `categoryId.definitionId` of the charted attribute. */
   readonly primary?: string;
@@ -169,9 +176,52 @@ function isAnalysis(value: unknown): value is Analysis {
 
   if (value['mark'] !== undefined && !isMember(MARKS, value['mark'])) return false;
 
+  // `path` is deliberately not checked here. `parsePath` drops entries it
+  // cannot read, so a trail written by a newer build — or hand-edited — costs
+  // the depth it could not parse rather than the whole link, which the `view`
+  // beside it can still rebuild.
+  if (value['path'] !== undefined && !Array.isArray(value['path'])) return false;
+
   const filters = value['filters'];
   if (filters === undefined) return true;
   return Array.isArray(filters) && filters.every(isAttributeSelection);
+}
+
+/**
+ * The trail a link describes.
+ *
+ * Links written before the trail carry only a view and a type, which is enough
+ * to rebuild the stack that view would have been reached through — reaching
+ * Attributes means having picked a type, and reaching Network from a type means
+ * having passed through its attributes. `fallbackType` covers the one case the
+ * old shape could express and the new one cannot: an attribute view with no
+ * type chosen, which used to fall back to the first type in the metamodel.
+ */
+export function pathOf(
+  analysis: Analysis,
+  fallbackType: () => ObjectType | undefined,
+): Route[] {
+  const stored = parsePath(analysis.path);
+  if (stored.length > 0) return stored;
+
+  const type = analysis.type ?? fallbackType();
+
+  if (analysis.view === 'attributes') {
+    return type ? [ROOT, { at: 'attributes', type }] : [ROOT];
+  }
+
+  if (analysis.view === 'network') {
+    return type
+      ? [ROOT, { at: 'attributes', type }, { at: 'network', type }]
+      : [ROOT, { at: 'network' }];
+  }
+
+  return [ROOT];
+}
+
+/** The legacy `view` field for a trail — the kind of its deepest screen. */
+export function viewOf(path: readonly Route[]): ViewId {
+  return path[path.length - 1]?.at ?? 'population';
 }
 
 /**

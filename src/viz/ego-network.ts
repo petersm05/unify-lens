@@ -42,6 +42,8 @@ interface Link extends SimulationLinkDatum<Node> {
 }
 
 export interface EgoNetwork {
+  /** Where the filter chips belong: a floating panel over the canvas. */
+  readonly filterHost: HTMLElement;
   focusType(type: ObjectType): Promise<void>;
   focusObject(id: UUID, name: string, type: string): Promise<void>;
   destroy(): void;
@@ -64,6 +66,7 @@ export function mountEgoNetwork(
     <div class="graph">
       <canvas></canvas>
       <div class="finder"></div>
+      <div class="graph-chips"></div>
       <div class="hud">
         <button type="button" data-act="recenter">Recentre</button>
         <span class="status"></span>
@@ -468,6 +471,8 @@ export function mountEgoNetwork(
   }
 
   return {
+    filterHost: must(container.querySelector<HTMLElement>('.graph-chips'), 'ego-network: chips'),
+
     focusType: (type) => seed(type).catch(report),
     focusObject: (id, name, type) => focusObject(id, name, type).catch(report),
     destroy(): void {

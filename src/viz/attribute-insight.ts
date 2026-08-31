@@ -36,11 +36,9 @@ import { countUp } from '../ui/motion';
 import { must } from '../ui/dom';
 import {
   attributeIcon,
-  controlsIcon,
   dismissIcon,
   filterIcon,
   ideaIcon,
-  sidebarIcon,
 } from '../ui/icons';
 import {
   closesOnPick,
@@ -88,6 +86,16 @@ export interface AttributeSnapshot {
 }
 
 export interface AttributeInsight {
+  /** Where the filter chips belong: the top of the column that scrolls. */
+  readonly filterHost: HTMLElement;
+  /** The charted attribute's name — the shell puts it in the title. */
+  subject(): string | null;
+  /** Shows or hides the attribute panel, which the nav-bar title opens. */
+  openSubjects(): void;
+  /** Whether the panel is showing, for the title's `aria-expanded`. */
+  subjectsOpen(): boolean;
+  /** Raises the chart options, which the toolbar opens. */
+  openOptions(): void;
   /** What is on screen, as keys rather than object references. */
   snapshot(): AttributeSnapshot;
   /** Puts a described chart back on screen; resolves once it is drawn. */
@@ -116,10 +124,6 @@ export function mountAttributeInsight(
   container.innerHTML = `
     <section class="split">
       <aside class="rail" tabindex="-1">
-        <label class="field">
-          <span>Object type</span>
-          <div class="type-select"></div>
-        </label>
         <!-- The way back to the opening screen once a chart has replaced it.
              Hidden until there is a screen behind it — an offer counts, since
              taking it is what makes one. Deliberately the
@@ -131,15 +135,6 @@ export function mountAttributeInsight(
 
         <div class="attr-list" role="list" aria-label="Attributes"></div>
       </aside>
-
-      <!-- Outside both scrolling panels on purpose. A chart page is long, so a
-           toggle inside it scrolls out of reach; and where the two take turns,
-           the one that is hidden cannot offer the way back to the other. -->
-      <div class="rail-bar">
-        <button type="button" class="rail-toggle" aria-expanded="true">
-          <span class="rail-label">Attributes</span>
-        </button>
-      </div>
 
       <!-- Only where the panel covers the chart. Tapping beside it puts it
            away, which is what covering something is expected to allow. -->
@@ -189,9 +184,7 @@ export function mountAttributeInsight(
                 <p class="sub" data-k="subtitle"></p>
               </div>
               <div class="chart-menu">
-                <button type="button" class="menu-btn" aria-expanded="false" aria-haspopup="dialog">
-                  <span class="menu-current"></span>
-                </button>
+                <span class="menu-current" aria-hidden="true"></span>
                 <div class="menu-panel" hidden role="dialog" aria-label="Chart options">
                   <div class="menu-group">
                     <span class="menu-label">Chart type</span>
@@ -272,7 +265,6 @@ export function mountAttributeInsight(
   const q = <T extends HTMLElement>(selector: string, what: string): T =>
     must(container.querySelector<T>(selector), `attributes: ${what}`);
 
-  const select = mountPicker('.type-select', 'type select');
   const compare = mountPicker('.compare-select', 'compare select', 'Nothing — one measure');
   const sizeSelect = mountPicker('.size-select', 'size select', 'Uniform');
   const sizeField = q('.size-field', 'size field');
@@ -282,16 +274,12 @@ export function mountAttributeInsight(
   const grainField = q('.grain-field', 'grain field');
   const legendHost = q('.highlight-legend', 'highlight legend');
   const markBar = q('.marks', 'marks');
-  const menuButton = q<HTMLButtonElement>('.menu-btn', 'menu button');
   const menuPanel = q('.menu-panel', 'menu panel');
   const menuCurrent = q('.menu-current', 'menu label');
-  menuButton.prepend(controlsIcon());
   const attrList = q('.attr-list', 'list');
   const split = q('.split', 'split');
   const rail = q('.rail', 'rail');
-  const railToggle = q<HTMLButtonElement>('.rail-toggle', 'rail toggle');
   const railScrim = q('.rail-scrim', 'rail scrim');
-  railToggle.prepend(sidebarIcon());
   const insight = q('.insight', 'insight');
   const placeholder = q<HTMLButtonElement>('.placeholder', 'placeholder');
   const leadsCard = q('.leads', 'leads card');
@@ -334,10 +322,8 @@ export function mountAttributeInsight(
   );
   const objectsHost = q('.objects-host', 'objects host');
 
-  select.setOptions(types.map((entry) => ({ value: entry, label: labelFor(entry) })));
 
   let type: ObjectType = filters.get().type ?? types[0]!;
-  select.setValue(type);
 
   let choices: AttributeChoice[] = [];
   let primary: AttributeChoice | null = null;
@@ -371,9 +357,10 @@ export function mountAttributeInsight(
    * The type `choices` holds the attributes of, or null while that is unsettled.
    *
    * A scan is one type's attributes against that type's population, and the two
-   * halves arrive separately — so this is what says they agree. `select.onChange`
-   * sets the shared filter *before* loading the schema, so every subscriber is
-   * called with the new type on screen and the previous one's `choices` in hand,
+   * halves arrive separately — so this is what says they agree. Mounting a
+   * route sets the shared filter *before* the schema loads, so every subscriber
+   * is called with the new type on screen and the previous one's `choices` in
+   * hand,
    * and `prune` calls them again from inside the load. Both used to start a scan
    * of one type's objects through another type's schema.
    *
@@ -427,7 +414,6 @@ export function mountAttributeInsight(
     split.classList.toggle('rail-on', open);
     split.classList.toggle('rail-off', !open);
 
-    railToggle.setAttribute('aria-expanded', String(open));
     rail.hidden = !open;
     // Only where the panel is over the chart is there anything to dim.
     railScrim.hidden = !open || lane === 'wide';
@@ -441,9 +427,9 @@ export function mountAttributeInsight(
         rail.querySelector<HTMLElement>('.attr:not(:disabled):not([hidden])') ??
         rail
       ).focus();
-    } else {
-      railToggle.focus();
     }
+    // Nothing to hand focus back to on close: the control is the nav-bar title,
+    // which is what was clicked, so it already has it.
   }
 
   /** Opens or closes the panel, remembering the choice where it is kept. */
@@ -455,13 +441,12 @@ export function mountAttributeInsight(
       narrowOpen = open;
     }
     applyRail(true);
+    // The title is the disclosure, and it lives in the bar above this view.
+    onStateChange();
   }
 
   placeholder.addEventListener('click', () => setRail(true));
   leadsLink.addEventListener('click', () => showLeads());
-  railToggle.addEventListener('click', () =>
-    setRail(!(lane === 'wide' ? wideOpen : narrowOpen)),
-  );
   railScrim.addEventListener('click', () => setRail(false));
 
   /**
@@ -484,6 +469,9 @@ export function mountAttributeInsight(
     // keep the panel open, and closed where it would be covering the chart.
     narrowOpen = false;
     applyRail();
+    // Each arrangement has its own resting state, so changing arrangement
+    // changes whether the panel is showing — and the title above says so.
+    onStateChange();
   });
 
   applyRail();
@@ -496,14 +484,6 @@ export function mountAttributeInsight(
    * thinking rather than responding.
    */
   let cache: { key: string; distribution: Distribution; cover: Coverage } | null = null;
-
-  select.onChange((value) => {
-    type = value as ObjectType;
-    // The filter bar's type chip has to follow the rail, or the two disagree
-    // about what population is on screen.
-    filters.setType(type);
-    void loadAttributes().catch(fail);
-  });
 
   compare.onChange((value) => {
     secondary = choices.find((choice) => keyOf(choice) === value) ?? null;
@@ -531,13 +511,8 @@ export function mountAttributeInsight(
   // ── options menu ──────────────────────────────────────────────────
   const setMenu = (open: boolean): void => {
     menuPanel.hidden = !open;
-    menuButton.setAttribute('aria-expanded', String(open));
   };
 
-  menuButton.addEventListener('click', (event) => {
-    event.stopPropagation();
-    setMenu(menuPanel.hidden);
-  });
   menuPanel.addEventListener('click', (event) => event.stopPropagation());
   const onAway = (): void => setMenu(false);
   const onEscape = (event: KeyboardEvent): void => {
@@ -551,7 +526,6 @@ export function mountAttributeInsight(
   const unsubscribe = filters.subscribe((filter) => {
     if (filter.type && filter.type !== type) {
       type = filter.type;
-      select.setValue(type);
       void loadAttributes().catch(fail);
       return;
     }
@@ -2358,7 +2332,6 @@ export function mountAttributeInsight(
   ): Promise<void> {
     if (objectType !== type) {
       type = objectType as ObjectType;
-      select.setValue(type);
       await loadAttributes();
     }
 
@@ -2394,10 +2367,7 @@ export function mountAttributeInsight(
   }
 
   async function restoreSnapshot(snapshot: AttributeSnapshot): Promise<void> {
-    if (snapshot.type) {
-      type = snapshot.type;
-      select.setValue(type);
-    }
+    if (snapshot.type) type = snapshot.type;
 
     // Always wait for the schema, even when the type already matches: mounting
     // the view kicks off its own load, and looking an attribute up before that
@@ -2434,6 +2404,26 @@ export function mountAttributeInsight(
   }
 
   return {
+    filterHost: q('.detail', 'detail'),
+
+    subject(): string | null {
+      return primary?.name ?? null;
+    },
+
+    // Both delegate rather than reimplement: the panel's resting state, focus
+    // handling and scrim all live in one place, and the bar above only asks.
+    openSubjects(): void {
+      setRail(!(lane === 'wide' ? wideOpen : narrowOpen));
+    },
+
+    subjectsOpen(): boolean {
+      return lane === 'wide' ? wideOpen : narrowOpen;
+    },
+
+    openOptions(): void {
+      setMenu(menuPanel.hidden);
+    },
+
     snapshot(): AttributeSnapshot {
       return {
         type,

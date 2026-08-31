@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { AttributeFilter, MetaModel } from '@bizzdesign/sdk-bundle/browser';
-import { decode, deserialise, encode, serialise, type Analysis } from './analysis';
+import type { AttributeFilter, MetaModel, ObjectType } from '@bizzdesign/sdk-bundle/browser';
+import {
+  decode,
+  deserialise,
+  encode,
+  pathOf,
+  serialise,
+  viewOf,
+  type Analysis,
+} from './analysis';
+import { ROOT } from './route';
 import type { AttributeSelection } from './filter';
 
 const selection: AttributeSelection = {
@@ -121,5 +130,85 @@ describe('a link that is not a link', () => {
     ['base64 of something that is not JSON', btoa('hello')],
   ])('decodes %s to null', (_case, text) => {
     expect(decode(text)).toBeNull();
+  });
+});
+
+/**
+ * The compatibility seam. Links written before the trail existed carry a view
+ * and a type; a trail has to be rebuilt from them, or every link already shared
+ * opens on the wrong screen.
+ */
+describe('the trail a link describes', () => {
+  const APPLICATION = 'BDCore.Application' as ObjectType;
+  const first = (): ObjectType => 'BDCore.Goal' as ObjectType;
+
+  it('prefers a stored path over anything derived', () => {
+    const stored = pathOf(
+      { v: 1, env: 'acme', view: 'population', path: [ROOT, { at: 'network' }] },
+      first,
+    );
+
+    // `view` disagrees on purpose: the path is the more specific answer.
+    expect(stored).toEqual([ROOT, { at: 'network' }]);
+  });
+
+  it('rebuilds the trail an attribute view was reached through', () => {
+    expect(pathOf({ v: 1, env: 'acme', view: 'attributes', type: APPLICATION }, first)).toEqual([
+      ROOT,
+      { at: 'attributes', type: APPLICATION },
+    ]);
+  });
+
+  it('rebuilds a graph as having been reached through its type', () => {
+    expect(pathOf({ v: 1, env: 'acme', view: 'network', type: APPLICATION }, first)).toEqual([
+      ROOT,
+      { at: 'attributes', type: APPLICATION },
+      { at: 'network', type: APPLICATION },
+    ]);
+  });
+
+  it('falls back to the first type for an attribute view that named none', () => {
+    // The only state the old shape could express that the new one cannot.
+    expect(pathOf({ v: 1, env: 'acme', view: 'attributes' }, first)).toEqual([
+      ROOT,
+      { at: 'attributes', type: first() },
+    ]);
+  });
+
+  it('opens at the root when there is no type to fall back to', () => {
+    expect(pathOf({ v: 1, env: 'acme', view: 'attributes' }, () => undefined)).toEqual([ROOT]);
+  });
+
+  it('ignores a path that is not a trail, rather than opening nowhere', () => {
+    expect(
+      pathOf({ v: 1, env: 'acme', view: 'attributes', type: APPLICATION, path: [] }, first),
+    ).toEqual([ROOT, { at: 'attributes', type: APPLICATION }]);
+  });
+});
+
+describe('the view a trail is written as', () => {
+  it('names the deepest screen, which is what an older build reads', () => {
+    expect(viewOf([ROOT])).toBe('population');
+    expect(viewOf([ROOT, { at: 'attributes', type: 'T' as ObjectType }])).toBe('attributes');
+    expect(viewOf([ROOT, { at: 'network' }])).toBe('network');
+  });
+
+  it('answers for an empty trail rather than leaving the field undefined', () => {
+    expect(viewOf([])).toBe('population');
+  });
+});
+
+describe('a link carrying a trail', () => {
+  it('survives a round trip with its path intact', () => {
+    const withPath: Analysis = {
+      ...analysis,
+      path: [ROOT, { at: 'attributes', type: 'BDCore.Application' as ObjectType }],
+    };
+
+    expect(decode(encode(withPath))).toEqual(withPath);
+  });
+
+  it('is rejected when its path is not a list', () => {
+    expect(accepts({ ...payload(), path: 'population' })).toBe(false);
   });
 });

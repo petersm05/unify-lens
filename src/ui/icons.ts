@@ -156,9 +156,10 @@ export function sidebarIcon(): HTMLElement {
  * rail and the chart take turns, the two directions are one move seen from
  * either end.
  */
-export function chevronIcon(direction: 'back' | 'forward' = 'back'): HTMLElement {
+export function chevronIcon(direction: 'back' | 'forward' | 'down' = 'back'): HTMLElement {
   const wrapper = document.createElement('span');
-  wrapper.className = direction === 'forward' ? 'icon icon-flip' : 'icon';
+  wrapper.className =
+    direction === 'forward' ? 'icon icon-flip' : direction === 'down' ? 'icon icon-down' : 'icon';
   wrapper.setAttribute('aria-hidden', 'true');
   wrapper.innerHTML =
     '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +

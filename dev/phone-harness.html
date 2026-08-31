@@ -27,39 +27,71 @@
       time; with no query every screen is stacked, which is what the overflow
       check below reads.
 
+      The chrome is the trail's: a nav bar carrying where you are and the
+      subject of the screen, a bottom toolbar carrying the verbs, and — above
+      the split breakpoint — the population as a column. The filter chips are
+      not here, because they are not shell any more: each view is handed a place
+      to put them so they scroll away with its content, and the attribute view's
+      copy is inside its `.detail` below.
+
       What this cannot tell you: iOS reports real `env(safe-area-inset-*)` values
       and Chromium reports zero, and the network canvas needs a live simulation
       to say whether a gesture through the HUD strip reaches it. Both need a
       device.
     -->
     <div id="app" class="viz-root">
-      <header class="bar">
-        <h1>Unify Lens</h1>
-        <button type="button" class="share-btn">Share</button>
-        <div class="saved-host">
-          <button type="button" class="saved-btn" aria-expanded="false">
-            <span class="icon" aria-hidden="true">⋯</span>More<span class="saved-badge">2</span>
+      <header class="navbar">
+        <button type="button" class="nav-back">
+          <span class="icon" aria-hidden="true">‹</span><span class="back-label">Population</span>
+        </button>
+        <div class="nav-heading">
+          <button type="button" class="nav-title menu" aria-haspopup="menu" aria-expanded="false">
+            <span class="title-text">Annual Cost (EUR)</span>
+            <span class="icon icon-down" aria-hidden="true">⌄</span>
           </button>
+          <p class="nav-sub">Application Component</p>
+        </div>
+        <div class="nav-trailing">
+          <div class="saved-host">
+            <button type="button" class="saved-btn" aria-expanded="false">
+              <span class="icon" aria-hidden="true">⋯</span>More<span class="saved-badge">2</span>
+            </button>
+          </div>
         </div>
       </header>
-      <nav class="tabs" role="tablist">
-        <button type="button" role="tab" aria-selected="false">Population</button>
-        <button type="button" role="tab" aria-selected="true">Attributes</button>
-        <button type="button" role="tab" aria-selected="false">Network</button>
-      </nav>
       <div class="progress" role="status"><span></span></div>
-      <div class="filters">
-        <div class="filter-bar">
-          <button type="button" class="filter-chip">
-            <span>Type: Application Component</span><span class="x">✕</span>
-          </button>
-          <button type="button" class="filter-chip">
-            <span>Business criticality is Mission critical</span><span class="x">✕</span>
-          </button>
-          <button type="button" class="clear-all">Clear all</button>
-        </div>
+      <div class="shell-body">
+        <!-- Only above the split breakpoint, where the level the current screen
+             was reached from becomes a column of its own. -->
+        <aside class="type-rail">
+          <h2 class="rail-head">Population</h2>
+          <div class="type-list" role="list">
+            <button type="button" class="type-item" aria-current="true">
+              <span class="t-name">Application Component</span><span class="t-count">298</span>
+            </button>
+            <button type="button" class="type-item" aria-current="false">
+              <span class="t-name">Business Process</span><span class="t-count">45</span>
+            </button>
+            <button type="button" class="type-item" aria-current="false">
+              <span class="t-name">Software Technology</span><span class="t-count">141</span>
+            </button>
+          </div>
+        </aside>
+        <main class="pane"></main>
       </div>
-      <main class="pane"></main>
+      <nav class="toolbar" aria-label="Actions">
+        <button type="button" class="tool on">
+          <span class="icon" aria-hidden="true">⧨</span><span class="tool-label">Filter</span
+          ><span class="tool-count">1</span>
+        </button>
+        <button type="button" class="tool primary">
+          <span class="icon" aria-hidden="true">≡</span
+          ><span class="tool-label">Chart options</span>
+        </button>
+        <button type="button" class="tool">
+          <span class="icon" aria-hidden="true">↑</span><span class="tool-label">Share</span>
+        </button>
+      </nav>
     </div>
 
     <script type="module">
@@ -147,14 +179,6 @@
         const section = el('section', `split lane-${lane} ${open ? 'rail-on' : 'rail-off'}`);
         section.innerHTML = `
           <aside class="rail" tabindex="-1">
-            <label class="field">
-              <span>Object type</span>
-              <div class="picker">
-                <button type="button" class="picker-btn" aria-expanded="false">
-                  Application Component
-                </button>
-              </div>
-            </label>
             <button type="button" class="attr leads-link">
               <span class="icon" aria-hidden="true"></span>
               <span class="a-name">Worth a look</span>
@@ -174,16 +198,17 @@
             </div>
           </aside>
 
-          <div class="rail-bar">
-            <button type="button" class="rail-toggle" aria-expanded="true">
-              <span class="icon" aria-hidden="true"></span>
-              <span class="rail-label">Attributes</span>
-            </button>
-          </div>
-
           <div class="rail-scrim" hidden></div>
 
           <div class="detail">
+            <div class="filters">
+              <div class="filter-bar">
+                <button type="button" class="filter-chip">
+                  <span>Business criticality is Mission critical</span><span class="x">✕</span>
+                </button>
+                <button type="button" class="clear-all">Clear all</button>
+              </div>
+            </div>
             <div class="insight">
               <div class="kpis has-coverage">
                 <div class="kpi hero">
@@ -224,9 +249,7 @@
                     <p class="sub">Six values, summed across 1.191 objects.</p>
                   </div>
                   <div class="chart-menu">
-                    <button type="button" class="menu-btn" aria-expanded="false">
-                      <span class="menu-current">Bars</span>
-                    </button>
+                    <span class="menu-current" aria-hidden="true">Bars</span>
                   </div>
                 </div>
 
@@ -322,7 +345,11 @@
         section.querySelector('.objects-host').append(objectTable());
         section.querySelector('.rail').hidden = !open;
         section.querySelector('.rail-scrim').hidden = !open || lane === 'wide';
-        section.querySelector('.rail-toggle').setAttribute('aria-expanded', String(open));
+        // The panel's disclosure is the nav-bar title, which is shell markup
+        // above this view rather than part of the template.
+        document
+          .querySelector('.nav-title')
+          .setAttribute('aria-expanded', String(open));
         section.querySelector('.insight').hidden = !charted;
         // Four states share the empty pane. `?charted=no` is the one the view
         // opens on where the population was small enough to have been read:
@@ -486,6 +513,15 @@
           <div class="finder">
             <div class="search">
               <input type="search" placeholder="Search objects…" />
+            </div>
+          </div>
+          <div class="graph-chips">
+            <div class="filters">
+              <div class="filter-bar">
+                <button type="button" class="filter-chip">
+                  <span>Business criticality is Mission critical</span><span class="x">✕</span>
+                </button>
+              </div>
             </div>
           </div>
           <div class="hud">
