@@ -48,7 +48,7 @@ export async function sumAttribute(
   params: { types?: readonly ObjectType[]; categoryId: string; name: string },
 ): Promise<number> {
   const { sum } = await kg.aggregateAttributeValues({
-    filter: params.types ? { types: [...params.types] } : undefined,
+    ...(params.types ? { filter: { types: [...params.types] } } : {}),
     aggregate: { sum: { categoryId: params.categoryId, name: params.name } },
   });
   return sum;

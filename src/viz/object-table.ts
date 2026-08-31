@@ -1,29 +1,45 @@
 import type { ObjectType, UUID } from '@bizzdesign/sdk-bundle/browser';
 import type { Session } from '../sdk/client';
 
+import { labelFor } from '../sdk/metamodel';
+import { fetchTable } from '../data/object-table';
+import { toDelimitedTable } from '../data/table-export';
 import {
   columnFor,
   CREATED_COLUMN,
-  fetchTable,
+  foldCharted,
   NAME_COLUMN,
   type Column,
-} from '../data/object-table';
+} from '../data/table-columns';
 import { equalsCondition, SAMPLE_LIMIT, type AttributeChoice } from '../data/attributes';
 import { scopeFor, type FilterStore } from '../data/filter';
 import { onContextRequest, showContextMenu } from '../ui/context-menu';
 import { busy } from '../ui/busy';
 import { must } from '../ui/dom';
 import { attributeIcon, controlsIcon, dragIcon } from '../ui/icons';
-import { formatCompact, formatCount, formatMoney } from './theme';
+import { formatCompact, formatCount, formatMoney, sampledObjects } from './theme';
 
 export interface ObjectTable {
-  /** Keeps a column for the attribute currently being charted. */
-  setFocus(choice: AttributeChoice | null): void;
+  /**
+   * Keeps a column for each attribute the chart is built from — both of them
+   * where two are being compared.
+   */
+  setFocus(charted: readonly AttributeChoice[]): void;
   refresh(): void;
   destroy(): void;
 }
 
 const PAGE_SIZE = 25;
+/**
+ * How much a copy takes.
+ *
+ * The page on screen is 25 rows, which is not what anyone means by "copy this
+ * table". The whole selection is, and `SAMPLE_LIMIT` is the ceiling the rest
+ * of the app already reads to — past it the answer is a sample either way, and
+ * the heading says so.
+ */
+const COPY_LIMIT = SAMPLE_LIMIT;
+const COPIED_MS = 1_800;
 const DEBOUNCE_MS = 280;
 
 /**
@@ -52,6 +68,7 @@ export function mountObjectTable(
             <summary><span class="picker-label">Columns</span></summary>
             <div class="col-list"></div>
           </details>
+          <button type="button" class="objects-copy">Copy</button>
         </div>
       </div>
       <p class="sub" data-k="objects-note" hidden></p>
@@ -78,6 +95,7 @@ export function mountObjectTable(
   const body = must(host.querySelector<HTMLElement>('tbody'), 'objects: body');
   const note = must(host.querySelector<HTMLElement>('[data-k="objects-note"]'), 'objects: note');
   const pagerState = must(host.querySelector<HTMLElement>('.pager-state'), 'objects: pager');
+  const copyButton = must(host.querySelector<HTMLButtonElement>('.objects-copy'), 'objects: copy');
   const prev = must(host.querySelector<HTMLButtonElement>('[data-act="prev"]'), 'objects: prev');
   const next = must(host.querySelector<HTMLButtonElement>('[data-act="next"]'), 'objects: next');
 
@@ -86,7 +104,8 @@ export function mountObjectTable(
   // identity and the click target, so a table that opened on some other column
   // would read as a list of values with no subject.
   let extraColumns: Column[] = [];
-  let focusKey: string | null = null;
+  /** Keys of the columns the current chart put there, and only those. */
+  let fromChart: readonly string[] = [];
   /** Kept across rebuilds so a rebuild does not wipe what someone just typed. */
   let colTerm = '';
 
@@ -116,6 +135,10 @@ export function mountObjectTable(
   next.addEventListener('click', () => {
     page += 1;
     void load();
+  });
+
+  copyButton.addEventListener('click', () => {
+    void copyTable();
   });
 
   const unsubscribe = filters.subscribe(() => {
@@ -232,7 +255,9 @@ export function mountObjectTable(
       remove.textContent = '✕';
       remove.addEventListener('click', () => {
         extraColumns = extraColumns.filter((entry) => entry.key !== column.key);
-        if (focusKey === column.key) focusKey = null;
+        // Taken away on purpose, so the next chart change must not bring it
+        // back as one of its own.
+        fromChart = fromChart.filter((key) => key !== column.key);
         settleSort();
         void load();
       });
@@ -371,15 +396,68 @@ export function mountObjectTable(
     return element;
   }
 
+  /**
+   * The whole selection on the clipboard, not the page on screen.
+   *
+   * Reuses `fetchTable` with one big page rather than a second query shape:
+   * the server-sorted path asks for that many at once, and the sample-sorted
+   * path already builds every row before it slices, so both answer this with
+   * the code that answers the table.
+   */
+  async function copyTable(): Promise<void> {
+    const { type } = getContext();
+    const columns = columnsNow();
+    const scope = scopeFor(filters.get());
+
+    const result = await busy.track(
+      fetchTable(session.kg, session.sample, {
+        type,
+        ...(scope ? { scope } : {}),
+        searchTerm: term,
+        columns,
+        sortKey,
+        descending,
+        page: 0,
+        pageSize: COPY_LIMIT,
+      }),
+    );
+
+    // What this is a list of. Without it a column of names is a column of
+    // names, and a week later nobody knows which question produced it.
+    const applied = filters.get().attributes.map((selection) => selection.label);
+    const heading = [labelFor(type), ...applied, new Date().toLocaleDateString()].join(' · ');
+
+    const table = toDelimitedTable(columns, result.rows, {
+      heading,
+      // Either the ranking could not see everything, or there were more rows
+      // than one copy takes. Both mean the same thing to whoever reads it.
+      sampled: result.truncated || result.total > result.rows.length,
+    });
+
+    const said = (message: string): void => {
+      copyButton.textContent = message;
+      globalThis.setTimeout(() => (copyButton.textContent = 'Copy'), COPIED_MS);
+    };
+
+    try {
+      await navigator.clipboard.writeText(table);
+      said(`Copied ${formatCount(result.rows.length)}`);
+    } catch {
+      said('Could not copy');
+    }
+  }
+
   async function load(): Promise<void> {
     const mine = ++generation;
     const { type } = getContext();
     const columns = columnsNow();
 
+    const scope = scopeFor(filters.get());
+
     const result = await busy.track(
       fetchTable(session.kg, session.sample, {
         type,
-        scope: scopeFor(filters.get()),
+        ...(scope ? { scope } : {}),
         searchTerm: term,
         columns,
         sortKey,
@@ -450,7 +528,7 @@ export function mountObjectTable(
     const incomplete = result.sortedBy === 'sample' && result.truncated;
     note.hidden = !incomplete;
     note.textContent = incomplete
-      ? `Ranked from the first ${formatCount(SAMPLE_LIMIT)} objects, so this order may not be complete.`
+      ? `Ranked from ${sampledObjects(result)}, so this order may not be complete.`
       : '';
 
     const from = result.total === 0 ? 0 : page * PAGE_SIZE + 1;
@@ -508,14 +586,16 @@ export function mountObjectTable(
      * without anyone opening the column picker, and columns added by hand are
      * left alone.
      */
-    setFocus(choice: AttributeChoice | null): void {
-      const column = choice ? columnFor(choice) : null;
-      if (column?.key === focusKey) return;
+    setFocus(charted: readonly AttributeChoice[]): void {
+      const next = foldCharted(extraColumns, fromChart, charted);
+      fromChart = next.added;
 
-      const kept = extraColumns.filter((existing) => existing.key !== focusKey);
-      extraColumns =
-        column && !kept.some((existing) => existing.key === column.key) ? [...kept, column] : kept;
-      focusKey = column?.key ?? null;
+      const unchanged =
+        next.columns.length === extraColumns.length &&
+        next.columns.every((column, index) => column.key === extraColumns[index]?.key);
+      if (unchanged) return;
+
+      extraColumns = [...next.columns];
 
       settleSort();
       page = 0;

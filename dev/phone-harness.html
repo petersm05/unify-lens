@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Unify Lens — layout harness</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="stylesheet" href="../src/app.css" />
+  </head>
+  <body>
+    <!--
+      Every screen this app has, laid out with representative strings instead of
+      a Unify session.
+
+      The app connects before it renders anything, so without a backend the only
+      screens reachable are the boot splash and the setup form — which means the
+      layout this change is about cannot be looked at. Every view is built from
+      one `innerHTML` template per module, so those templates are pasted here
+      verbatim and filled by hand. The stylesheet cannot tell these strings from
+      real data, and layout is all this change touches.
+
+      Kept in the repo rather than in a scratch directory so `../src/app.css`
+      resolves and the dev server reloads it. `?view=…` shows one screen at a
+      time; with no query every screen is stacked, which is what the overflow
+      check below reads.
+
+      The chrome is the trail's: a nav bar carrying where you are and the
+      subject of the screen, a bottom toolbar carrying the verbs, and — above
+      the split breakpoint — the population as a column. The filter chips are
+      not here, because they are not shell any more: each view is handed a place
+      to put them so they scroll away with its content, and the attribute view's
+      copy is inside its `.detail` below.
+
+      What this cannot tell you: iOS reports real `env(safe-area-inset-*)` values
+      and Chromium reports zero, and the network canvas needs a live simulation
+      to say whether a gesture through the HUD strip reaches it. Both need a
+      device.
+    -->
+    <div id="app" class="viz-root">
+      <header class="navbar">
+        <button type="button" class="nav-back">
+          <span class="icon" aria-hidden="true">‹</span><span class="back-label">Population</span>
+        </button>
+        <div class="nav-heading">
+          <button type="button" class="nav-title menu" aria-haspopup="menu">
+            <span class="title-text">Annual Cost (EUR)</span>
+            <span class="icon icon-down" aria-hidden="true">⌄</span>
+          </button>
+          <p class="nav-sub">Application Component</p>
+        </div>
+        <div class="nav-trailing">
+          <div class="saved-host">
+            <button type="button" class="saved-btn" aria-expanded="false">
+              <span class="icon" aria-hidden="true">⋯</span>More<span class="saved-badge">2</span>
+            </button>
+          </div>
+        </div>
+      </header>
+      <div class="progress" role="status"><span></span></div>
+      <div class="shell-body">
+        <!-- Only above the split breakpoint, where the level the current screen
+             was reached from becomes a column of its own. -->
+        <aside class="type-rail">
+          <h2 class="rail-head">Population</h2>
+          <div class="type-list" role="list">
+            <button type="button" class="type-item" aria-current="true">
+              <span class="t-name">Application Component</span><span class="t-count">298</span>
+            </button>
+            <button type="button" class="type-item" aria-current="false">
+              <span class="t-name">Business Process</span><span class="t-count">45</span>
+            </button>
+            <button type="button" class="type-item" aria-current="false">
+              <span class="t-name">Software Technology</span><span class="t-count">141</span>
+            </button>
+          </div>
+        </aside>
+        <main class="pane"></main>
+      </div>
+      <nav class="toolbar" aria-label="Actions">
+        <button type="button" class="tool on">
+          <span class="icon" aria-hidden="true">⧨</span><span class="tool-label">Filter</span
+          ><span class="tool-count">1</span>
+        </button>
+        <button type="button" class="tool primary">
+          <span class="icon" aria-hidden="true">≡</span
+          ><span class="tool-label">Chart options</span>
+        </button>
+        <button type="button" class="tool">
+          <span class="icon" aria-hidden="true">↑</span><span class="tool-label">Share</span>
+        </button>
+      </nav>
+    </div>
+
+    <script type="module">
+      import { laneNow, wideRailOpen } from '../src/ui/rail.ts';
+
+      const pane = document.querySelector('main.pane');
+      const view = new URL(location.href).searchParams.get('view') ?? 'all';
+
+      /** A name long enough to be the one that breaks a row. */
+      const LONG = 'Customer Relationship Management Platform';
+      const TYPES = [
+        ['Application Component', 412],
+        [LONG, 318],
+        ['Business Process', 264],
+        ['Technology Service', 121],
+        ['Data Object', 84],
+        ['Not set', 12],
+      ];
+
+      const el = (tag, className, text) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      };
+
+      /** `renderBarList`'s row, by hand: label, track, value and a share. */
+      function barRows(withShare) {
+        const max = Math.max(...TYPES.map(([, count]) => count));
+        const total = TYPES.reduce((sum, [, count]) => sum + count, 0);
+        return TYPES.map(([name, count]) => {
+          const row = el('div', 'row');
+          row.append(el('span', 'label', name));
+          const track = el('span', 'track');
+          const fill = el('span', 'fill');
+          fill.style.width = `${(count / max) * 100}%`;
+          track.append(fill);
+          row.append(track, el('span', 'value', `€${count},2M`));
+          if (withShare) row.append(el('span', 'share', `${((count / total) * 100).toFixed(1)}%`));
+          return row;
+        });
+      }
+
+      function population() {
+        const section = el('section', 'chart on-plane');
+        section.innerHTML = `
+          <div class="kpis">
+            <div class="kpi hero">
+              <span class="k-label">Objects</span>
+              <span class="k-value">1.191</span>
+            </div>
+            <div class="kpi">
+              <span class="k-label">Relations</span>
+              <span class="k-value">4.806</span>
+            </div>
+            <div class="kpi">
+              <span class="k-label">Types in use</span>
+              <span class="k-value">18</span>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Population by type</h2>
+            <p class="sub">Tap a type to explore its attributes.</p>
+            <div class="rows" role="list"></div>
+          </div>
+        `;
+        section.querySelector('.rows').append(...barRows(false));
+        return section;
+      }
+
+      function attributes() {
+        // The real decision, not a copy of it. The harness used to restate the
+        // breakpoint and pick the classes by hand, which meant it agreed with
+        // itself no matter what `src/ui/rail.ts` actually did. Importing the
+        // module and applying its answer the way `applyRail` does is what makes
+        // a wrong answer visible here.
+        const lane = laneNow();
+        const asked = new URL(location.href).searchParams.get('rail');
+        // `?charted=no` is the state you land in before picking an attribute:
+        // the chart pane, standing empty, with the prompt that opens the panel.
+        const charted = new URL(location.href).searchParams.get('charted') !== 'no';
+        // The resting state the app would be in: open where there is room to
+        // keep it open, closed where it would be covering the chart.
+        const open = asked ? asked === 'on' : lane === 'wide' && wideRailOpen();
+        const section = el('section', `split lane-${lane} ${open ? 'rail-on' : 'rail-off'}`);
+        section.innerHTML = `
+          <aside class="rail" tabindex="-1">
+            <button type="button" class="attr leads-link">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="a-name">Worth a look</span>
+            </button>
+            <div class="attr-list" role="list" aria-label="Attributes">
+              <h3 class="rail-head">General</h3>
+              <button type="button" class="attr on" role="listitem">
+                <span class="a-name">Business criticality</span>
+              </button>
+              <button type="button" class="attr" role="listitem">
+                <span class="a-name">Total cost of ownership</span>
+              </button>
+              <h3 class="rail-head">Lifecycle</h3>
+              <button type="button" class="attr" role="listitem">
+                <span class="a-name">Decommission date</span>
+              </button>
+            </div>
+          </aside>
+
+          <div class="rail-bar">
+            <button type="button" class="rail-toggle" aria-expanded="true">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="rail-label">Attributes</span>
+            </button>
+          </div>
+
+          <div class="rail-scrim" hidden></div>
+
+          <div class="detail">
+            <div class="filters">
+              <div class="filter-bar">
+                <button type="button" class="filter-chip">
+                  <span>Business criticality is Mission critical</span><span class="x">✕</span>
+                </button>
+                <button type="button" class="clear-all">Clear all</button>
+              </div>
+            </div>
+            <div class="insight">
+              <div class="kpis has-coverage">
+                <div class="kpi hero">
+                  <span class="k-label">Total in Mission critical</span>
+                  <span class="k-value">€12,2M</span>
+                </div>
+                <div class="kpi">
+                  <span class="k-label">Share of total</span>
+                  <span class="k-value">38,4%</span>
+                </div>
+                <!-- Third figure. The dash offset is 188.5 × (1 − 0.84),
+                     which the app computes from GAUGE_ARC; written out here,
+                     because this block is a JavaScript template literal and a
+                     backtick in it ends the string. -->
+                <div class="kpi coverage good">
+                  <span class="k-label">Coverage</span>
+                  <div class="cov-body">
+                    <div class="gauge">
+                      <svg viewBox="0 4 100 92" aria-hidden="true" focusable="false">
+                        <path class="gauge-track" d="M 21.72 78.28 A 40 40 0 1 1 78.28 78.28" />
+                        <path class="gauge-fill" d="M 21.72 78.28 A 40 40 0 1 1 78.28 78.28"
+                              style="stroke-dashoffset:30.16" />
+                      </svg>
+                      <span class="k-value gauge-value">84%</span>
+                    </div>
+                    <span class="cov-read">
+                      <span class="cov-state">Well covered</span>
+                      <span class="k-of">190 not set</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card chart-card">
+                <div class="card-head">
+                  <div class="card-title">
+                    <h2>Total cost of ownership by business criticality</h2>
+                    <p class="sub">Six values, summed across 1.191 objects.</p>
+                  </div>
+                  <div class="chart-menu">
+                    <span class="menu-current" aria-hidden="true">Bars</span>
+                  </div>
+                </div>
+
+                <div class="with-donut has-donut">
+                  <div class="donut"></div>
+                  <div class="rows" role="list"></div>
+                </div>
+
+                <div class="stats">
+                  <div class="stat"><span class="s-label">Lowest</span><span class="s-value">€1.240</span></div>
+                  <div class="stat"><span class="s-label">Median</span><span class="s-value">€184.500</span></div>
+                  <div class="stat"><span class="s-label">90th pct</span><span class="s-value">€1,4M</span></div>
+                  <div class="stat"><span class="s-label">Highest</span><span class="s-value">€3,8M</span></div>
+                </div>
+              </div>
+
+              <div class="objects-host card"></div>
+            </div>
+            <section class="card leads" aria-label="Worth a look">
+              <div class="card-title">
+                <h2>Worth a look</h2>
+                <p class="sub"></p>
+              </div>
+              <div class="lead-rows" role="list">
+                <div class="lead empty coverage-row" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">Unused</span>
+                    <span class="lead-title">Financials</span>
+                    <span class="lead-note">8 attributes</span>
+                    <span class="lead-headline">every one is sparse</span>
+                    <span class="lead-detail">best covered is Contract value, at 9%</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss Financials">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="lead sparse coverage-row" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">Sparse</span>
+                    <span class="lead-title">Business criticality</span>
+                    <span class="lead-note">General</span>
+                    <span class="lead-headline">12% covered</span>
+                    <span class="lead-detail">1.048 of 1.191 not set</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss Business criticality">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="lead sparse coverage-row" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">Sparse</span>
+                    <span class="lead-title">${LONG}</span>
+                    <span class="lead-note">Application portfolio management</span>
+                    <span class="lead-headline">&lt;1% covered</span>
+                    <span class="lead-detail">1.186 of 1.191 not set</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="lead concentrated" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">One value</span>
+                    <span class="lead-title">Lifecycle</span>
+                    <span class="lead-note">General</span>
+                    <span class="lead-headline">94% are “Production”</span>
+                    <span class="lead-detail">1.048 of the 1.115 objects with a value</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss Lifecycle">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="lead outlier" role="listitem">
+                  <button type="button" class="lead-open">
+                    <span class="lead-word">Outlier</span>
+                    <span class="lead-title">Total cost of ownership</span>
+                    <span class="lead-note">Financials</span>
+                    <span class="lead-headline">highest value is 41× the median</span>
+                    <span class="lead-detail">€3,8M against a median of €92.400</span>
+                  </button>
+                  <button type="button" class="lead-hide" aria-label="Dismiss Total cost of ownership">
+                    <span class="icon" aria-hidden="true">✕</span>
+                  </button>
+                </div>
+              </div>
+              <button type="button" class="lead-scan" hidden>Scan the population</button>
+            </section>
+
+            <button type="button" class="placeholder">Pick an attribute to chart it.</button>
+          </div>
+        `;
+        section.querySelector('.with-donut .rows').append(...barRows(true));
+        section.querySelector('.objects-host').append(objectTable());
+        section.querySelector('.rail').hidden = !open;
+        section.querySelector('.rail-scrim').hidden = !open || lane === 'wide';
+        section.querySelector('.rail-toggle').setAttribute('aria-expanded', String(open));
+        section.querySelector('.insight').hidden = !charted;
+        // Four states share the empty pane. `?charted=no` is the one the view
+        // opens on where the population was small enough to have been read:
+        // the leads. `?leads=offer` is the same screen where it was not,
+        // `?leads=coverage` is a read that stopped short — rows, and the
+        // action under them — and `?leads=no` is the bare line from before
+        // there was anything to say.
+        const leads = new URL(location.href).searchParams.get('leads') ?? 'rows';
+        const offering = leads === 'offer';
+        const uncounted = leads === 'coverage';
+        const card = section.querySelector('.leads');
+        card.hidden = charted || leads === 'no';
+        card.querySelector('.lead-rows').hidden = offering;
+        // A read that stopped short says nothing about coverage, so those rows
+        // are not in that list at all — the app leaves them out rather than
+        // qualifying them.
+        card
+          .querySelectorAll('.coverage-row')
+          .forEach((row) => (row.hidden = uncounted));
+        const action = card.querySelector('.lead-scan');
+        action.hidden = !offering && !uncounted;
+        action.textContent = offering
+          ? 'Scan the population'
+          : 'Count coverage across the population';
+        card.querySelector('.sub').textContent = offering
+          ? '12.406 Application Component objects is more than is read without being asked. One read covers every attribute at once, and the rows say so where it has to stop short of the whole population.'
+          : uncounted
+            ? 'Across 44 attributes of the first 4.000 objects read. Coverage is left out: this read stopped short, and a share of what it reached is not a share of the whole. Every figure here is that read’s.'
+            : 'Across 44 attributes of 1.191 Application Component objects. Each row opens the chart behind it.';
+        // The app hides the row until there is a screen behind it, and an
+        // offer counts as one — so `?leads=no`, which is the state before
+        // either, is the one state without it. It reads as selected only while
+        // that screen is what is on show.
+        const link = section.querySelector('.leads-link');
+        link.hidden = leads === 'no';
+        link.classList.toggle('on', !charted && !offering);
+        // Only one row in the panel is the one on screen.
+        if (!charted) section.querySelector('.attr-list .attr.on').classList.remove('on');
+        section.querySelector('.placeholder').hidden = charted || !card.hidden;
+        return section;
+      }
+
+      function objectTable() {
+        // `?cols=open` drops the column picker open, which is the only way to
+        // look at a panel that is otherwise closed on load.
+        const colsOpen = new URL(location.href).searchParams.get('cols') === 'open';
+        const section = el('section', 'objects');
+        section.innerHTML = `
+          <div class="objects-head">
+            <h2>Objects in this selection</h2>
+            <div class="objects-tools">
+              <input type="search" class="obj-search" placeholder="Search these objects…" />
+              <details class="col-picker" ${colsOpen ? 'open' : ''}>
+                <summary><span class="picker-label">Columns</span></summary>
+                <!-- buildColumnPicker()'s output, by hand. An empty .col-list is
+                     what let #17 through: a panel with nothing in it has nothing
+                     to truncate, so the width it gives its contents never showed
+                     up as wrong. -->
+                <div class="col-list">
+                  <input type="search" class="col-search" placeholder="Search columns…" />
+                  <div class="col-heading">Shown</div>
+                  <div class="col-shown">
+                    <div class="col-row is-fixed">
+                      <span class="col-spacer"></span>
+                      <span class="col-name-wrap"><span class="col-name">Name</span></span>
+                      <span class="col-note">always first</span>
+                    </div>
+                    <div class="col-row">
+                      <button type="button" class="col-handle" aria-label="Move Business criticality">
+                        <span class="icon" aria-hidden="true"></span>
+                      </button>
+                      <span class="col-name-wrap">
+                        <span class="icon" aria-hidden="true"></span>
+                        <span class="col-name">Business criticality</span>
+                        <span class="col-cat">Application</span>
+                      </span>
+                      <button type="button" class="col-remove" aria-label="Remove">✕</button>
+                    </div>
+                  </div>
+                  <div class="col-divider"></div>
+                  <div class="col-heading">Add</div>
+                  <button type="button" class="col-add">
+                    <span class="col-plus">+</span>
+                    <span class="col-name-wrap">
+                      <span class="icon" aria-hidden="true"></span>
+                      <span class="col-name">Application owner</span>
+                      <span class="col-cat">Ownership</span>
+                    </span>
+                  </button>
+                  <button type="button" class="col-add">
+                    <span class="col-plus">+</span>
+                    <span class="col-name-wrap">
+                      <span class="icon" aria-hidden="true"></span>
+                      <span class="col-name">Environment</span>
+                      <span class="col-cat">Application</span>
+                    </span>
+                  </button>
+                  <button type="button" class="col-add">
+                    <span class="col-plus">+</span>
+                    <span class="col-name-wrap">
+                      <span class="icon icon-text" aria-hidden="true">€</span>
+                      <span class="col-name">Total cost of ownership</span>
+                      <span class="col-cat">Finance</span>
+                    </span>
+                  </button>
+                  <button type="button" class="col-add">
+                    <span class="col-plus">+</span>
+                    <span class="col-name-wrap">
+                      <span class="icon" aria-hidden="true"></span>
+                      <span class="col-name">Decommission date</span>
+                      <span class="col-cat">Lifecycle</span>
+                    </span>
+                  </button>
+                </div>
+              </details>
+            </div>
+          </div>
+          <div class="table-scroll"><table class="data objects-table">
+            <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <div class="pager">
+            <button type="button">Previous</button>
+            <span class="pager-state">1–25 of 412</span>
+            <button type="button">Next</button>
+          </div>
+        `;
+
+        // Five columns: the picker's doing, not the default — the default keeps
+        // one attribute beside the name and needs no scrolling at all.
+        const columns = ['Name', 'Criticality', 'Cost of ownership', 'Owner', 'Decommission'];
+        section.querySelector('thead tr').append(
+          ...columns.map((column) => {
+            const cell = el('th');
+            cell.append(Object.assign(el('button', 'sort'), { textContent: column }));
+            return cell;
+          }),
+        );
+        section.querySelector('tbody').append(
+          ...TYPES.map(([name]) => {
+            const row = el('tr', 'pickable');
+            row.append(
+              el('td', null, name),
+              el('td', null, 'Mission critical'),
+              el('td', null, '€1.284.500'),
+              el('td', null, 'Enterprise Architecture'),
+              el('td', null, '2027-03-31'),
+            );
+            return row;
+          }),
+        );
+        return section;
+      }
+
+      function network() {
+        const graph = el('div', 'graph');
+        graph.style.position = 'relative';
+        graph.style.height = '420px';
+        graph.innerHTML = `
+          <canvas></canvas>
+          <div class="finder">
+            <div class="search">
+              <input type="search" placeholder="Search objects…" />
+            </div>
+          </div>
+          <div class="graph-chips">
+            <div class="filters">
+              <div class="filter-bar">
+                <button type="button" class="filter-chip">
+                  <span>Business criticality is Mission critical</span><span class="x">✕</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="hud">
+            <button type="button">Recentre</button>
+            <span class="status">42 objects, 3 hops from ${LONG}</span>
+          </div>
+          <div class="legend" aria-label="Distance from focus">
+            <span><i style="background:var(--hop-0)"></i>Focus</span>
+            <span><i style="background:var(--hop-1)"></i>1 hop</span>
+            <span><i style="background:var(--hop-2)"></i>2 hops</span>
+            <span><i style="background:var(--hop-3)"></i>3 hops</span>
+          </div>
+        `;
+        return graph;
+      }
+
+      function sheet() {
+        const backdrop = el('div', 'sheet-backdrop');
+        backdrop.innerHTML = `
+          <aside class="sheet" role="dialog" aria-label="Object details">
+            <header class="sheet-head">
+              <div>
+                <p class="sheet-kind">Application Component</p>
+                <h2 class="sheet-name">${LONG}</h2>
+              </div>
+              <button type="button" class="sheet-close" aria-label="Close">✕</button>
+            </header>
+            <div class="sheet-body">
+              <p class="sheet-desc">
+                The system of record for every customer interaction across the
+                three regional sales organisations.
+              </p>
+              <div class="sheet-section">
+                <ul class="facts">
+                  <li><button type="button" class="fact chartable">
+                    <span class="icon" aria-hidden="true"></span>
+                    <span class="f-name">Business criticality</span>
+                    <span class="f-value">Mission critical</span>
+                    <span class="f-go" aria-hidden="true">↗</span>
+                  </button></li>
+                  <li><button type="button" class="fact chartable">
+                    <span class="icon icon-text" aria-hidden="true">€</span>
+                    <span class="f-name">Total cost of ownership</span>
+                    <span class="f-value">€1.284.500</span>
+                    <span class="f-go" aria-hidden="true">↗</span>
+                  </button></li>
+                  <li><div class="fact plain-fact">
+                    <span class="f-name">Decommission date</span>
+                    <span class="f-value">2027-03-31</span>
+                  </div></li>
+                </ul>
+              </div>
+            </div>
+            <footer class="sheet-foot">
+              <button type="button" class="ghost">Show in network</button>
+            </footer>
+          </aside>
+        `;
+        return backdrop;
+      }
+
+      /**
+       * The overflow menu, open.
+       *
+       * Pasted from `src/ui/saved-panel.ts` like every other template here. It
+       * is `position: absolute` inside the header's `.saved-host`, so it is
+       * rendered there rather than in the pane — which is also the only way to
+       * see whether a 360px panel hanging off the right edge of a 390px screen
+       * stays on the screen.
+       */
+      function more() {
+        const host = document.querySelector('.saved-host');
+        host.querySelector('.saved-btn').setAttribute('aria-expanded', 'true');
+        const panel = el('div', 'saved-panel');
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-label', 'More');
+        panel.innerHTML = `
+          <div class="saved-head">
+            <span class="menu-label">Analyses</span>
+            <button type="button" class="saved-add">Save current…</button>
+          </div>
+          <ul class="saved-list">
+            <li>
+              <button type="button" class="saved-open">Mission-critical apps by owner</button>
+              <button type="button" class="saved-more" aria-label="Actions">
+                <span class="icon" aria-hidden="true">⋯</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="saved-open is-new">${LONG}</button>
+              <span class="saved-owner">new — shared by Amina Osei</span>
+              <button type="button" class="saved-more" aria-label="Actions">
+                <span class="icon" aria-hidden="true">⋯</span>
+              </button>
+            </li>
+          </ul>
+          <button type="button" class="saved-offer">Show this count on the app icon</button>
+
+          <div class="menu-rows">
+            <button type="button" class="menu-row">
+              <span class="icon" aria-hidden="true">⚙</span>
+              <span class="menu-row-label">Settings</span>
+              <span class="icon icon-flip" aria-hidden="true">›</span>
+            </button>
+            <button type="button" class="menu-row">
+              <span class="icon" aria-hidden="true">✷</span>
+              <span class="menu-row-label">Report a problem</span>
+            </button>
+            <button type="button" class="menu-row">
+              <span class="icon" aria-hidden="true">✧</span>
+              <span class="menu-row-label">Request a feature</span>
+            </button>
+          </div>
+
+          <div class="menu-rows">
+            <button type="button" class="menu-row is-danger">
+              <span class="icon" aria-hidden="true">⏏</span>
+              <span class="menu-row-label">Sign out</span>
+            </button>
+          </div>
+
+          <p class="saved-foot">
+            <span class="saved-env">horizzondemo.unify.cloud</span>
+            <span class="saved-build">Build a1b2c3d</span>
+          </p>
+        `;
+        host.append(panel);
+        return el('section', 'chart on-plane');
+      }
+
+      /** The settings sheet, pasted from `src/ui/settings.ts`. */
+      function settings() {
+        const backdrop = el('div', 'modal-backdrop');
+        backdrop.innerHTML = `
+          <div class="modal settings" role="dialog" aria-label="Settings">
+            <div class="settings-head">
+              <h2>Settings</h2>
+              <button type="button" class="sheet-close" aria-label="Close">×</button>
+            </div>
+
+            <section class="settings-group">
+              <span class="menu-label">Environment</span>
+              <p class="settings-value">horizzondemo.unify.cloud</p>
+              <p class="settings-note">Analyses you save are kept in this environment, so they
+                follow you to any browser you sign in from.</p>
+              <div class="settings-buttons">
+                <button type="button" class="settings-btn">Change environment…</button>
+                <button type="button" class="settings-btn is-danger">Sign out</button>
+              </div>
+            </section>
+
+            <section class="settings-group">
+              <span class="menu-label">Notifications</span>
+              <button type="button" class="settings-switch" role="switch" aria-checked="true">
+                <span class="settings-switch-text">
+                  <span class="settings-switch-label">Count on the app icon</span>
+                  <span class="settings-note">How many analyses other people have shared that you
+                    have not opened yet, on the installed app's icon.</span>
+                </span>
+                <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+              </button>
+            </section>
+
+            <section class="settings-group">
+              <span class="menu-label">About</span>
+              <p class="settings-value settings-build">Unify Lens · build a1b2c3d</p>
+              <p class="settings-note">Worth quoting in a report: it says exactly which version of
+                the app you are looking at, which an installed app has no address bar to tell
+                you.</p>
+              <div class="settings-buttons">
+                <button type="button" class="settings-btn">Copy build details</button>
+                <button type="button" class="settings-btn">Project on GitHub</button>
+              </div>
+            </section>
+          </div>
+        `;
+        return backdrop;
+      }
+
+      const VIEWS = { population, attributes, network, sheet, more, settings };
+      // The sheet covers the screen — it is `position: fixed` over the app, and
+      // faking that with a local containing block gave it the wrapper's
+      // geometry rather than the viewport's, which is the thing being checked.
+      // So it gets a page of its own and `?view=all` leaves it out — as do
+      // `?view=more` and `?view=settings`, for the same reason: one hangs off
+      // the header and the other covers everything.
+      const wanted = view === 'all' ? ['population', 'attributes', 'network'] : [view];
+      for (const key of wanted) pane.append(VIEWS[key]());
+
+      // Stacking every screen means the pane scrolls, which it does not do in
+      // the app. Only the single-view URLs are honest about height.
+      if (view === 'all') pane.style.overflowY = 'auto';
+
+      /**
+       * Nothing may reach past the right edge of the screen.
+       *
+       * Two things are allowed to: the cross-tab and the object table are meant
+       * to scroll sideways inside their own box, so anything inside one of
+       * those is skipped. Reported on `window.__overflow` for the headless run
+       * to read, and printed here for a person looking at the page.
+       */
+      // Measured before the report below is appended: it is a `<pre>`, and a
+      // one-line list of offenders was reliably the widest thing on the page —
+      // the check was reporting itself.
+      const overflowing = [...document.querySelectorAll('*')]
+        .filter((node) => !node.closest('.table-scroll, .heatmap'))
+        .filter((node) => node.getBoundingClientRect().right > innerWidth + 1)
+        .map((node) => `${node.tagName.toLowerCase()}.${node.className || '(none)'}`);
+
+      // Written into the document rather than onto `window`, so a headless run
+      // can read it with --dump-dom and a person can read it by scrolling down.
+      const report = el('pre', 'harness-report');
+      report.id = 'harness-report';
+      report.style.cssText = 'white-space:pre-wrap;padding:12px;font-size:12px';
+      report.textContent = [
+        `viewport ${innerWidth}x${innerHeight}`,
+        `page width ${document.scrollingElement.scrollWidth}`,
+        overflowing.length === 0 ? 'OVERFLOW none' : `OVERFLOW ${overflowing.join(', ')}`,
+      ].join('\n');
+      document.body.append(report);
+    </script>
+  </body>
+</html>

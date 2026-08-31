@@ -1,9 +1,14 @@
 # Publishes Unify Lens to GitHub Pages.
 #
-# Manual trigger only. The SDK comes from GitHub Packages in the bizzdesign org,
-# which the automatic GITHUB_TOKEN cannot read, so this needs a repository
-# secret PACKAGES_TOKEN — a PAT with read:packages that can see that org.
-# Without it `npm ci` fails, which is why this does not run on every push.
+# The SDK comes from GitHub Packages in the bizzdesign org, which the automatic
+# GITHUB_TOKEN cannot read, so this needs a repository secret PACKAGES_TOKEN —
+# a PAT with read:packages that can see that org. Without it `npm ci` fails
+# before anything is built.
+#
+# Pages must be set to build from GitHub Actions (Settings > Pages > Source).
+# Serving from a branch instead leaves deploy-pages with nothing to publish to,
+# and puts the site back on hand-built uploads — which is how the site came to be
+# serving a 4 MB sourcemap beside a 1.6 MB bundle.
 #
 # The build runs with no .env and no config.json, so the artifact is
 # tenant-neutral: on first run it asks which Unify environment to use and reads
@@ -12,6 +17,9 @@
 name: Deploy to GitHub Pages
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -21,24 +29,47 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # A deploy that is halfway through publishing should finish. Cancelling it
+  # leaves the Pages deployment in flight with nothing to complete it.
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           registry-url: https://npm.pkg.github.com
           scope: '@bizzdesign'
+      # Without this the missing secret surfaces as a bare npm E401, which reads
+      # like a broken package rather than an unset repository setting.
+      - name: Require the packages token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::PACKAGES_TOKEN is empty or unset. Add a repository secret holding a PAT with read:packages that can see the bizzdesign org (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
       - run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      # Before the deploy build, not after: a failing test should cost a build,
+      # not a publish.
+      - run: npm test
       # DEPLOY=1 drops sourcemaps, which would otherwise publish the app source.
       - run: DEPLOY=1 npm run build
+      # A sourcemap here means DEPLOY=1 stopped working, and the failure is
+      # silent: the deploy succeeds, carrying a map larger than the app.
+      - name: Refuse to publish sourcemaps
+        run: |
+          if find dist -name '*.map' -print -quit | grep -q .; then
+            echo "::error::dist contains sourcemaps; DEPLOY=1 did not take effect."
+            exit 1
+          fi
       # Pages serves no index.html for unknown paths; the app is a single page,
       # so the 404 has to be the app itself or a deep link dead-ends.
       - run: cp dist/index.html dist/404.html

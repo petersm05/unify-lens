@@ -1,0 +1,66 @@
+# Typechecks and builds every commit on its way to main.
+#
+# Deploys are the one thing that used to run in CI, and they were manual, so
+# nothing ever verified a commit before it landed on main. This does, while
+# finding out is still cheap. Pushes to main run pages.yml instead, which
+# performs the same build before it publishes anything.
+#
+# Pull requests only. A branch used to be built on push as well, which meant a
+# branch with a pull request open was built twice for one commit; the
+# concurrency block below deduped that by cancelling one of them, and a
+# cancelled run sits on the commit afterwards looking like a failure. One
+# trigger, one run, no artefact. What is lost is CI on a branch before its pull
+# request exists — nothing can reach main unchecked either way — and
+# workflow_dispatch is here for a branch someone wants built early.
+#
+# Needs the PACKAGES_TOKEN secret for the same reason pages.yml does: the SDK
+# lives in GitHub Packages under the bizzdesign org, which the automatic
+# GITHUB_TOKEN cannot read.
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two pushes in quick succession to one pull request: the second supersedes
+  # the first, so the first is not worth finishing. That cancellation lands on
+  # the superseded commit rather than on the head, so it never shows against the
+  # pull request the way the push/pull_request pair used to.
+  #
+  # head_ref is set only on pull_request; ref_name carries the branch name on a
+  # manual run, so both land on one group.
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@bizzdesign'
+      # Without this the missing secret surfaces as a bare npm E401, which reads
+      # like a broken package rather than an unset repository setting.
+      - name: Require the packages token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::PACKAGES_TOKEN is empty or unset. Add a repository secret holding a PAT with read:packages that can see the bizzdesign org (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      # `build` is `tsc --noEmit && vite build`, so this typechecks too — the
+      # test files live under src/, so they are typechecked with everything else.
+      - run: npm run build
+      - run: npm test

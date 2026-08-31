@@ -137,24 +137,99 @@ export function moreIcon(): HTMLElement {
   return wrapper;
 }
 
-/** Chevron pointing back up the trail, as iOS draws it. */
-export function backIcon(): HTMLElement {
+/** Sidebar glyph — the attribute rail, shown or put away beside the chart. */
+export function sidebarIcon(): HTMLElement {
   const wrapper = document.createElement('span');
   wrapper.className = 'icon';
   wrapper.setAttribute('aria-hidden', 'true');
   wrapper.innerHTML =
-    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" ' +
-    'stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 3.5L6 9l5.5 5.5"/></svg>';
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="2.5" y="3" width="13" height="12" rx="2.5"/><path d="M7.5 3v12"/></svg>';
   return wrapper;
 }
 
-/** Small chevron marking a label as something that opens. */
-export function caretIcon(): HTMLElement {
+/**
+ * Chevron glyph, pointing back by default.
+ *
+ * `forward` flips the same path rather than drawing a second one: where the
+ * rail and the chart take turns, the two directions are one move seen from
+ * either end.
+ */
+export function chevronIcon(direction: 'back' | 'forward' | 'down' = 'back'): HTMLElement {
   const wrapper = document.createElement('span');
-  wrapper.className = 'icon caret';
+  wrapper.className =
+    direction === 'forward' ? 'icon icon-flip' : direction === 'down' ? 'icon icon-down' : 'icon';
   wrapper.setAttribute('aria-hidden', 'true');
   wrapper.innerHTML =
-    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" ' +
-    'stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7L9 11.5 13.5 7"/></svg>';
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M11.25 3.5 5.75 9l5.5 5.5"/></svg>';
+  return wrapper;
+}
+
+/** Gear glyph — the settings sheet behind the menu. */
+export function settingsIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<circle cx="9" cy="9" r="2.6"/>' +
+    '<path d="M9 1.6v1.9M9 14.5v1.9M2.77 5.4l1.65.95M13.58 11.65l1.65.95' +
+    'M2.77 12.6l1.65-.95M13.58 6.35l1.65-.95"/></svg>';
+  return wrapper;
+}
+
+/** Beetle glyph — something is wrong and worth telling someone about. */
+export function bugIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M5.5 8a3.5 3.5 0 0 1 7 0v2.5a3.5 3.5 0 0 1-7 0z"/>' +
+    '<path d="M6.4 5.6 5.2 4.2M11.6 5.6l1.2-1.4M5.5 9H3M15 9h-2.5' +
+    'M5.7 12.2 3.8 13.4M12.3 12.2l1.9 1.2"/></svg>';
+  return wrapper;
+}
+
+/** Lamp glyph — something this could do that it does not do yet. */
+export function ideaIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M6.4 10.4a3.6 3.6 0 1 1 5.2 0c-.6.7-.9 1.2-.9 2h-3.4c0-.8-.3-1.3-.9-2z"/>' +
+    '<path d="M7.3 14.4h3.4M8 16.2h2"/></svg>';
+  return wrapper;
+}
+
+/** Door-and-arrow glyph — leaving the session, not closing the app. */
+export function signOutIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M11 3.5H5.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H11"/>' +
+    '<path d="M9 9h6.5M13 6.5 15.5 9 13 11.5"/></svg>';
+  return wrapper;
+}
+
+/** Cross glyph — putting one row away, not closing the panel it sits in. */
+export function dismissIcon(): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'icon';
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M5.5 5.5l7 7M12.5 5.5l-7 7"/></svg>';
   return wrapper;
 }

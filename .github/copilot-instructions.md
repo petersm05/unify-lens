@@ -1,0 +1,128 @@
+# Reviewing Unify Lens
+
+A visualization surface for the Bizzdesign Unify knowledge graph, built on the
+published partner SDK. TypeScript, no framework, no runtime beyond the browser.
+`pages.yml` runs `npm test` before it builds, so a failing test costs a build
+and not a publish — do not suggest reordering those steps.
+
+What follows is the set of rules that have actually been broken here, and the
+conventions that are deliberate rather than accidental. Please weigh findings
+against these rather than against general TypeScript style.
+
+## Rules worth failing a review over
+
+**No test may reach the SDK at run time.** `@bizzdesign/sdk-bundle` is CommonJS
+underneath, so the test runner's ESM loader cannot take a named export out of
+`ts-results` and dies *collecting* the file — which fails the whole suite while
+reporting every other test as passing, and stops the deploy. This has cost two
+deploys. `src/test-graph.test.ts` catches it, but not everything: a dynamic
+`await import(…)` is not matched, and a relative specifier it cannot resolve to
+a file is skipped rather than reported, so the walk can stop short without
+saying so (#54). The fix is `import type` where a type is all that is wanted,
+or moving the pure part into its own module where it is not — as
+`table-columns.ts` was split from `src/data/object-table.ts` (there is a
+`src/viz/object-table.ts` too). Never a loader shim.
+
+**`import type` and `import { type X }` are different statements.**
+`verbatimModuleSyntax` is on. The first is erased; the second still emits
+`import {} from '…'` and loads the module. That bites wherever the module
+loaded is the SDK *or reaches it*: `src/data/table-export.ts` takes `Row` from
+`./object-table` with `import type` for exactly this reason, since inlining it
+would load a module that value-imports the metamodel and through it the SDK,
+and the suite would die collecting. Inline `type` beside real imports from a
+module that does not reach the SDK — `import { columnFor, type Column } from
+'./table-columns'` — is ordinary and correct.
+
+**Anything naming an attribute to the server uses the definition id, never the
+display name.** `conditionName` builds `categoryId.definitionId` for a filter,
+and the descriptors passed to sorting and aggregation do the same — several of
+them in a field spelled `name` that holds `definitionId`, which is exactly the
+sort of thing that invites a helpful correction. Substituting the label matches
+nothing and fails silently: no error, an empty result, a zero sum, or a sort
+that quietly does not sort.
+
+Locally it is the other way round. Keys into a sample's value map are
+`categoryId::name`, because that is what the read hands back. So the question
+is not which field is called what, but which side of the wire the value is
+going to.
+
+**Sampling must not be swallowed.** `SAMPLE_LIMIT` bounds reads, and where a
+figure is derived from a sample, `truncated` travels with it and *must* be
+surfaced — stated as the rule rather than as a description, because a read
+returning the flag is no guarantee its caller reads it.
+A figure from a sample is a different claim from one over the population, so
+dropping the flag on the floor is a correctness bug, not a tidy-up.
+
+`truncated: false` is not automatically a dropped flag, though. Several reads
+are exact either way: they use the shared sample when it is complete and fall
+back to server-side counts when it is not, so neither path extrapolates, and
+some of those return no flag at all. Which shape a function has is the
+question, and reading it is the only reliable way to answer — a list here would
+be one entry short of the code within a month, which is how this paragraph has
+already been wrong more than once.
+
+**Status is never colour alone.** Every state carries a word as well as a hue.
+
+**The two theme ramps are different colours.** `--ord-0…5` are *not* the same in
+light and dark; the light ramp starts mid-toned and the dark one starts
+near-white. Anything that puts ink on a ramp step must take it from
+`--on-ord-0…5`, which is defined beside the ramp, and never from
+`--text-primary` or `--surface-1` — those swap with the theme and hand each end
+of the ramp the other end's ink. That was a 1.11:1 contrast defect.
+
+## The compiler settings a suggestion has to satisfy
+
+`strict`, plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
+`noUnusedLocals`, `noImplicitReturns`, `noFallthroughCasesInSwitch`,
+`noImplicitOverride` and `isolatedModules`. In particular: indexing an array
+yields `T | undefined`, and an optional property will not accept an explicit
+`undefined`. A suggestion that ignores either will not compile.
+
+## Things that look like problems here and are not
+
+- **Long comments explaining *why*.** The house style records the reasoning
+  behind a decision, including options that were rejected and measurements that
+  settled a question. Please do not suggest shortening or deleting them; a
+  comment that only restates the code is worth flagging, one that carries
+  history is not.
+- **Prose in commit messages and pull request bodies.** Same reason.
+- **Inline `style.background` / `style.color` in the chart renderers.** Per-step
+  ramp values come from CSS custom properties and are set inline on purpose, so
+  the palette stays in one place.
+- **`dev/phone-harness.html`.** A deliberate static harness for looking at
+  layouts without a live tenant, since the app connects before it renders and
+  there is no session here. It imports one real module — `src/ui/rail.ts`, so
+  the breakpoint decision is the app's own — and the rest of each view is its
+  `innerHTML` template pasted in and filled with representative strings. So the
+  stylesheet is live — it links `../src/app.css`, which is why it lives in the
+  repo — and the markup is a copy. A CSS change reaches it; a template change
+  does not. Markup here that has drifted from its module is worth flagging; its
+  being a copy is not.
+
+## What is genuinely useful to flag
+
+- Arithmetic that changes a figure — quantile conventions, bin boundaries,
+  counts that no longer sum to their input, an off-by-one in a slice.
+- A `truncated`, `null` or `undefined` case that is not handled where the
+  surrounding code handles it.
+- Anything that would widen the bundle: a new runtime dependency, or a large
+  import pulled in for one helper. This app is opened over cellular on tablets
+  and phones.
+- Accessibility: contrast against the *actual* surface a thing sits on, hit
+  targets, and anything conveyed by colour with no text beside it.
+- Layout that breaks at a narrow width or a short one. The panel and the chart
+  do **not** take turns — that was removed deliberately, and `src/ui/rail.ts`
+  says why. The panel sits beside the chart where there is room and over it
+  where there is not, and the chart is on screen either way. The viewport
+  widths that matter are 900, 820 (where the panel becomes an overlay, and
+  the only one living in TypeScript), 700 and 560, plus a 520px *height*
+  breakpoint for a phone in landscape. Not everything is keyed to the
+  viewport, though: the coverage card lays itself out from a container query
+  on its own width, because the same iPad gives it a wrapped 500px card with
+  the panel open beside it and a 280px one without.
+
+## What this app is not
+
+There is no server, no framework and no state library. Suggestions that
+introduce React, a store, a CSS framework, or a build step beyond Vite are out
+of scope — please do not raise them.

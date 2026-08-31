@@ -105,13 +105,21 @@ export async function settingsFromEnvJs(environmentUrl: string): Promise<Runtime
   const graphqlEndpoint = text('appSyncUrl');
   if (!graphqlEndpoint) return null;
 
+  // Read once and tested, rather than called twice: the truthiness check
+  // narrows the const, which is what lets the spread stay type-correct.
+  const graphqlRealtimeEndpoint = text('appSyncRealtimeUrl');
+  const cognitoRegion = text('cognitoRegion');
+  const cognitoDomain = text('cognitoDomain');
+  const cognitoUserPoolId = text('cognitoUserPoolId');
+  const cognitoClientId = text('cognitoClientId');
+
   return {
     graphqlEndpoint,
-    ...(text('appSyncRealtimeUrl') ? { graphqlRealtimeEndpoint: text('appSyncRealtimeUrl') } : {}),
-    ...(text('cognitoRegion') ? { cognitoRegion: text('cognitoRegion') } : {}),
-    ...(text('cognitoDomain') ? { cognitoDomain: text('cognitoDomain') } : {}),
-    ...(text('cognitoUserPoolId') ? { cognitoUserPoolId: text('cognitoUserPoolId') } : {}),
-    ...(text('cognitoClientId') ? { cognitoClientId: text('cognitoClientId') } : {}),
+    ...(graphqlRealtimeEndpoint ? { graphqlRealtimeEndpoint } : {}),
+    ...(cognitoRegion ? { cognitoRegion } : {}),
+    ...(cognitoDomain ? { cognitoDomain } : {}),
+    ...(cognitoUserPoolId ? { cognitoUserPoolId } : {}),
+    ...(cognitoClientId ? { cognitoClientId } : {}),
   };
 }
 
@@ -140,10 +148,43 @@ async function fetchConfig(): Promise<RuntimeConfig | null> {
   try {
     const response = await fetch(new URL('config.json', document.baseURI), { cache: 'no-store' });
     if (!response.ok) return null;
-    return (await response.json()) as RuntimeConfig;
+    return toRuntimeConfig(await response.json());
   } catch {
     return null;
   }
+}
+
+const CONFIG_KEYS = [
+  'environmentUrl',
+  'graphqlEndpoint',
+  'graphqlRealtimeEndpoint',
+  'cognitoRegion',
+  'cognitoDomain',
+  'cognitoUserPoolId',
+  'cognitoClientId',
+  'metaModel',
+  'callbackUrl',
+] as const satisfies readonly (keyof RuntimeConfig)[];
+
+/**
+ * Keeps the fields that are non-empty strings and drops everything else.
+ *
+ * A file that parses but says `"graphqlEndpoint": 123` therefore behaves like
+ * a file that does not name an endpoint at all — `hasTarget` fails, and the
+ * next source in the resolution order gets its turn. That is the same
+ * degradation an absent or unreadable `config.json` already produces, which
+ * makes a malformed one recoverable rather than a hard stop.
+ */
+function toRuntimeConfig(value: unknown): RuntimeConfig | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+
+  const record = value as Record<string, unknown>;
+  const config: Record<string, string> = {};
+  for (const key of CONFIG_KEYS) {
+    const field = record[key];
+    if (typeof field === 'string' && field.length > 0) config[key] = field;
+  }
+  return config;
 }
 
 function buildConfig(): RuntimeConfig {
@@ -152,21 +193,25 @@ function buildConfig(): RuntimeConfig {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
   };
 
+  const environmentUrl = read('VITE_UNIFY_ENVIRONMENT_URL');
+  const graphqlEndpoint = read('VITE_UNIFY_GRAPHQL_URL');
+  const graphqlRealtimeEndpoint = read('VITE_UNIFY_GRAPHQL_REALTIME_URL');
+  const cognitoRegion = read('VITE_COGNITO_REGION');
+  const cognitoDomain = read('VITE_COGNITO_DOMAIN');
+  const cognitoUserPoolId = read('VITE_COGNITO_USER_POOL_ID');
+  const cognitoClientId = read('VITE_COGNITO_CLIENT_ID');
+  const metaModel = read('VITE_UNIFY_METAMODEL');
+  const callbackUrl = read('VITE_UNIFY_CALLBACK_URL');
+
   return {
-    ...(read('VITE_UNIFY_ENVIRONMENT_URL')
-      ? { environmentUrl: read('VITE_UNIFY_ENVIRONMENT_URL') }
-      : {}),
-    ...(read('VITE_UNIFY_GRAPHQL_URL') ? { graphqlEndpoint: read('VITE_UNIFY_GRAPHQL_URL') } : {}),
-    ...(read('VITE_UNIFY_GRAPHQL_REALTIME_URL')
-      ? { graphqlRealtimeEndpoint: read('VITE_UNIFY_GRAPHQL_REALTIME_URL') }
-      : {}),
-    ...(read('VITE_COGNITO_REGION') ? { cognitoRegion: read('VITE_COGNITO_REGION') } : {}),
-    ...(read('VITE_COGNITO_DOMAIN') ? { cognitoDomain: read('VITE_COGNITO_DOMAIN') } : {}),
-    ...(read('VITE_COGNITO_USER_POOL_ID')
-      ? { cognitoUserPoolId: read('VITE_COGNITO_USER_POOL_ID') }
-      : {}),
-    ...(read('VITE_COGNITO_CLIENT_ID') ? { cognitoClientId: read('VITE_COGNITO_CLIENT_ID') } : {}),
-    ...(read('VITE_UNIFY_METAMODEL') ? { metaModel: read('VITE_UNIFY_METAMODEL') } : {}),
-    ...(read('VITE_UNIFY_CALLBACK_URL') ? { callbackUrl: read('VITE_UNIFY_CALLBACK_URL') } : {}),
+    ...(environmentUrl ? { environmentUrl } : {}),
+    ...(graphqlEndpoint ? { graphqlEndpoint } : {}),
+    ...(graphqlRealtimeEndpoint ? { graphqlRealtimeEndpoint } : {}),
+    ...(cognitoRegion ? { cognitoRegion } : {}),
+    ...(cognitoDomain ? { cognitoDomain } : {}),
+    ...(cognitoUserPoolId ? { cognitoUserPoolId } : {}),
+    ...(cognitoClientId ? { cognitoClientId } : {}),
+    ...(metaModel ? { metaModel } : {}),
+    ...(callbackUrl ? { callbackUrl } : {}),
   };
 }

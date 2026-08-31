@@ -6,24 +6,9 @@ import type {
 } from '@bizzdesign/sdk-bundle/browser';
 import type { Kg } from '../sdk/client';
 import { labelFor } from '../sdk/metamodel';
-import { conditionName, type AttributeChoice } from './attributes';
+import { conditionName } from './attributes';
+import type { Column, SortMode } from './table-columns';
 import { SAMPLE_LIMIT, type Sample, type SampleStore } from './sample-store';
-
-export type SortMode =
-  /** The backend orders the whole result set correctly. */
-  | 'server'
-  /** The backend's ordering is wrong for this column; sort a bounded read. */
-  | 'sample'
-  | 'none';
-
-export interface Column {
-  readonly key: string;
-  readonly label: string;
-  readonly field: 'name' | 'type' | 'createdAt' | 'attribute';
-  readonly choice?: AttributeChoice;
-  readonly numeric: boolean;
-  readonly sort: SortMode;
-}
 
 export interface Row {
   readonly id: UUID;
@@ -49,42 +34,12 @@ export interface TableResult {
   readonly sortedBy: SortMode;
   /** Set when a sample sort could not see the whole population. */
   readonly truncated: boolean;
-}
-
-export const NAME_COLUMN: Column = {
-  key: 'name',
-  label: 'Name',
-  field: 'name',
-  numeric: false,
-  sort: 'server',
-};
-
-export const CREATED_COLUMN: Column = {
-  key: 'createdAt',
-  label: 'Created',
-  field: 'createdAt',
-  numeric: false,
-  sort: 'server',
-};
-
-/**
- * Turns an attribute into a table column, deciding how it can be sorted.
- *
- * `orderBy.attributeValue` compares values as **text**. For a string or an
- * enumeration that is exactly right. For a number it is silently wrong —
- * 97000 sorts above 1900000 — so those columns are sorted from a bounded
- * client-side read instead, and the UI says which happened.
- */
-export function columnFor(choice: AttributeChoice): Column {
-  const numeric = choice.kind === 'integer' || choice.kind === 'real' || choice.kind === 'money';
-  return {
-    key: `${choice.categoryId}.${choice.definitionId}`,
-    label: choice.name,
-    field: 'attribute',
-    choice,
-    numeric,
-    sort: numeric || choice.kind === 'date' ? 'sample' : 'server',
-  };
+  /**
+   * How many objects the ranking saw, for the note that says it may be
+   * incomplete. Zero where the server did the ordering and nothing was read
+   * client-side — which is also where `truncated` is false.
+   */
+  readonly sampled: number;
 }
 
 const SELECTOR = { attributeCategories: true, systemAttributes: true } as const;
@@ -119,6 +74,7 @@ export async function fetchTable(
       total,
       sortedBy: column ? 'server' : 'none',
       truncated: false,
+      sampled: 0,
     };
   }
 
@@ -158,6 +114,8 @@ export async function fetchTable(
     total: rows.length,
     sortedBy: 'sample',
     truncated,
+    // Every row the ranking sorted, before this page was sliced out of them.
+    sampled: rows.length,
   };
 }
 

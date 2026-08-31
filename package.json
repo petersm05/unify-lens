@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "iPad-first visualization surface for the Bizzdesign Unify knowledge graph",
+  "description": "Visualization surface for the Bizzdesign Unify knowledge graph, from phone to desktop",
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit"
   },
@@ -26,6 +28,7 @@
     "@types/d3-scale": "^4.0.8",
     "@types/node": "^26.3.0",
     "typescript": "^5.6.3",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^3.2.7"
   }
 }

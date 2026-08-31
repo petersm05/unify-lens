@@ -1,0 +1,113 @@
+# Working on Unify Lens
+
+For what the code expects — the rules, the compiler settings, what is
+deliberate and what is a defect — read
+[`.github/copilot-instructions.md`](.github/copilot-instructions.md). It is
+written for a reviewer, and it is just as true for whoever is writing the
+change. This file is about the procedure around it.
+
+## Every change goes through a pull request
+
+Branch from the current `main`, one concern per branch. Then:
+
+1. **Run `npm test` and `npm run build` before pushing.** They take seconds and
+   catch what a reading of the diff cannot, the SDK-in-tests failure among
+   them. Waiting on CI for those is a slow way to learn them.
+2. **Push and open a pull request, then review it** — run the `code-review`
+   skill against the pull request number.
+3. **Fix what it finds**, or say why a finding is wrong. Both are answers;
+   ignoring one is not.
+4. **Re-run the review.** A pass over the previous diff says nothing about the
+   one that replaced it, and the fixes are the part most likely to be hasty.
+5. Repeat until it comes back clean **and CI is green**, then hand it over as
+   ready to merge. Both, not either — the next section is why.
+
+Merging is the maintainer's. So is anything the review raises that turns out to
+be a product decision rather than a defect — those go to them, not into the
+branch.
+
+### Review-clean is not the same as mergeable
+
+The two checks catch different things, and both have been the only one to catch
+something real:
+
+- **CI** found the test that reached the SDK, which failed two deploys and left
+  the site on a stale build. A reading of the diff would not have seen it.
+- **The review** found three tests that asserted nothing — a timezone-dependent
+  fixture, a test that passed with the behaviour it named removed, and a
+  comparison of `undefined` with `undefined`. CI passed all three happily.
+
+So the gate is both, plus the maintainer's judgement. Neither replaces the
+other, and a green review is not permission to skip a red pipeline.
+
+### Knowing when to stop
+
+Two rounds is the shape to expect: review, fix, re-review. A third round
+finding the *same class* of thing means the change is the wrong shape, not that
+the findings are wrong — step back and restructure rather than patch again.
+
+This file went twenty rounds. Every finding was real, and two thirds of them
+were one mistake wearing different clothes, because the file asserts facts
+about code and each sentence was a claim that could rot. What finally worked
+was making fewer claims, not defending more of them. Prose that describes the
+codebase should say what to look for, not inventory what is currently there.
+
+Effort follows what a mistake would cost. Arithmetic, filters, anything that
+changes a figure or what a chart means: the whole loop, and check the fix
+rather than the file. A label, a comment, a stylesheet value: one pass is
+enough, and a second is usually the more expensive mistake.
+
+### Verify the fix, not the file
+
+"The suite fails when I break the code" is not evidence that the test for that
+behaviour works — some *other* test may be doing the catching. Check which test
+failed and for what reason. That mistake shipped three inert tests here, and
+the review caught them rather than the mutation run that was supposed to.
+
+## Four habits worth catching in yourself
+
+These were each repeated several times in one day before being named. They are
+cheap to check for and expensive to leave.
+
+**Fix the class, not the instance.** A review found the same defect five times
+in `.github/copilot-instructions.md`: a hand-kept list of which functions
+behave which way, always one entry behind the code. Four of those times the fix
+was to add the missing entry. The fifth deleted the lists, which is what should
+have happened the first time the shape repeated. When a second instance of a
+finding appears, the finding is about the shape.
+
+**Claim things about the diff, not about the workspace.** Three times a file
+here described something — a linked document, a tested module, a test fixture —
+that existed only on another unmerged branch. It is true on the machine and
+false for anyone who merges this. Ask what the claim means on `main` with only
+this branch applied.
+
+**A commit message is a claim like any other.** Three messages described work
+the commit did not contain: a fix applied to one of two files, a sentence
+removed that was not, a check run whose output went unread. Before writing the
+message, read the diff that is staged, not the intention.
+
+**Read the output of the command you just ran.** Twice a script raised an error
+mid-run, wrote part of its changes, and the commit went ahead in the same
+invocation with the failure scrolled past. Separate the step that changes files
+from the step that records them, and look in between.
+
+## Two ways pull requests have gone wrong here
+
+**Do not stack a pull request on another branch.** It has been tried twice and
+gone wrong twice: one merged into a base branch that was itself already merged,
+so the change was "merged" into a dead end and never reached `main`; the other
+put follow-up work on top of already-merged history. Where two changes touch
+the same lines, land the first and rebase the second onto `main`.
+
+**A merged pull request is finished.** Follow-up work starts from `main` again,
+on a fresh branch, as a new pull request.
+
+## Watch what you shipped
+
+`pages.yml` deploys on every push to `main` and runs the tests before it
+builds, so a failing test costs a build and not a publish — the same trade the
+README and the workflow itself describe. It does mean a red pipeline stops the
+site updating while everything looks fine from the outside. After a merge,
+check the run rather than assuming: twice the deploy was red for the better
+part of an hour before anyone looked.

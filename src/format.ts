@@ -11,6 +11,52 @@ export function formatCount(value: number): string {
   return integer.format(value);
 }
 
+/** Anything that knows how many objects its figures were read from. */
+export interface SampledRead {
+  readonly sampled: number;
+}
+
+/**
+ * What a partial read actually covered, for the sentence that says so.
+ *
+ * `SAMPLE_LIMIT` is a ceiling, not a measurement, and naming the constant was
+ * wrong in every message that did it: `SampleStore` also stops on a time
+ * budget, so a slow read is truncated at whatever it reached — 2.500 of 10.000
+ * objects, under a caption claiming the first 4.000.
+ *
+ * It takes the read rather than a number for that reason. A caption cannot
+ * reach for the constant again without first inventing something that claims
+ * to be a read, where `sampledObjects(SAMPLE_LIMIT)` would have compiled and
+ * looked ordinary — the compiler enforces on every build what a check on the
+ * source could only look for.
+ */
+export function sampledObjects(read: SampledRead): string {
+  return `the first ${formatCount(read.sampled)} objects read`;
+}
+
+/**
+ * A share as a percentage, without rounding a real value away to nothing.
+ *
+ * "0% covered" on an attribute five objects carry is the reading nothing here
+ * may give: it is the claim that something is missing, and a reader who opens
+ * the chart and finds five bars has been told a falsehood by a rounding rule.
+ * The same at the other end, where "100%" would say a gap has been closed that
+ * has not.
+ *
+ * Lives here rather than beside either of its callers because both the row
+ * that says an attribute is sparse and the gauge it opens print this number,
+ * and the two disagreeing — "<1% covered" opening a card reading "0%" — is the
+ * defect the rule exists to prevent.
+ */
+export function percent(share: number): string {
+  if (share > 0 && share < 0.005) return '<1%';
+  // The upper bound is inclusive where the lower is not, because rounding is:
+  // 0.995 rounds *to* 100, so it is the first share that would print as a
+  // whole population, while 0.005 rounds to 1 rather than to nothing.
+  if (share < 1 && share >= 0.995) return '>99%';
+  return `${Math.round(share * 100)}%`;
+}
+
 /**
  * Compact suffixes, chosen over `Intl`'s own compact notation.
  *
@@ -52,6 +98,11 @@ export function formatMoney(value: number, currency: string | undefined): string
       style: 'currency',
       currency,
       currencyDisplay: 'narrowSymbol',
+      // The currency style defaults the *minimum* to 2 and clamps it down to
+      // the ceiling rather than to zero, which rendered a round figure as
+      // "€16.0K" where formatCompact gave "16K". Both are headline forms and
+      // they sat next to each other.
+      minimumFractionDigits: 0,
       maximumFractionDigits: scaled.suffix ? 1 : 0,
     }).formatToParts(scaled.value);
 

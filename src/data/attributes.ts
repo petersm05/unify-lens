@@ -49,6 +49,16 @@ export interface Distribution {
   readonly total: number;
   /** Set when the sample hit `SAMPLE_LIMIT` and the tail was not read. */
   readonly truncated: boolean;
+  /**
+   * How many objects were read into the sample the bins came from — zero where
+   * they came from server-side counts and nothing was read.
+   *
+   * Only meaningful beside `truncated`, and it has to travel with it, because
+   * `SAMPLE_LIMIT` cannot stand in for it: the read also stops on a time
+   * budget, so a truncated sample holds whatever it reached rather than the
+   * ceiling.
+   */
+  readonly sampled: number;
   /** Server-side total, for numeric attributes only. */
   readonly sum?: number;
   /** The period a timeline was bucketed into. */
@@ -235,7 +245,7 @@ export async function scatterPoints(
   scope?: AttributeFilter<MetaModel>,
   size?: AttributeChoice,
   group?: AttributeChoice,
-): Promise<{ points: Point[]; truncated: boolean; groups: string[] }> {
+): Promise<{ points: Point[]; truncated: boolean; sampled: number; groups: string[] }> {
   const sample = await store.get(type, scope);
   const xKey = `${x.categoryId}::${x.name}`;
   const yKey = `${y.categoryId}::${y.name}`;
@@ -264,7 +274,12 @@ export async function scatterPoints(
     });
   }
 
-  return { points, truncated: sample.truncated, groups: [...seen].sort() };
+  return {
+    points,
+    truncated: sample.truncated,
+    sampled: sample.objects.length,
+    groups: [...seen].sort(),
+  };
 }
 
 export interface CrossTab {
@@ -520,7 +535,13 @@ export async function valueFrequency(
       },
     }));
 
-  return { bins, total, truncated: sample.truncated, distinct: tally.size };
+  return {
+    bins,
+    total,
+    truncated: sample.truncated,
+    sampled: sample.objects.length,
+    distinct: tally.size,
+  };
 }
 
 /** The server-side sum of one numeric attribute under an arbitrary scope. */
@@ -651,7 +672,12 @@ export async function enumDistribution(
           ]
         : counted;
 
-    return { bins, total: bins.reduce((sum, bin) => sum + bin.count, 0), truncated: false };
+    return {
+      bins,
+      total: bins.reduce((sum, bin) => sum + bin.count, 0),
+      truncated: false,
+      sampled: sample.objects.length,
+    };
   }
 
   const counted = await Promise.all(
@@ -694,7 +720,13 @@ export async function enumDistribution(
       ? [...counted, { label: 'Not set', count: notSet, condition: notSetCondition }]
       : counted;
 
-  return { bins, total: bins.reduce((sum, bin) => sum + bin.count, 0), truncated: false };
+  return {
+    bins,
+    total: bins.reduce((sum, bin) => sum + bin.count, 0),
+    truncated: false,
+    // Counted server-side; no objects were read, so there is no read to size.
+    sampled: 0,
+  };
 }
 
 /**
@@ -732,12 +764,17 @@ export async function numericDistribution(
       ).sum
     : numbers.reduce((total, value) => total + value, 0);
 
+  // An empty sample has no quantiles. `stats` is declared optional and now
+  // means it: absent rather than present-and-undefined.
+  const stats = quantiles(numbers);
+
   return {
     ...histogram(numbers, choice),
     total: numbers.length,
     truncated: sample.truncated,
+    sampled: sample.objects.length,
     sum,
-    stats: quantiles(numbers),
+    ...(stats ? { stats } : {}),
     top: rank(observations),
     observations,
   };
@@ -767,7 +804,8 @@ export async function dateDistribution(
     if (value instanceof Date) dates.push(value);
   }
 
-  if (dates.length === 0) return { bins: [], total: 0, truncated: sample.truncated };
+  if (dates.length === 0)
+    return { bins: [], total: 0, truncated: sample.truncated, sampled: sample.objects.length };
 
   const chosen: Grain = grain ?? suggestGrain(dates);
 
@@ -805,7 +843,12 @@ export async function dateDistribution(
       },
     }));
 
-  return { bins, total: dates.length, truncated: sample.truncated };
+  return {
+    bins,
+    total: dates.length,
+    truncated: sample.truncated,
+    sampled: sample.objects.length,
+  };
 }
 
 export interface TrendPoint extends Bin {
@@ -819,8 +862,21 @@ export interface Trend {
   /** True when the measure is summed rather than averaged. */
   readonly additive: boolean;
   readonly truncated: boolean;
+  /** How many objects were read to build it — see `Distribution.sampled`. */
+  readonly sampled: number;
   /** Objects carrying both a date and a measure — the population behind the line. */
   readonly counted: number;
+  /**
+   * The measure across all of them, as the headline beside the chart.
+   *
+   * Averaged over objects rather than over periods, which is not the same
+   * number: ten objects averaging 2 in one month and one at 10 in the next is
+   * 2,7 across the eleven, where a mean of the two periods' means is 6 and
+   * gives a quiet month the same say as a busy one. Computed from the pairs
+   * rather than from the buckets, so it does not depend on the per-period
+   * arithmetic agreeing with it. Summed instead where the measure is money.
+   */
+  readonly overall: number;
 }
 
 /**
@@ -856,11 +912,23 @@ export async function measureOverTime(
   }
 
   const chosen: Grain = grain ?? suggestGrain(paired.map((entry) => entry.date));
+  // A money measure is summed whether or not anything carried it: `additive`
+  // is a fact about the measure, and saying otherwise here made the same
+  // attribute report `true` with one pair and `false` with none.
+  const additive = measure.kind === 'money';
   if (paired.length === 0) {
-    return { points: [], grain: chosen, additive: false, truncated: sample.truncated, counted: 0 };
+    return {
+      points: [],
+      grain: chosen,
+      additive,
+      truncated: sample.truncated,
+      sampled: sample.objects.length,
+      counted: 0,
+      overall: 0,
+    };
   }
 
-  const additive = measure.kind === 'money';
+  const measured = paired.reduce((sum, entry) => sum + entry.value, 0);
   const buckets = new Map<string, { start: Date; end: Date; sum: number; count: number }>();
   for (const { date, value } of paired) {
     const bucket = bucketFor(date, chosen);
@@ -905,7 +973,9 @@ export async function measureOverTime(
     grain: chosen,
     additive,
     truncated: sample.truncated,
+    sampled: sample.objects.length,
     counted: paired.length,
+    overall: additive ? measured : measured / paired.length,
   };
 }
 
@@ -924,8 +994,15 @@ export function quantiles(values: readonly number[]): NumericStats | undefined {
   return { min: sorted[0]!, median: at(0.5), p90: at(0.9), max: sorted[sorted.length - 1]! };
 }
 
-/** Equal-width bins over the observed range, rounded to readable boundaries. */
-function histogram(values: readonly number[], choice: AttributeChoice): { bins: Bin[] } {
+/**
+ * Equal-width bins over the observed range, rounded to readable boundaries.
+ *
+ * Exported for the tests that pin the boundaries: where a bin starts, which
+ * bin the maximum lands in, and that the counts still add up to what went in.
+ * Reaching it through `numericDistribution` would mean standing up a knowledge
+ * graph and a sample store to check arithmetic that needs neither.
+ */
+export function histogram(values: readonly number[], choice: AttributeChoice): { bins: Bin[] } {
   if (values.length === 0) return { bins: [] };
 
   const low = Math.min(...values);

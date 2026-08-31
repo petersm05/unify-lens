@@ -1,7 +1,9 @@
 # Unify Lens
 
-An iPad-first visualization surface for the Bizzdesign Unify knowledge graph,
-built on the published partner SDK (`@bizzdesign/sdk-bundle`, browser entry).
+A visualization surface for the Bizzdesign Unify knowledge graph, built on the
+published partner SDK (`@bizzdesign/sdk-bundle`, browser entry). It was designed
+for an iPad and still reads best on one; it now also fits a phone — see
+[Small screens](#small-screens).
 
 ## Before it will run: the Cognito allowlist
 
@@ -62,6 +64,77 @@ Two deployment shapes worth knowing:
   `environmentUrl` at that origin. Same origin as the data, one config line.
 - **Standalone** — host anywhere and set `environmentUrl` per deployment. Works
   identically; the callback allowlist below is what has to keep up.
+
+### The pipeline
+
+Two workflows, both needing one repository secret:
+
+| Workflow | Runs on | Does |
+| --- | --- | --- |
+| `ci.yml` | pull requests, or by hand | `npm run build` (`tsc --noEmit && vite build`) then `npm test` |
+| `pages.yml` | pushes to `main`, or by hand | `npm test`, then the same build with `DEPLOY=1`, then publishes `dist/` to Pages |
+
+Tests run before the deploy build rather than after, so a failing test costs a
+build and not a publish.
+
+**`PACKAGES_TOKEN` is what makes either one work.** `@bizzdesign/sdk-bundle`
+lives in GitHub Packages under the bizzdesign org, and the automatic
+`GITHUB_TOKEN` cannot read another org's packages — so a build with no token
+dies at `npm ci` with a 401 before it compiles a line. The secret holds a PAT
+with `read:packages` from an account that can see that org. Both workflows check
+for it first and say so, rather than letting npm report it as a broken package.
+
+**Pages must be set to build from GitHub Actions**, not from a branch
+(Settings → Pages → Source). Serving from `gh-pages` means `deploy-pages` has
+nowhere to publish and the site only changes when someone uploads a build by
+hand — which is how the site came to be serving a 4 MB sourcemap beside a 1.6 MB
+bundle. This repo is public, so that exposed nothing; it was just two and a half
+times the app in dead weight, on something people open over cellular. `DEPLOY=1`
+is what drops sourcemaps, and `pages.yml` now fails the build rather than
+publish one.
+
+A deployed artifact is tenant-neutral on purpose: the workflow builds with no
+`.env` and no `config.json`, so the app asks which environment to use on first
+run. Pin a deployment by dropping a `config.json` beside the built files.
+
+### Tests
+
+```bash
+npm test          # once
+npm run test:watch
+```
+
+Vitest, no browser environment and no DOM: what is covered is the pure decision
+logic, which is where a wrong answer is silent rather than loud.
+
+- **`data/chart-spec.ts`** — which marks a field combination earns. A donut only
+  at two to five slices, a quadrant ahead of a scatter only when neither axis is
+  money, a date and a measure landing on a trend in either order, money summed
+  where a score is averaged. An incorrect mark still renders; it just
+  misrepresents the data, so these are the rules worth pinning.
+- **`data/filter.ts`** — one selection per attribute, charts excluding their own
+  attribute so they keep every bar, and `prune()` dropping what a new type
+  cannot match.
+- **`format.ts`** — the compact thresholds (K starts at 1e4, not 1e3) and the
+  money path.
+- **`data/analysis.ts`** — what a saved analysis encodes and decodes.
+- **`data/table-columns.ts`** and **`data/table-export.ts`** — which columns a
+  chart contributes, and the values a copied table carries.
+- **`ui/rail.ts`** — whether picking an attribute closes the panel, and the
+  wide-side resting state including what an untouched device stores. Behaviour
+  rather than layout, so it needs no DOM.
+- **`test-graph.test.ts`** — not a module but a rule: that no test reaches the
+  SDK at run time, since the bundle is CommonJS and takes the whole suite, and
+  the deploy, down with it.
+
+Assertions in the `format.ts` tests avoid pinning a locale. Those functions call
+`Intl` with `undefined`, so separators come from the runner's environment; the
+tests assert what is actually ours — which suffix, how many fraction digits —
+rather than `en-US` punctuation.
+
+Beyond `ui/rail.ts`, the `ui/` and `viz/` layers are untested. They need a DOM
+environment and a separate argument about what is worth asserting about a
+rendered chart.
 
 ### The Cognito callback is the operational constraint
 
@@ -145,13 +218,18 @@ node scripts/make-icons.mjs
 | `src/sdk/client.ts` | Connect + authenticate once per page load; query batching on |
 | `src/sdk/metamodel.ts` | Per-metamodel type and role lists, display labels |
 | `src/data/population.ts` | Count fan-out, `sum` aggregation, streaming sync |
-| `src/data/cache.ts` | IndexedDB store, indexed by object type |
+| `src/data/idb.ts` | IndexedDB wrapper; every operation resolves rather than rejects, so a denied quota costs speed and not function |
+| `src/data/schema-cache.ts` | The attribute schema per object type, kept in that store |
 | `src/data/live.ts` | `CREATE_*` / `UPDATE_*` subscriptions |
+| `src/data/incoming.ts` | Saved analyses shared with you, and which have not been seen |
+| `src/data/table-columns.ts` | What a table column is, and how a chart's attributes fold into a set |
+| `src/data/table-export.ts` | The table as something a spreadsheet will accept |
 | `src/data/attributes.ts` | Attribute schema, enum counts, numeric histograms |
 | `src/data/analysis.ts` | The shareable description of a screen |
 | `src/data/chart-spec.ts` | Field types → the marks worth offering |
 | `src/data/saved.ts` | Saved analyses, on this device |
 | `src/data/sample-store.ts` | One population read, shared by every derivation |
+| `src/data/leads.ts` | What is worth looking at in a population, from one read of it |
 | `src/data/filter.ts` | The cross-filter every view reads |
 | `src/data/view-writer.ts` | Writes a graph back to Unify as a view |
 | `src/ui/detail-sheet.ts` | The record slide-over |
@@ -160,6 +238,9 @@ node scripts/make-icons.mjs
 | `src/data/object-detail.ts` | Everything the graph holds about one object |
 | `src/data/object-table.ts` | Paged, searchable, sortable object rows |
 | `src/viz/object-table.ts` | The table that replaces the chart legend once filtered |
+| `src/viz/heatmap.ts` | Two categoricals as a grid, one cell picked and the rest washed |
+| `src/viz/timeline.ts` | A measure per period |
+| `src/ui/rail.ts` | Where the attribute panel sits, and whether that is remembered |
 | `src/viz/scatter.ts` | Canvas scatter for two measures |
 | `src/viz/donut.ts` | Part-to-whole ring, gated to five slices |
 | `src/viz/type-bars.ts` | Population — KPI row over ranked bars, live-updating |
@@ -172,8 +253,11 @@ Three views:
 
 - **Population** — headline figures over a ranked breakdown by object type. Tap a
   type to explore it in the network.
-- **Attributes** — pick an object type and the app lists what the metamodel
-  declares for it, then charts whichever attribute you pick: an enumeration
+- **Attributes** — opens on what is worth looking at rather than on an empty
+  pane: coverage holes, a value that holds almost everything, a maximum orders
+  of magnitude above its median, each row opening the chart behind it. Pick an
+  object type and the app lists what the metamodel declares for it, and charts
+  whichever attribute you pick: an enumeration
   becomes an ordered bar chart, a numeric attribute a histogram with an exact
   server-side total, quantiles, and a ranked list of the highest-valued objects.
   Every attribute also gets a coverage meter — what fraction of the population
@@ -359,6 +443,148 @@ Tables live *inside* a card rather than being one: a `<caption>` renders outside
 the table's background box, so styling the table as the card dropped the caption
 onto the plane behind it.
 
+### Small screens
+
+The app was built for an iPad, and for a long time the only rule that fired
+below that stacked the attribute rail *above* the chart at a third of the pane.
+On a phone that left the chart about 460px tall behind 92px of nested padding —
+readable, but nothing anybody would choose.
+
+**One panel, one control, one meaning.** Hiding the attributes on a large
+screen and fitting them on a small one are the same question — *is the panel
+open?* — and the size decides only *where* the panel goes:
+
+| | wide | narrow |
+| --- | --- | --- |
+| where the panel goes | a column beside the chart | over the chart, with the ground behind it dimmed |
+| resting state | open, and remembered on this device | closed; one tap away |
+| picking an attribute | nothing moves | puts the panel away |
+| the toggle reads | Attributes | Attributes |
+
+The chart is on screen in every one of those states. That is the point of the
+overlay, and it is worth saying why it was not the first design.
+
+The first attempt gave a phone a *drill-down*: the panel and the chart took
+turns in one pane. It looked like one mechanism because one variable drove it,
+but it was two — a column that shows and hides, and two panes that swap — and
+the seams showed. `railView` had to return which pane was up, the toggle's label
+flipped between Attributes and Chart, and a chevron turned round to say which
+way you were going. None of that describes the wide arrangement, because none of
+it needed to exist there.
+
+Worse, the drill-down rested on the *list*, so a phone opened on a wall of
+attribute names and the chart pane was not on screen at all. The wide
+arrangement was then the only one that reliably put a chart in front of you —
+which is exactly how it was reported: *"it only worked in landscape"*.
+
+The overlay is the same mechanism as the column. `railView` is gone, the label
+is constant, the chevron is gone, and `RailView` with them; what is left in
+`src/ui/rail.ts` is the breakpoint, where the resting state is remembered, and
+`closesOnPick`. The chart is never unmounted, so it keeps its scroll position,
+its canvas and its place in the tab order for free — the drill-down had to save
+and restore the scroll by hand.
+
+**The breakpoint lives in TypeScript** (`src/ui/rail.ts`), not the stylesheet,
+and `.split` wears the answer as a class. It is behaviour as much as layout —
+what the resting state is, whether a selection closes the panel, whether the
+choice is remembered — so JavaScript needs the number anyway, and a second copy
+in CSS would only be a number waiting to disagree with it.
+
+**The overlay needs nothing taken out of flow.** Where the panel covers the
+chart, `.split`'s grid already puts both in one named area; they are three
+layers in one cell — chart, scrim, panel — separated by `z-index` alone. The
+scrim is a real element rather than a pseudo-element so it can be tapped, which
+is the same shape the record sheet's backdrop already uses.
+
+**The toggle sits in its own row of the split**, outside both scrolling panels.
+Inside the chart it would scroll out of reach on a long page.
+
+**The panel's state is not in the `?a=` payload.** An `Analysis` describes a
+question, and an open sidebar is not part of one. The same payload is what gets
+saved and what gets sent to a colleague — and the object-type picker lives in
+the panel, so sharing it closed would hand someone a view they could not
+re-aim.
+
+**The empty pane says what to do next and is the way to do it.**
+`.placeholder` is a button when picking an attribute is the next step and a
+plain sentence when it is not — `say()` in `attribute-insight.ts` decides that
+per message, so loading, a type with no categories and an error stay sentences.
+
+**The breakpoints are a ladder, not a pile:** 900 the donut stops fitting beside
+its row list, 820 the panel stops fitting beside the chart, 700 the card head
+stops holding its options button, 560 a phone in portrait — plus
+`max-height: 520px`, a phone on its side, which is the one thing no width can
+tell you. 560 clears a Pro Max in portrait (430) and stays below the narrowest
+phone landscape (667), so the one-column decisions never fire on a screen that
+is wide and short. Nothing new should need a sixth number.
+
+**The phone rules sit at the end of `app.css`, not beside their sections.** This
+stylesheet is written in layers — `.detail`, `.chart`, `.row` and `.kpi.hero`
+are each declared twice, the second time by a later design pass — and a media
+query carries no specificity of its own. A phone override written next to the
+first declaration loses to the second and looks entirely correct while doing
+nothing. Horizontal padding is the exception: it moved to `--gutter` and
+`--card-pad` on `.viz-root`, and a token resolves where it is *used*, so it does
+not care which declaration wins. That also fixed a drift the nine hard-coded
+copies had accumulated — the title was sitting 4px right of the tabs beneath it.
+
+Three things that were plainly broken and are now fixed at any size:
+
+- Three tabs at 22px of padding each came to more than a phone is wide, and
+  nothing clipped the overrun — the whole page gained a sideways scroll.
+- The chart options panel opened off the *left* edge of the screen: the 700px
+  rule moves its button to the left of the wrapped card head, but the panel was
+  still anchored to that button's right edge.
+- The object table's horizontal scroller had never had anything to scroll.
+  `table.data` is `width: 100%`, so the table was pinned to the card and the
+  cells crushed instead. It is now `max-content` with the name column pinned —
+  not a stacked card list, which would cost the per-column sort control the
+  table exists for, and not hidden columns, because the default is already two
+  columns wide and any others are there because someone added them.
+- The record sheet's footer was fixed to the *viewport*, with the sheet's width
+  restated on it so the two would agree. On a phone that put it under Safari's
+  own bottom bar. The sheet is now a column that owns its own scroller, and the
+  footer is its last row.
+
+#### Looking at it without a backend
+
+`dev/phone-harness.html` is every screen the app has, laid out with
+representative strings. The app connects before it renders anything, so without
+a Unify session the only reachable screens are the boot splash and the setup
+form — which is to say the layout cannot be looked at at all. Every view is
+built from one `innerHTML` template per module, so those templates are pasted
+into the harness and filled by hand; the stylesheet cannot tell the difference,
+and layout is all any of this touches.
+
+Open it under `npm run dev` at `/dev/phone-harness.html` in a device toolbar.
+`?view=population|attributes|network|sheet|more|settings` shows one screen;
+`?rail=on|off` picks which side of the split; `?charted=no` is the state before
+an attribute has been picked, where `?leads=rows|offer|coverage|no` picks which
+shape of that state to draw; `?cols=open` drops the column picker open. It
+prints its own viewport, page width and a list of anything reaching past the
+right edge — skipping the cross-tab and the object table, which are *meant* to
+scroll sideways. Checked that way at 375x667, 390x844, 430x932, both landscapes,
+and 820/821 for the lane boundary (`max-width: 820px` matches *at* 820).
+
+Two rules for keeping it honest, both learned the hard way:
+
+**Import the decision, never restate it.** The harness asks `src/ui/rail.ts` for
+the lane and the remembered resting state, and applies them the way `applyRail`
+does. It used to carry its own copy of the breakpoint and choose the classes by
+hand, which meant it agreed with itself whatever the app actually did — a check
+that can only confirm its own copy is not a check.
+
+**Fill every panel it draws, including the ones that open on demand.** An empty
+`.col-list` is what let #17 through: a panel with nothing in it has nothing to
+truncate, so the width it was giving its contents never showed up as wrong.
+
+Two things it cannot tell you, both of which need a device: Chromium reports
+every `env(safe-area-inset-*)` as zero, which is exactly the mechanism the sheet
+footer change is about; and whether a pan that starts on the network's HUD strip
+reaches the canvas underneath it. Note also that the entrance animations must be
+allowed to finish before anything is measured, or a panel mid-slide reads as
+overflowing by however far it has left to travel.
+
 ### Number formatting
 
 Magnitude suffixes are fixed at **K / M / B**; everything else — digits,
@@ -467,6 +693,43 @@ deliberately excludes its own filter while the table includes it — so choosing
 numeric sort right after filtering pays that cost once (~5 s). Paging and
 re-sorting afterwards are free. Prefetching that second population speculatively
 was rejected: it would spend a full read for a sort most sessions never ask for.
+
+### The overflow menu, and what moved out of it
+
+**One dropdown had become three unrelated things.** Under the list of saved
+analyses sat two grey headings — *Environment* and *About* — and under those, a
+wrapped row of twelve-pixel text buttons: change environment, sign out, badge
+the app icon, report a problem, request a feature. Sign out was the same size
+and weight as a footnote about which build was running, which is the wrong shape
+for the one control in there that throws something away.
+
+The split is by **how often, not by what kind**:
+
+| | where it lives | why |
+| --- | --- | --- |
+| saved analyses, sharing one | the menu | what somebody opened the menu for |
+| report a problem, request a feature | the menu, as a row | wanted at the moment something is wrong, not two taps later |
+| sign out | the menu, as its own row below a rule | frequent, and the only destructive thing there |
+| change environment, badge the icon | the settings sheet | once a quarter, and once ever |
+| which environment, which build | the menu's footer, as a caption | facts worth having in reach that nobody opens a menu to read |
+
+**The rows are rows.** Full width, a glyph each, 42px — 46 where the pointer is
+coarse — and the destructive one carries `--status-serious` and a rule above it.
+A menu whose entries are laid out as flowing text is a menu people scan past.
+
+**Settings is a sheet, not a submenu.** Every setting in there needs a sentence
+to say what it does — "Count on the app icon" means nothing without the line
+about which count, and badging costs a notification permission on iOS, which is
+not something to spring on someone who opened a dropdown. A dropdown row has
+nowhere to put that sentence; a sheet does. Its switch is the whole row rather
+than a 42px target beside a label.
+
+**Nothing is duplicated except sign out**, which is in both on purpose: it
+belongs in the menu because it is frequent, and beside the environment it names
+because that is where someone goes looking for account actions.
+
+`?view=more` and `?view=settings` in the phone harness draw both surfaces
+without a backend.
 
 ### Sharing an analysis
 

@@ -28,7 +28,7 @@ import { mountFilterBar } from './filter-bar';
 import { forgetEnvironment } from '../sdk/runtime-config';
 import { expireSession } from '../sdk/session-guard';
 import { canShare, shareLink } from './share';
-import { backIcon, caretIcon, controlsIcon, filterIcon, shareIcon } from './icons';
+import { chevronIcon, controlsIcon, filterIcon, shareIcon } from './icons';
 
 interface View {
   /**
@@ -95,8 +95,8 @@ export function mountShell(root: HTMLElement, session: Session): void {
     'shell: share button',
   );
 
-  navBack.prepend(backIcon());
-  navTitle.append(caretIcon());
+  navBack.prepend(chevronIcon('back'));
+  navTitle.append(chevronIcon('down'));
   filterButton.prepend(filterIcon());
   optionsButton.prepend(controlsIcon());
   shareButton.prepend(shareIcon());
@@ -147,12 +147,16 @@ export function mountShell(root: HTMLElement, session: Session): void {
     const filter = filters.get();
     const chart = insightView?.snapshot();
     const path = routes.path;
+    // Resolved once: testing `filter.type ?? chart?.type` narrows nothing about
+    // the second evaluation of it.
+    const type = filter.type ?? chart?.type;
+
     return {
       v: 1,
       env: session.label,
       view: viewOf(path),
       path,
-      ...(filter.type ?? chart?.type ? { type: filter.type ?? chart?.type } : {}),
+      ...(type ? { type } : {}),
       ...(chart?.primary ? { primary: chart.primary } : {}),
       ...(chart?.secondary ? { secondary: chart.secondary } : {}),
       ...(chart?.mark ? { mark: chart.mark } : {}),

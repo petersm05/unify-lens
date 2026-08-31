@@ -4,20 +4,15 @@ import type { Session } from '../sdk/client';
 import { must } from './dom';
 import { confirmAction } from './prompt';
 import { canShare, shareLink } from './share';
-import { moreIcon } from './icons';
+import { bugIcon, chevronIcon, ideaIcon, moreIcon, settingsIcon, signOutIcon } from './icons';
 import { showContextMenu, type MenuItem } from './context-menu';
 import { openShareWith } from './share-with';
 import { openSaveAnalysis } from './save-analysis';
 import { applyChoice } from './share-options';
 import { createIncoming } from '../data/incoming';
-import {
-  canBadgeIcon,
-  disableIconBadge,
-  enableIconBadge,
-  iconBadgeOn,
-  showIconBadge,
-} from './app-badge';
+import { canBadgeIcon, enableIconBadge, iconBadgeOn, showIconBadge } from './app-badge';
 import { buildId, openReport } from './report';
+import { openSettings } from './settings';
 
 export interface SavedPanel {
   destroy(): void;
@@ -59,24 +54,28 @@ export function mountSavedPanel(
         <p class="saved-status" hidden></p>
         <button type="button" class="saved-offer" hidden>Show this count on the app icon</button>
 
-        <div class="menu-section">
-          <span class="menu-label">Environment</span>
-          <p class="saved-env"></p>
-          <div class="saved-report">
-            <button type="button" class="saved-action" data-act="switch">Change environment…</button>
-            <button type="button" class="saved-action" data-act="signout">Sign out</button>
-          </div>
+        <div class="menu-rows">
+          <button type="button" class="menu-row" data-act="settings">
+            <span class="menu-row-label">Settings</span>
+          </button>
+          <button type="button" class="menu-row" data-act="bug">
+            <span class="menu-row-label">Report a problem</span>
+          </button>
+          <button type="button" class="menu-row" data-act="idea">
+            <span class="menu-row-label">Request a feature</span>
+          </button>
         </div>
 
-        <div class="menu-section">
-          <span class="menu-label">About</span>
-          <p class="saved-build"></p>
-          <div class="saved-report">
-            <button type="button" class="saved-action" data-act="badge" hidden></button>
-            <button type="button" class="saved-action" data-act="bug">Report a problem</button>
-            <button type="button" class="saved-action" data-act="idea">Request a feature</button>
-          </div>
+        <div class="menu-rows">
+          <button type="button" class="menu-row is-danger" data-act="signout">
+            <span class="menu-row-label">Sign out</span>
+          </button>
         </div>
+
+        <p class="saved-foot">
+          <span class="saved-env"></span>
+          <span class="saved-build"></span>
+        </p>
       </div>
     </div>
   `;
@@ -86,8 +85,6 @@ export function mountSavedPanel(
 
   const incoming = createIncoming(session);
   const offer = must(host.querySelector<HTMLButtonElement>('.saved-offer'), 'saved: offer');
-  /** What the icon-badge offer would be about, so it is not offered for nothing. */
-  let lastCount = 0;
   const badge = document.createElement('span');
   badge.className = 'saved-badge';
   badge.hidden = true;
@@ -102,7 +99,6 @@ export function mountSavedPanel(
    */
   function showBadge(entries: readonly SavedAnalysis[]): void {
     const count = incoming.unseen(entries).length;
-    lastCount = count;
     badge.hidden = count === 0;
     badge.textContent = count > 9 ? '9+' : String(count);
     button.setAttribute(
@@ -121,7 +117,6 @@ export function mountSavedPanel(
    * without opening a menu. Hence the number the panel was opened *on*.
    */
   function showOffer(count: number): void {
-    lastCount = count;
     offer.hidden = !canBadgeIcon() || iconBadgeOn() || count === 0;
   }
   const panel = must(host.querySelector<HTMLElement>('.saved-panel'), 'saved: panel');
@@ -137,51 +132,16 @@ export function mountSavedPanel(
    * address bar and no reload button — so a report of "still broken" and a
    * report of "not updated yet" look identical. Naming the build separates
    * them. The hash comes from the module's own URL, so it needs no build-time
-   * plumbing and cannot drift from what is actually loaded.
+   * plumbing and cannot drift from what is actually loaded. It sits in the
+   * menu's footer, as a caption rather than as a heading of its own; the
+   * settings sheet is where it can be copied for a report.
    */
   const build = must(host.querySelector<HTMLElement>('.saved-build'), 'saved: build');
   build.textContent = `Build ${buildId()}`;
 
-  /**
-   * Offered rather than assumed.
-   *
-   * On iOS badging an installed app is a notification, so switching it on costs
-   * a permission prompt — which is not something to spring on someone who only
-   * opened a menu. Hidden entirely where the browser cannot badge at all.
-   */
-  const badgeToggle = must(
-    host.querySelector<HTMLButtonElement>('[data-act="badge"]'),
-    'saved: badge toggle',
-  );
-  const drawBadgeToggle = (): void => {
-    badgeToggle.hidden = !canBadgeIcon();
-    badgeToggle.textContent = iconBadgeOn()
-      ? 'Stop showing counts on the app icon'
-      : 'Show counts on the app icon';
-    // The offer is for discovering this; once it is on there is nothing to
-    // discover, and the settings line is where it gets turned back off.
-    offer.hidden = !canBadgeIcon() || iconBadgeOn() || lastCount === 0;
-  };
-  drawBadgeToggle();
-  badgeToggle.addEventListener('click', () => {
-    if (iconBadgeOn()) {
-      disableIconBadge();
-      drawBadgeToggle();
-      return;
-    }
-    void enableIconBadge().then((on) => {
-      drawBadgeToggle();
-      if (!on) {
-        say('The icon can only be badged once notifications are allowed for this app.');
-        return;
-      }
-      void store.list().then((entries) => showBadge(entries));
-    });
-  });
-
   offer.addEventListener('click', () => {
     void enableIconBadge().then((on) => {
-      drawBadgeToggle();
+      offer.hidden = iconBadgeOn();
       if (on) {
         say('The app icon will show the count from now on.');
         void store.list().then((entries) => showBadge(entries));
@@ -214,19 +174,31 @@ export function mountSavedPanel(
     });
   });
 
-  const switchEnv = must(
-    host.querySelector<HTMLButtonElement>('[data-act="switch"]'),
-    'saved: switch',
+  /**
+   * Everything that is a preference, one level in.
+   *
+   * Changing environment is a once-a-quarter act and badging the icon is a
+   * once-ever one; neither earns a place beside the analyses somebody opened
+   * this menu to reach. The sheet also has room to say what each does, which a
+   * dropdown row does not.
+   */
+  const settings = must(
+    host.querySelector<HTMLButtonElement>('[data-act="settings"]'),
+    'saved: settings',
   );
-  switchEnv.disabled = onChangeEnvironment === undefined;
-  switchEnv.addEventListener('click', () => {
+  settings.append(chevronIcon('forward'));
+  settings.addEventListener('click', () => {
     setOpen(false);
-    void confirmAction({
-      title: 'Change environment?',
-      hint: `This signs out of ${environment ?? 'the current environment'} and asks which Unify to connect to. Saved analyses are kept — each records the environment it was built against.`,
-      confirmLabel: 'Change environment',
-    }).then((yes) => {
-      if (yes) void onChangeEnvironment?.();
+    openSettings({
+      // `!== undefined`, not truthiness: an empty environment name should
+      // still be passed through as one, exactly as it was before.
+      ...(environment !== undefined ? { environment } : {}),
+      localOnly: store.isLocalOnly(),
+      ...(onSignOut !== undefined ? { onSignOut } : {}),
+      ...(onChangeEnvironment !== undefined ? { onChangeEnvironment } : {}),
+      // Turning badging on there should put the count on the icon at once,
+      // rather than at the next background check a few minutes later.
+      onBadgeEnabled: () => void store.list().then((entries) => showBadge(entries)),
     });
   });
 
@@ -238,6 +210,17 @@ export function mountSavedPanel(
       setOpen(false);
       openReport(kind, environment);
     });
+  }
+
+  // The rows read as a menu rather than as a paragraph of links, so each one
+  // gets the glyph that says which kind of thing it is.
+  for (const [act, glyph] of [
+    ['settings', settingsIcon],
+    ['bug', bugIcon],
+    ['idea', ideaIcon],
+    ['signout', signOutIcon],
+  ] as const) {
+    host.querySelector(`[data-act="${act}"]`)?.prepend(glyph());
   }
 
   const setOpen = (open: boolean): void => {
