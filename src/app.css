@@ -176,26 +176,31 @@
    iOS then shows that white past the app: behind the home indicator, and while
    the viewport rubber-bands. The page needs its own copy of the ground colour,
    declared where `html` and `body` can actually see it. */
-/* The ground matches the plane, not the app's own surface.
+/* The ground matches whatever now sits at the bottom of the app.
    #app is anchored to the top and sized to the viewport, so any moment the
-   visible area is taller than it — a toolbar retracting, an overscroll, the
-   keyboard leaving — opens a gap at the *bottom*, directly under the scrolling
-   plane. Painting that gap in the lighter surface colour is what made it read
-   as a band; in the plane's own colour there is nothing to see. */
+   visible area is taller than it — an overscroll, the keyboard leaving, a
+   standalone window resolving its insets — opens a gap at the *bottom*. A gap
+   in a colour the bottom of the app is not reads as a band.
+
+   It used to be the plane, because the scrolling plane was the bottom-most
+   thing. The toolbar is now, and on the network lens so is the canvas, which
+   takes #app's own surface — so on every screen the answer is `--surface-1`.
+   The `theme-color` meta in index.html already carried these two values, which
+   is a fair sign of which of the two was the odd one out. */
 :root {
-  --page: #f2e9d8;
+  --page: #faf5ea;
   --page-ink: #2c2118;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --page: #191310;
+    --page: #241c16;
     --page-ink: #f6ede0;
   }
 }
 
 :root[data-theme='dark'] {
-  --page: #191310;
+  --page: #241c16;
   --page-ink: #f6ede0;
 }
 
